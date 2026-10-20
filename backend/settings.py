@@ -35,16 +35,24 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+	'daphne',  # [ahmed] Runs Django with ASGI support, allowing HTTP and WebSocket connections.
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
+
+	'channels',  # [ahmed] Adds Django Channels functionality for handling WebSocket connections.
+
+	'rest_framework',
     'rest_framework.authtoken',
     'django_filters',
     'core_data',
+
+	'realtime.apps.RealtimeConfig',  #  [ahmed] Registers our real-time Django app.
+
 ]
 
 MIDDLEWARE = [
@@ -75,6 +83,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
+
+ASGI_APPLICATION = 'backend.asgi.application' #  [ahmed] Tells Django where to find our ASGI application for handling HTTP and WebSocket connections.
 
 
 # Database
@@ -145,3 +155,26 @@ REST_FRAMEWORK = {
 import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+
+
+# [ahmed] Configure Redis as the shared channel layer for WebSocket messaging.
+CHANNEL_LAYERS = {
+    "default": {
+        # [ahmed] Allow separate Django processes to communicate using Redis.
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+
+        "CONFIG": {
+            "hosts": [
+                {
+                    # [ahmed] Load the Redis server address from .env.
+                    "address": os.environ["REDIS_URL"],
+
+                    # [ahmed] Allow Redis blocking reads to wait without a client-side read timeout.
+                    "socket_timeout": None,
+                },
+            ],
+        },
+    },
+}
+
