@@ -1,3 +1,6 @@
 Django
 djangorestframework
 drf-spectacular
+channels
+daphne
+psycopg[binary]
