@@ -6,4 +6,6 @@ Pillow >=10.0
 python-dotenv>=1.0
 
 # [ahmed] Provides a shared Redis-backed channel layer for real-time messages.
+channels>=4.3,<5.0
+daphne>=4.2,<5.0
 channels-redis>=4.2,<5.0
