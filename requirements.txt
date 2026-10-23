@@ -4,3 +4,4 @@ drf-spectacular
 channels
 daphne
 psycopg[binary]
+channels-redis

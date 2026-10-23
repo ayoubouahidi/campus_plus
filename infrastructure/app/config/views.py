@@ -9,7 +9,7 @@ from drf_spectacular.utils import extend_schema
             "type": "object",
             "properties": {
                 "status": {"type": "string", "example": "ok"},
-                "message": {"type": "string", "example": "API is hamza"},
+                "message": {"type": "string", "example": "API is running"},
             },
         },
     },
