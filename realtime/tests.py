@@ -1,4 +1,10 @@
+from unittest.mock import patch
 
+from django.contrib.auth.models import User
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from core_data.models import ClubEvent, Department
 from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase, override_settings
 
@@ -96,3 +102,44 @@ class CalendarBroadcastTests(SimpleTestCase):
 
             if connected_b:
                 await client_b.disconnect()
+
+class AutomaticEventBroadcastTests(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="test_admin",
+            password="test_password",
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        self.department = Department.objects.create(
+            title="Computer Science",
+        )
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_event_creation_broadcasts(self, mock_broadcast):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/club-events/",
+                {
+                    "name": "Python Workshop",
+                    "description": "Introduction to Python",
+                    "parent_id": self.department.id,
+                    "location": "1337 Campus",
+                    "status": "planned",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(ClubEvent.objects.count(), 1)
+
+        mock_broadcast.assert_called_once()
+
+        event_type, event_data = mock_broadcast.call_args.args
+
+        self.assertEqual(event_type, "event_created")
+        self.assertEqual(event_data["name"], "Python Workshop")
+        self.assertEqual(event_data["id"], response.data["id"])

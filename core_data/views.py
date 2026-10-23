@@ -1,3 +1,9 @@
+# [ahmed] Run broadcasts after successful database commits.
+from django.db import transaction
+
+# [ahmed] Broadcast calendar events through Redis.
+from realtime.broadcast import broadcast_calendar_event
+
 from django.db.models import Q
 from rest_framework import filters, status, viewsets
 from rest_framework.authtoken.models import Token
@@ -44,6 +50,7 @@ class CanCreateClubEvent(BasePermission):
         ).exists()
 
 
+
 class ClubEventViewSet(viewsets.ModelViewSet):
     queryset = ClubEvent.objects.select_related('parent_id').all()
     serializer_class = ClubEventSerializer
@@ -54,6 +61,22 @@ class ClubEventViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return [CanCreateClubEvent()]
         return [AllowAny()]
+
+    # [ahmed] Automatically broadcast new events after creation.
+    def perform_create(self, serializer):
+        # [ahmed] Save the new event.
+        serializer.save()
+
+        # [ahmed] Get the saved event's serialized data.
+        event_data = dict(serializer.data)
+
+        # [ahmed] Broadcast only after a successful database commit.
+        transaction.on_commit(
+            lambda: broadcast_calendar_event(
+                "event_created",
+                event_data,
+            )
+        )
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
