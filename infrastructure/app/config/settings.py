@@ -1,27 +1,20 @@
-
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# --- Environment & Security ---
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
-
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
+# --- Core Infra & Static Services ---
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-    "rest_framework",
-    "drf_spectacular",
-    "channels",
+    "django.contrib.staticfiles",  # Needed for collectstatic to serve assets via NGINX
+    "channels",                    # ASGI & WebSocket integration
 ]
 
+# --- Redis Pub/Sub Broker (Channels Layer) ---
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -31,51 +24,9 @@ CHANNEL_LAYERS = {
     },
 }
 
-REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_THROTTLE_RATES": {
-        "public": "60/min",
-    },
-        "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.ScopedRateThrottle",
-    ],
-}
-
-
-SPECTACULAR_SETTINGS = {
-    'TITLE': '42 Transcendence API',
-    'VERSION': '1.0.0',
-}
-
 ROOT_URLCONF = "config.urls"
 
-MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.locale.LocaleMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
-]
-
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
-            ],
-        },
-    },
-]
-
-
+# --- Database Connection (PostgreSQL 16) ---
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -87,25 +38,17 @@ DATABASES = {
     }
 }
 
+# --- Reverse Proxy & SSL Security Handshake ---
 CSRF_TRUSTED_ORIGINS = [
     "https://localhost",
     "https://127.0.0.1",
 ]
-
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-
-WSGI_APPLICATION = "config.wsgi.application"
+# --- ASGI Application Server ---
 ASGI_APPLICATION = "config.asgi.application"
 
-LANGUAGE_CODE = "en-us"
-
-TIME_ZONE = "UTC"
-
-USE_I18N = True
-
-USE_TZ = True
-
+# --- Static & Media Volumes (Mounted to NGINX) ---
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
