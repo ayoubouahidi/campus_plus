@@ -20,4 +20,13 @@ def health_check(request):
     return Response({
         "status": "ok",
         "message": "API is running"
-    })
+})
+
+
+@api_view(["GET"])
+
+def get_user(request):
+    return Response(
+        {
+        }
+    )
