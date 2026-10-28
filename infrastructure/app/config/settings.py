@@ -6,8 +6,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # --- Environment & Security ---
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
-
+ALLOWED_HOSTS =  [
+    "localhost",
+    "127.0.0.1",
+    "campusplus.ma",
+]
 # --- Core Infra & Static Services ---
 INSTALLED_APPS = [
     "django.contrib.admin",

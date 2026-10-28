@@ -16,11 +16,6 @@ services:
       REDIS_HOST: redis
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG}
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/health/\")'"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     depends_on:
       db:
         condition: service_healthy
@@ -39,9 +34,7 @@ services:
       - static_data:/app/staticfiles:ro
       - media_data:/app/media:ro
     depends_on:
-      web:
-        condition: service_healthy
-
+      - web
   redis:
     image: redis:7-alpine
     restart: unless-stopped

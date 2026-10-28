@@ -22,11 +22,8 @@ def health_check(request):
         "message": "API is running"
 })
 
-
 @api_view(["GET"])
-
-def get_user(request):
-    return Response(
-        {
-        }
-    )
+def check_real_ip(request):
+    return Response({
+        "real_ip": request.headers.get("X-Real-IP")
+    })
