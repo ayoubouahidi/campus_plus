@@ -150,6 +150,36 @@ class CalendarBroadcastTests(TransactionTestCase):
         self.assertFalse(connected)
 
 
+    def test_revoked_token_is_rejected(self):
+        old_key = self.token.key
+        self.token.delete()
+
+        async_to_sync(self.check_revoked_token)(old_key)
+
+    async def check_revoked_token(self, old_key):
+        client = WebsocketCommunicator(
+            test_application,
+            f"/ws/calendar/?token={old_key}",
+        )
+
+        connected, _ = await client.connect()
+
+        self.assertFalse(connected)
+
+    def test_duplicate_tokens_are_rejected(self):
+        async_to_sync(self.check_duplicate_tokens)()
+
+    async def check_duplicate_tokens(self):
+        client = WebsocketCommunicator(
+            test_application,
+            f"/ws/calendar/?token={self.token.key}&token=invalid",
+        )
+
+        connected, _ = await client.connect()
+
+        self.assertFalse(connected)
+
+
 class AutomaticEventBroadcastTests(TestCase):
 
     def setUp(self):
