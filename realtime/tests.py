@@ -1,17 +1,15 @@
+
 from unittest.mock import patch
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from channels.routing import URLRouter
+from channels.testing import WebsocketCommunicator
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.test import APIClient
 
 from core_data.models import ClubEvent, Department
-from asgiref.sync import async_to_sync
-from django.test import SimpleTestCase, override_settings
-
-from channels.testing import WebsocketCommunicator
-from channels.layers import get_channel_layer
-from channels.routing import URLRouter
-
 from realtime.routing import websocket_urlpatterns
 
 
@@ -103,15 +101,18 @@ class CalendarBroadcastTests(SimpleTestCase):
             if connected_b:
                 await client_b.disconnect()
 
+
 class AutomaticEventBroadcastTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+
         self.admin = User.objects.create_user(
             username="test_admin",
             password="test_password",
             is_staff=True,
         )
+
         self.client.force_authenticate(user=self.admin)
 
         self.department = Department.objects.create(
@@ -143,3 +144,161 @@ class AutomaticEventBroadcastTests(TestCase):
         self.assertEqual(event_type, "event_created")
         self.assertEqual(event_data["name"], "Python Workshop")
         self.assertEqual(event_data["id"], response.data["id"])
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_event_update_broadcasts(self, mock_broadcast):
+        event = ClubEvent.objects.create(
+            name="Python Workshop",
+            parent_id=self.department,
+            location="1337 Campus",
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/club-events/{event.id}/",
+                {
+                    "location": "Main Hall",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+
+        event.refresh_from_db()
+
+        self.assertEqual(event.location, "Main Hall")
+        mock_broadcast.assert_called_once()
+
+        event_type, event_data = mock_broadcast.call_args.args
+
+        self.assertEqual(event_type, "event_updated")
+        self.assertEqual(event_data["id"], event.id)
+        self.assertEqual(event_data["location"], "Main Hall")
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_event_deletion_broadcasts(self, mock_broadcast):
+        event = ClubEvent.objects.create(
+            name="Python Workshop",
+            parent_id=self.department,
+        )
+
+        event_id = event.id
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(
+                f"/api/club-events/{event_id}/"
+            )
+
+        self.assertEqual(response.status_code, 204)
+
+        self.assertFalse(
+            ClubEvent.objects.filter(id=event_id).exists()
+        )
+
+        mock_broadcast.assert_called_once_with(
+            "event_deleted",
+            {"id": event_id},
+        )
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_regular_user_cannot_modify_event(self, mock_broadcast):
+        event = ClubEvent.objects.create(
+            name="Python Workshop",
+            parent_id=self.department,
+            location="1337 Campus",
+        )
+
+        regular_user = User.objects.create_user(
+            username="regular_student",
+            password="test_password",
+        )
+
+        self.client.force_authenticate(user=regular_user)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            update_response = self.client.patch(
+                f"/api/club-events/{event.id}/",
+                {
+                    "location": "Unauthorized change",
+                },
+                format="json",
+            )
+
+            delete_response = self.client.delete(
+                f"/api/club-events/{event.id}/"
+            )
+
+        self.assertEqual(update_response.status_code, 403)
+        self.assertEqual(delete_response.status_code, 403)
+
+        event.refresh_from_db()
+
+        self.assertEqual(event.location, "1337 Campus")
+        self.assertTrue(
+            ClubEvent.objects.filter(id=event.id).exists()
+        )
+
+        mock_broadcast.assert_not_called()
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_invalid_event_creation_does_not_broadcast(self, mock_broadcast):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/club-events/",
+                {
+                    "description": "Missing required event name",
+                    "parent_id": self.department.id,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ClubEvent.objects.count(), 0)
+
+        mock_broadcast.assert_not_called()
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_invalid_event_update_does_not_broadcast(self, mock_broadcast):
+        event = ClubEvent.objects.create(
+            name="Python Workshop",
+            parent_id=self.department,
+            status="planned",
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/club-events/{event.id}/",
+                {
+                    "status": "invalid_status",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 400)
+
+        event.refresh_from_db()
+        self.assertEqual(event.status, "planned")
+
+        mock_broadcast.assert_not_called()
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_unauthenticated_user_cannot_delete_event(self, mock_broadcast):
+        event = ClubEvent.objects.create(
+            name="Python Workshop",
+            parent_id=self.department,
+        )
+
+        self.client.force_authenticate(user=None)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(
+                f"/api/club-events/{event.id}/"
+            )
+
+        self.assertIn(response.status_code, (401, 403))
+
+        self.assertTrue(
+            ClubEvent.objects.filter(id=event.id).exists()
+        )
+
+        mock_broadcast.assert_not_called()

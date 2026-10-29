@@ -49,6 +49,24 @@ class CanCreateClubEvent(BasePermission):
             head__user=request.user,
         ).exists()
 
+# [ahmed] Protect changes to existing club events.
+class CanModifyClubEvent(BasePermission):
+    message = "Only an admin or this event's club head can modify it."
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.is_staff:
+            return True
+
+        return bool(
+            obj.club_id
+            and Club.objects.filter(
+                pk=obj.club_id,
+                head__user=request.user,
+            ).exists()
+        )
 
 
 class ClubEventViewSet(viewsets.ModelViewSet):
@@ -58,8 +76,12 @@ class ClubEventViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description', 'parent_id__title']
 
     def get_permissions(self):
-        if self.action == 'create':
+        if self.action == "create":
             return [CanCreateClubEvent()]
+
+        if self.action in ("update", "partial_update", "destroy"):
+            return [CanModifyClubEvent()]
+
         return [AllowAny()]
 
     # [ahmed] Automatically broadcast new events after creation.
@@ -77,6 +99,39 @@ class ClubEventViewSet(viewsets.ModelViewSet):
                 event_data,
             )
         )
+
+    # [ahmed] Broadcast changes when an event is updated.
+    def perform_update(self, serializer):
+        # [ahmed] Save the modified event in the database.
+        serializer.save()
+
+        # [ahmed] Get the event's updated information.
+        event_data = dict(serializer.data)
+
+        # [ahmed] Notify clients after a successful commit.
+        transaction.on_commit(
+            lambda: broadcast_calendar_event(
+                "event_updated",
+                event_data,
+            )
+        )
+
+    # [ahmed] Broadcast when an event is deleted.
+    def perform_destroy(self, instance):
+        # [ahmed] Keep the event ID before deleting it.
+        event_id = instance.pk
+
+        # [ahmed] Delete the event from the database.
+        instance.delete()
+
+        # [ahmed] Notify clients after successful deletion.
+        transaction.on_commit(
+            lambda: broadcast_calendar_event(
+                "event_deleted",
+                {"id": event_id},
+            )
+        )
+
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
