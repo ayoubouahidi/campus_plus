@@ -22,6 +22,12 @@ services:
       redis:
         condition: service_started
 
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped
