@@ -116,7 +116,11 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 
 <Card isHoverable>
-  <CardBanner < alt="Workshop banner" overlay="{" src="[https://images.unsplash.com/photo-1517245386807-bb43f82c33c4](https://images.unsplash.com/photo-1517245386807-bb43f82c33c4)">
+  <CardBanner
+    src="/mock/events/hackathon.png"   // local path, or a host allow-listed in next.config images.remotePatterns
+    sizes="(min-width: 1024px) 33vw, 100vw"
+    overlay={
+      <>
         <Badge variant="Tech">Tech</Badge>
         <Badge hasDot variant="success">Open Seats</Badge>
       </>

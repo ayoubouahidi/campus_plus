@@ -1,4 +1,5 @@
-import { Department, Club, EventItem, User } from '@/types/api';
+import { AttendeePreview, Department, Club, EventItem, User } from '@/types/api';
+import { AppNotification } from '@/types/notification';
 
 export const mockCurrentUser: User = {
   id: 'usr_01',
@@ -61,6 +62,16 @@ export const mockClubs: Club[] = [
   },
 ];
 
+// Small pool the attendee previews draw from (initials fallback: no avatar images yet)
+const ATTENDEES = {
+  salma: { id: 'usr_02', full_name: 'Salma Idrissi', avatar_url: null },
+  youssef: { id: 'usr_03', full_name: 'Youssef Benali', avatar_url: null },
+  imane: { id: 'usr_04', full_name: 'Imane Chraibi', avatar_url: null },
+  hamza: { id: 'usr_05', full_name: 'Hamza El Amrani', avatar_url: null },
+  nora: { id: 'usr_06', full_name: 'Nora Tazi', avatar_url: null },
+} satisfies Record<string, AttendeePreview>;
+
+// Times are UTC; campus time (Africa/Casablanca) is UTC+1 in November.
 export const mockEvents: EventItem[] = [
   {
     id: 'evt_workshop_cine',
@@ -69,13 +80,14 @@ export const mockEvents: EventItem[] = [
     department_name: '1337 Coding School',
     title: 'Cinematic Storytelling & Lighting Masterclass',
     description: 'A 2-day practical session on framing, three-point lighting, and Davinci Resolve workflow.',
-    flyer_url: '/placeholder-event.png',
+    flyer_url: '', // no flyer uploaded: exercises the banner fallback
     location: 'Cluster 2 - Main Lab',
     category: 'Media',
-    start_time: '2026-09-25T18:00:00Z',
-    end_time: '2026-09-25T21:00:00Z',
+    start_time: '2026-11-05T17:00:00Z',
+    end_time: '2026-11-05T20:00:00Z',
     rsvps_count: 42,
     has_user_rsvpd: true,
+    attendees_preview: [ATTENDEES.salma, ATTENDEES.youssef, ATTENDEES.imane],
   },
   {
     id: 'evt_jam_session',
@@ -84,13 +96,14 @@ export const mockEvents: EventItem[] = [
     department_name: '1337 Coding School',
     title: 'LEET Jam Session: Afro House & Melodic Sets',
     description: 'Live electronic sets, open synthesizers, and collaborative jam session.',
-    flyer_url: '/placeholder-event.png',
+    flyer_url: '/mock/events/jam-session.png',
     location: 'Auditorium Courtyard',
     category: 'Music',
-    start_time: '2026-09-28T20:00:00Z',
-    end_time: '2026-09-28T23:00:00Z',
+    start_time: '2026-11-07T19:00:00Z',
+    end_time: '2026-11-07T22:00:00Z',
     rsvps_count: 87,
     has_user_rsvpd: false,
+    attendees_preview: [ATTENDEES.hamza, ATTENDEES.nora, ATTENDEES.salma],
   },
   {
     id: 'evt_hackathon_ai',
@@ -99,12 +112,101 @@ export const mockEvents: EventItem[] = [
     department_name: '1337 Coding School',
     title: '42 Campus Hackathon: Edge AI & Systems',
     description: '48-hour systems development sprint focusing on C++, microservices, and network protocols.',
-    flyer_url: '/placeholder-event.png',
+    flyer_url: '/mock/events/hackathon.png',
     location: 'Agora Hall',
     category: 'Tech',
-    start_time: '2026-10-02T09:00:00Z',
-    end_time: '2026-10-04T18:00:00Z',
+    start_time: '2026-11-13T08:00:00Z',
+    end_time: '2026-11-15T17:00:00Z',
     rsvps_count: 120,
     has_user_rsvpd: false,
+    attendees_preview: [ATTENDEES.youssef, ATTENDEES.imane, ATTENDEES.hamza],
+  },
+  {
+    id: 'evt_case_competition',
+    club_id: 'club_emines_consulting',
+    club_name: 'EMINES Consulting Club',
+    department_name: 'EMINES',
+    title: 'Industrial Strategy Case Competition: Phosphate Supply Chains of the Next Decade, Final Round',
+    description: 'Teams of four pitch supply-chain strategies to a jury of OCP and consulting partners.',
+    flyer_url: '/mock/events/symposium.png',
+    location: 'EMINES Amphitheater B',
+    category: 'Business',
+    start_time: '2026-11-18T13:30:00Z',
+    end_time: '2026-11-18T18:00:00Z',
+    rsvps_count: 2,
+    has_user_rsvpd: true,
+    attendees_preview: [ATTENDEES.nora, ATTENDEES.salma],
+  },
+  {
+    id: 'evt_basketball_final',
+    club_id: 'club_um6p_sports',
+    club_name: 'UM6P Sports Association',
+    department_name: 'UM6P Central Campus',
+    title: 'Inter-School Basketball Final: 1337 vs EMINES',
+    description: 'The season final at the UM6P sports complex. Bring your school colours.',
+    flyer_url: '/mock/events/basketball.png',
+    location: 'Sports Complex - Main Court',
+    category: 'Sports',
+    start_time: '2026-11-21T16:00:00Z',
+    end_time: '2026-11-21T18:00:00Z',
+    rsvps_count: 1,
+    has_user_rsvpd: false,
+    attendees_preview: [ATTENDEES.hamza],
+  },
+  {
+    id: 'evt_welcome_bbq',
+    club_id: 'club_bde',
+    club_name: 'Student Events Committee',
+    department_name: 'UM6P Central Campus',
+    title: 'Winter Welcome BBQ',
+    description: 'Food, music and club stands on the central lawn to close the semester.',
+    flyer_url: '/mock/events/campus-bbq.png',
+    location: 'Central Lawn',
+    category: 'EventsOrganization',
+    start_time: '2026-11-27T11:00:00Z',
+    end_time: '2026-11-27T15:00:00Z',
+    rsvps_count: 0,
+    has_user_rsvpd: false,
+    attendees_preview: [],
+  },
+];
+
+// Newest first, as the API will return them. Three unread.
+export const mockNotifications: AppNotification[] = [
+  {
+    id: 'ntf_04',
+    kind: 'event_created',
+    title: 'New event from 1337 Coding School',
+    body: '42 Campus Hackathon: Edge AI & Systems opens RSVPs.',
+    href: '/events/evt_hackathon_ai',
+    created_at: '2026-09-24T16:45:00Z',
+    is_read: false,
+  },
+  {
+    id: 'ntf_03',
+    kind: 'event_updated',
+    title: 'Venue changed',
+    body: 'LEET Jam Session moved to the Auditorium Courtyard.',
+    href: '/events/evt_jam_session',
+    created_at: '2026-09-24T11:20:00Z',
+    is_read: false,
+  },
+  {
+    id: 'ntf_02',
+    kind: 'event_deleted',
+    title: 'Event cancelled',
+    body: 'Leet Frame cancelled "Night Photography Walk".',
+    href: '/calendar',
+    created_at: '2026-09-23T19:05:00Z',
+    is_read: false,
+  },
+  {
+    id: 'ntf_01',
+    kind: 'event_updated',
+    title: 'Starts tomorrow',
+    body: 'Cinematic Storytelling & Lighting Masterclass, 18:00 in Cluster 2.',
+    href: '/events/evt_workshop_cine',
+    created_at: '2026-09-22T09:00:00Z',
+    is_read: true,
   },
 ];

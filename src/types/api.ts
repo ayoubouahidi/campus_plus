@@ -39,6 +39,13 @@ export interface Club {
 
 export type EventCategory = 'Tech' | 'Media' | 'Music' | 'Sports' | 'Business' | 'EventsOrganization' | 'Gaming';
 
+// A few attendees for the card's avatar stack; the full roster lives on /events/[id]
+export interface AttendeePreview {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+}
+
 export interface EventItem {
     id: string;
     club_id: string;
@@ -46,13 +53,14 @@ export interface EventItem {
     department_name: string;
     title: string;
     description: string;
-    flyer_url: string;
+    flyer_url: string; // '' when the organizer hasn't uploaded one
     location: string;
     category: EventCategory;
     start_time: string; // ISO 8601 string
     end_time: string;   // ISO 8601 string
     rsvps_count: number;
     has_user_rsvpd: boolean;
+    attendees_preview: AttendeePreview[]; // at most 3, newest first
   }
   
   // Standard Paginated Response Envelope :  EventResponse, ClubResponse, UserResponse

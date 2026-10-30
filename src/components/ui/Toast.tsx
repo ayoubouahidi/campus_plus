@@ -41,7 +41,7 @@ export interface ToastProviderProps {
   children: React.ReactNode;
 }
 
-export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
+export const ToastProvider = ({ children }: ToastProviderProps) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const dismissToast = useCallback((id: string) => {
@@ -65,11 +65,11 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     <ToastContext.Provider value={{ showToast, dismissToast }}>
       {children}
 
-      {/* Floating Toast Viewport Container */}
+      {/* Floating Toast Viewport Container. Below md it sits above the fixed MobileTabBar (64px + border + safe area). */}
       <div
         aria-live="polite"
         aria-atomic="true"
-        className="fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2 pointer-events-none px-4 sm:px-0"
+        className="fixed bottom-[calc(4rem+1px+env(safe-area-inset-bottom)+1rem)] right-4 z-50 flex w-full max-w-sm flex-col gap-2 pointer-events-none px-4 sm:px-0 md:bottom-4"
       >
         {toasts.map((toast) => (
           <ToastItem

@@ -119,35 +119,29 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   total?: number;
 }
 
-export const AvatarGroup: React.FC<AvatarGroupProps> = ({
-  children,
-  max = 4,
-  total,
-  className = '',
-  ...props
-}) => {
-  const childrenArray = React.Children.toArray(children);
-  const visibleChildren = childrenArray.slice(0, max);
-  const hiddenCount = (total !== undefined ? total - max : childrenArray.length - max);
+export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
+  ({ children, max = 4, total, className = '', ...props }, ref) => {
+    const childrenArray = React.Children.toArray(children);
+    const visibleChildren = childrenArray.slice(0, max);
+    const hiddenCount = total !== undefined ? total - max : childrenArray.length - max;
 
-  return (
-    <div
-      className={`flex items-center -space-x-2 overflow-hidden ${className}`}
-      {...props}
-    >
-      {visibleChildren.map((child, index) => (
-        <div key={index} className="inline-block ring-2 ring-white dark:ring-slate-950 rounded-full">
-          {child}
-        </div>
-      ))}
+    // Rings match the card surface (white / slate-900), where avatar stacks usually sit.
+    return (
+      <div ref={ref} className={`flex items-center -space-x-2 overflow-hidden ${className}`} {...props}>
+        {visibleChildren.map((child, index) => (
+          <div key={index} className="inline-block rounded-full ring-2 ring-white dark:ring-slate-900">
+            {child}
+          </div>
+        ))}
 
-      {hiddenCount > 0 && (
-        <div className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-950">
-          +{hiddenCount}
-        </div>
-      )}
-    </div>
-  );
-};
+        {hiddenCount > 0 && (
+          <div className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900">
+            +{hiddenCount}
+          </div>
+        )}
+      </div>
+    );
+  }
+);
 
 AvatarGroup.displayName = 'AvatarGroup';

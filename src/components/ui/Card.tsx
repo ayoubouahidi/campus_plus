@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 
 /* ---------------------------------- Card ---------------------------------- */
 
@@ -29,7 +30,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
 
     // "group" class enables child elements (like the banner image) to zoom on card hover
     const hoverStyles = isHoverable
-      ? 'group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-violet-300 dark:hover:border-violet-700/60 cursor-pointer'
+      ? 'group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-violet-300 dark:hover:border-violet-700/60 cursor-pointer motion-reduce:transition-none motion-reduce:hover:translate-y-0'
       : '';
 
     return (
@@ -49,18 +50,22 @@ Card.displayName = 'Card';
 
 export interface CardBannerProps extends React.HTMLAttributes<HTMLDivElement> {
   src?: string;
-  alt?: string;
+  alt?: string; // '' (decorative) by default: the card title usually sits right below the image
+  sizes?: string; // next/image `sizes`: how wide the banner renders, so the browser picks a small enough file
   aspectRatio?: 'video' | 'wide' | 'square';
   overlay?: React.ReactNode;
+  fallback?: React.ReactNode; // replaces the default placeholder when there is no src
 }
 
 export const CardBanner = React.forwardRef<HTMLDivElement, CardBannerProps>(
   (
     {
       src,
-      alt = 'Event banner',
+      alt = '',
+      sizes = '100vw',
       aspectRatio = 'video',
       overlay,
+      fallback,
       className = '',
       children,
       ...props
@@ -80,11 +85,15 @@ export const CardBanner = React.forwardRef<HTMLDivElement, CardBannerProps>(
         {...props}
       >
         {src ? (
-          <img
+          <Image
             src={src}
             alt={alt}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            fill
+            sizes={sizes}
+            className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
           />
+        ) : fallback ? (
+          fallback
         ) : (
           /* Subtle geometric fallback when an event doesn't have an image uploaded */
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/10 via-slate-100 to-slate-200 dark:from-violet-950/30 dark:via-slate-900 dark:to-slate-800">
@@ -173,7 +182,7 @@ export const CardFooter = React.forwardRef<
 >(({ className = '', ...props }, ref) => (
   <div
     ref={ref}
-    className={`mt-4 flex items-center justify-between border-t border-slate-100 p-5 pt-0 dark:border-slate-800/60 ${className}`}
+    className={`mt-4 flex items-center justify-between border-t border-slate-100 p-5 pt-4 dark:border-slate-800/60 ${className}`}
     {...props}
   />
 ));
