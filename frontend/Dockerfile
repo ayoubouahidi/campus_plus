@@ -1,23 +1,7 @@
-# ---- 1) deps ----
-FROM node:22-alpine AS deps
+FROM node:22-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
-
-# ---- 2) build ----
-FROM node:22-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+RUN npm install
 COPY . .
-RUN npm run build
-
-# ---- 3) runtime (small image) ----
-FROM node:22-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
-COPY --from=builder --chown=node:node /app/public ./public
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-USER node
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["npm", "run", "dev"]
