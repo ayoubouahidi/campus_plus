@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 const items = [
   { label: "Overview", href: "/super_admin" },
@@ -19,9 +20,12 @@ export default function SuperSidebar() {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white p-5">
       <h1 className="text-xl font-bold text-violet-600">CampusPulse</h1>
-      <span className="mt-2 w-fit rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-semibold text-violet-600">
-        SUPER ADMIN
-      </span>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="w-fit rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-semibold text-violet-600">
+          SUPER ADMIN
+        </span>
+        <ThemeToggle />
+      </div>
 
       <p className="mt-8 text-[11px] font-medium text-slate-400">MENU</p>
       <nav className="mt-3 space-y-1">

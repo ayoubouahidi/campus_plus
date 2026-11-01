@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/Input";
 import { Avatar } from "@/components/ui/Avatar";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 export default function Topbar({
   title,
@@ -16,6 +17,7 @@ export default function Topbar({
       </div>
 
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         <Input
           aria-label="Search dashboard"
           className="w-64 rounded-full border-0 bg-slate-100 py-2"
