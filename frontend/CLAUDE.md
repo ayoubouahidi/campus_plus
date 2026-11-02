@@ -80,11 +80,10 @@ Executed sequentially from Phase 2 through Phase 7:
   - `/calendar`: 7-column monthly/weekly date matrix + selected-day agenda drawer.
   - `/clubs` & `/clubs/[slug]`: Student club directory and detailed club brand profiles.
   - `/events/[id]`: Dedicated event dossier with RSVP ticket flow and attendee stacks.
-- **Phase 5: Authentication & Separated Admin Portals**
+- **Phase 5: Student Authentication & Route Guards**
   - `/auth/login` & `/auth/register`: Dual email credentials and 42 Intra OAuth.
-  - Role-based route guard middleware (Student vs Club Board vs Superadmin).
-  - Organizer Studio (`/admin/events`, event creation/edit modals, RSVP rosters).
-  - Superadmin Portal (`/admin/super/clubs`, governance, role assignments).
+  - Route guards for signed-in student pages (`/profile`); signed-out visitors keep the public views.
+  - **Out of scope:** the Organizer (Club Board) dashboard and the Superadmin portal are a **separate app**, not part of this codebase. See `DOCS.md` §1.3.
 - **Phase 6: Real-Time WebSockets**
   - Custom `useWebSocket` hook connecting to `/ws/calendar/` for live updates and toasts.
 - **Phase 7: i18n & API Production Hardening**

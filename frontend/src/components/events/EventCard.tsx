@@ -7,10 +7,13 @@ import { Avatar, AvatarGroup } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { CheckIcon, MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { CATEGORY_LABELS } from '@/lib/events';
-import { formatEventSchedule } from '@/lib/time';
+import { EventSchedule } from '@/lib/time';
 
 export interface EventCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   event: EventItem;
+  // Pre-formatted on the server (getEventSchedules). The card never formats dates itself, because the
+  // browser's time-zone data can disagree with the server's and break hydration (DOCS.md §5.2).
+  schedule: EventSchedule;
   onRsvpToggle: (event: EventItem) => void;
 }
 
@@ -31,8 +34,7 @@ const fallbackStyles: Record<EventCategory, string> = {
 const CalendarIcon = NAV_ICONS.calendar;
 
 export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
-  ({ event, onRsvpToggle, className = '', ...props }, ref) => {
-    const { day, time } = formatEventSchedule(event.start_time);
+  ({ event, schedule, onRsvpToggle, className = '', ...props }, ref) => {
     const isGoing = event.has_user_rsvpd;
 
     return (
@@ -51,7 +53,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Badge variant={event.category}>{CATEGORY_LABELS[event.category]}</Badge>
             <time dateTime={event.start_time} className="text-xs font-semibold text-violet-600 dark:text-violet-400">
-              {day} · {time}
+              {schedule.day} · {schedule.time}
             </time>
           </div>
 

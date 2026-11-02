@@ -78,7 +78,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | ----- | ------------------------------------- | -------------- |
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
-| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3) and 3.2 (§5.4) done |
+| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3) and 3.2 (§5.4) done; campus-time hydration fix (§5.2) |
 | 4     | Calendar, clubs, event dossier        | ⏳             |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
@@ -1158,7 +1158,7 @@ The mockup is a **light-only visual reference**, not a spec. We take its structu
 | 10 | Each card styled differently: solid lime pill vs. tinted pill, white vs. dark bookmark, club name above the title vs. on the image, date coloured per category | **One card layout**, always the same | Consistency is what makes a grid look calm. Per-category date colours also fail contrast (fuchsia-500 on white ≈ 3.3:1). |
 | 11 | Five CTA labels: "RSVP Now", "RSVP for Event", "Going ✓", "You're Attending", "Attending ✓" | Two states: **RSVP** (primary) and **Going** (with check icon, secondary/emerald tint) | One action needs one vocabulary. |
 | 12 | Card footer = avatar row **plus** a full-width 44px button (two rows) | **One row:** avatar stack + "42 going" on the left, small RSVP button on the right | Shorter cards, so more events above the fold. It also matches our existing `CardSkeleton` footer geometry (avatars left, `h-8 w-20` button right), so there is zero layout shift between loading and loaded states. |
-| 13 | Times shown as "9:00 AM EST" | "Thu, Nov 5 · 6:00 PM" in campus time (`formatEventSchedule`, `Africa/Casablanca`), no zone suffix | All events are on campus in Morocco. The fixed zone also keeps server and client output identical (no hydration mismatch). |
+| 13 | Times shown as "9:00 AM EST" | "Thu, Nov 5 · 5:00 PM" in campus time (`formatEventSchedule`, `Africa/Casablanca`), no zone suffix | All events are on campus in Morocco. Formatting runs **on the server only** and the text is passed down (§5.2), because a fixed zone alone does not guarantee identical server and browser output. |
 | 14 | Custom sizes (13px, 11px, 219px image) and padding that alternates 20/24px | Tailwind scale only: `text-xs`/`text-sm`/`text-lg`, image `aspect-video`, padding `p-5` everywhere | Fewer magic numbers. `aspect-video` keeps image height proportional at every column width. |
 | 15 | Hover state = large `shadow-xl` | Our `Card isHoverable`: `-translate-y-0.5`, `shadow-md`, violet border, image `scale-105` | Already built and tested in Phase 1. Subtle beats dramatic for a grid of 6+ cards. Respect `motion-reduce`. |
 | 16 | No empty state, light mode only | Empty state and full dark mode defined below | Both are required by the roadmap. |
@@ -1268,6 +1268,14 @@ Rules: no pure black (`#000`) or pure white text on dark backgrounds other than 
 
 - `src/types/api.ts`: added `AttendeePreview` and `EventItem.attendees_preview` (≤ 3, newest first). `flyer_url` may be `''`.
 - `src/lib/time.ts`: added `CAMPUS_TIME_ZONE` and `formatEventSchedule(iso) → { day, time }`.
+- **Hydration fix (2026-11-02): event times are formatted on the server only.**
+  - **Bug:** the browser logged *"Hydration failed because the server rendered text didn't match the client"* on the card's `<time>`: server `5:00 PM`, browser `6:00 PM`.
+  - **Cause:** pinning `timeZone: 'Africa/Casablanca'` is not enough. Every runtime ships its own copy of the IANA time-zone database. The server (Node in `node:22-alpine`, tzdata 2026e) has Morocco on GMT+0 from about Oct 2026; Chrome 144's bundled copy still says GMT+1. Morocco's offset changes by government decree, so runtimes will keep disagreeing from time to time.
+  - **Fix:** `getEventSchedules(events) → Record<id, EventSchedule>` runs in a Server Component (`src/app/page.tsx`). Client components receive the strings as props and never call `formatEventSchedule`. The browser's time-zone data is never used, so a visitor with an old browser also sees the right time after a re-render (e.g. clicking RSVP).
+  - **Rejected:** `suppressHydrationWarning` hides the warning but the text flips to the browser's value on the next re-render. A hard-coded `+00:00` offset breaks silently the next time Morocco changes its clock.
+  - **Rule from now on:** any date formatted in campus time is formatted on the server. The Phase 7 API could also send it pre-formatted.
+  - **Bench split:** `src/app/page.tsx` is now a Server Component. The interactive bench lives in `src/app/_bench/EventCardBench.tsx` (`_` = private folder, never a route).
+  - **Rebuild note:** the frontend container copies the source at build time (no volume), so code changes need `docker compose up -d --build frontend`.
 - `src/lib/mockData.ts`: events moved to November 2026 (UTC times), flyer paths under `/mock/events/`, a shared attendee pool, and more events.
 - `public/mock/events/`: `basketball.png`, `campus-bbq.png`, `hackathon.png`, `jam-session.png`, `symposium.png`.
 - `src/lib/events.ts`: created empty here, filled in Step 3.1 (§5.3).
@@ -1352,7 +1360,7 @@ const featured = getFeaturedEvent(events, now);
 
 ### 5.4 EventCard & `toggleRsvp` (Step 3.2)
 
-**Files:** `src/components/events/EventCard.tsx`, `toggleRsvp` in `src/lib/events.ts`, `CheckIcon` + `MapPinIcon` in `src/components/ui/layout/navIcons.tsx`
+**Files:** `src/components/events/EventCard.tsx` (`schedule` prop added 2026-11-02, see §5.2), `toggleRsvp` in `src/lib/events.ts`, `CheckIcon` + `MapPinIcon` in `src/components/ui/layout/navIcons.tsx`
 **Primitives touched:** `Card.tsx` (§2.2), `Avatar.tsx` (§2.3)
 **Status:** ✅ Step 3.2 complete. Bench: `src/app/page.tsx` (all 6 mock events + 4 self-checks).
 
@@ -1399,6 +1407,7 @@ The card is the unit of the feed. In two seconds it should answer "what, when, w
 ```ts
 interface EventCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   event: EventItem;                          // required
+  schedule: EventSchedule;                   // required; { day, time } pre-formatted on the server (§5.2)
   onRsvpToggle: (event: EventItem) => void;  // required; receives the event as currently shown
 }
 // forwardRef<HTMLDivElement> → the Card root
@@ -1420,9 +1429,10 @@ const handleRsvpToggle = (event: EventItem) => {
     : { title: "You're going", description: event.title, variant: 'success' });
 };
 
+// `schedules` comes from a Server Component: getEventSchedules(events)
 <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
   {events.map((event) => (
-    <li key={event.id}><EventCard event={event} onRsvpToggle={handleRsvpToggle} /></li>
+    <li key={event.id}><EventCard event={event} schedule={schedules[event.id]} onRsvpToggle={handleRsvpToggle} /></li>
   ))}
 </ul>
 ```
