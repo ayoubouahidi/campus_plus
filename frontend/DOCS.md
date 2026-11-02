@@ -43,7 +43,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 
 | Route | Page |
 | --- | --- |
-| `/` | Discovery feed: hero, department tabs, category pills, event grid |
+| `/` | Discovery feed: heading, department tabs, category pills, event grid |
 | `/calendar` | Interactive calendar: month grid and selected-day schedule |
 | `/clubs` | Clubs directory |
 | `/clubs/[slug]` | Individual club hub: banner, bio, contact, club events |
@@ -78,7 +78,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | ----- | ------------------------------------- | -------------- |
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
-| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3) and 3.2 (§5.4) done; campus-time hydration fix (§5.2) |
+| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3), 3.2 (§5.4) and 3.4 (§5.6) done; 3.3 hero dropped (§5.5); campus-time hydration fix (§5.2) |
 | 4     | Calendar, clubs, event dossier        | ⏳             |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
@@ -110,6 +110,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | Tabs       | `src/components/ui/Tabs.tsx`      |
 | Toast      | `src/components/ui/Toast.tsx`     |
 | Skeleton   | `src/components/ui/Skeleton.tsx`  |
+| FilterChip (added in Step 3.4, §5.6) | `src/components/ui/FilterChip.tsx` |
 
 Full entries get added here whenever one of these is modified.
 
@@ -1147,9 +1148,9 @@ The mockup is a **light-only visual reference**, not a spec. We take its structu
 | # | Mockup | Our version | Why |
 | --- | --- | --- | --- |
 | 1 | "CampusPulse" brand, blue `#2563eb` buttons | Campus Hub, violet tokens (`violet-600`, dark `violet-400`) | Brand and tokens are already set (§1.4). |
-| 2 | Generic marketing hero: photo, gradient, 2 blur blobs, SVG overlay, `mix-blend`, tint layer, eyebrow pill, live-count pill | **Featured event hero**: that event's flyer + **one** gradient, category badge, title, date · location, two actions | The roadmap says *featured event*. One real event is more useful than a slogan. Five decorative layers become one, which means less paint cost and fewer things to keep in sync with dark mode. |
-| 3 | Hero filters "All / RSVP'd / Saved / Invited" | Removed. Campus tabs **All · 1337 · EMINES** (our `Tabs`, segmented) sit in the toolbar under the hero | Saved and Invited have no data or feature behind them. Campus is the filter students actually need. White-15% pills on a photo also fail contrast. |
-| 4 | Two search bars (navbar "Search the whole site" + hero search) | Navbar ⌘K stays the global search. The feed gets **one** "Search events" input in the toolbar that filters the grid (debounced) | Two identical-looking inputs with different scopes confuse people. The feed input sits next to the filters it works with. |
+| 2 | Generic marketing hero: photo, gradient, 2 blur blobs, SVG overlay, `mix-blend`, tint layer, eyebrow pill, live-count pill | **No hero.** The page opens with the `<h1>` "Upcoming events" and the toolbar | A featured-event hero was built in Step 3.3 and then dropped by the product owner (2026-11-02): it looked heavy and repeated a card that is already in the grid. See §5.5. |
+| 3 | Hero filters "All / RSVP'd / Saved / Invited" | Removed. Campus tabs **All · 1337 · EMINES** (our `Tabs`, segmented) sit in the toolbar | Saved and Invited have no data or feature behind them. Campus is the filter students actually need. White-15% pills on a photo also fail contrast. |
+| 4 | Two search bars (navbar "Search the whole site" + page search) | **One search: the navbar's** ("Search events…", ⌘K). The feed toolbar has no search input, only campus and category filters | Two search boxes for the same events is redundant and confusing. (The first version of this spec kept both; corrected by the product owner on 2026-11-02 after Step 3.4 was built with a toolbar search.) |
 | 5 | Sticky, blurred category bar | Normal (non-sticky) chip row under the toolbar. Scrolls horizontally on phones, wraps on desktop | The navbar is already sticky. Two sticky bars take ~120px of a phone screen, and blur is expensive on low-end devices. |
 | 6 | Mockup categories (Technology, Sports & Rec, Arts & Culture, Social, Academic) | Our 7 `EventCategory` values with our colours: Tech `lime` · Media `violet` · Music `indigo` · Sports `teal` · Business `orange` · Gaming `fuchsia` · EventsOrganization (label "Events") `sky` | These must match the API type (`types/api.ts`). |
 | 7 | Grid inside a grey `#f1f5f9` rounded panel on a `#f8fafc` page | Cards sit directly on the page (`bg-slate-50` / `dark:bg-slate-950`) | A panel inside a page adds a layer with no purpose and gives dark mode a third grey to tune. |
@@ -1167,24 +1168,15 @@ The mockup is a **light-only visual reference**, not a spec. We take its structu
 
 Container for every section: `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` (same as the navbar). Vertical rhythm: `space-y-8` between sections, `py-6 sm:py-8` around the page.
 
-1. **Featured hero** (one event: the nearest upcoming event that has a flyer)
-   - Card-like block, `rounded-2xl overflow-hidden`, **inside** the container (not full-bleed). Height: `min-h-[320px]` on phones, `aspect-[21/9]` from `md`.
-   - Background: the flyer (`next/image`, `fill`, `object-cover`, `priority` because it is the LCP image) + one gradient `bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent`. With no flyer: `bg-gradient-to-br from-violet-600 to-violet-800`.
-   - Content, bottom-left, `p-6 sm:p-10`, max width `max-w-2xl`:
-     - small "Featured" label (`text-xs font-semibold uppercase tracking-wide text-violet-200`), then the category `Badge`
-     - title `text-2xl sm:text-4xl font-bold tracking-tight text-white`, max 2 lines
-     - meta `text-sm text-white/80`: date · time · location
-     - actions: primary **RSVP / Going** button + secondary "View details" link (to `/events/[id]`, styled as a white/10 outline pill)
-   - The hero looks the same in both themes (dark gradient on photo), so no `dark:` variants are needed except the no-flyer fallback.
-2. **Toolbar**
-   - Row 1: `<h2>` "Upcoming events" (`text-xl font-semibold`) + result count (`text-sm text-slate-500 dark:text-slate-400`, inside `aria-live="polite"`).
-   - Row 2 (stacked on phones, one row from `sm`): campus `Tabs` (segmented: All · 1337 · EMINES) on the left, `Input` with search icon (`placeholder="Search events"`, `max-w-sm w-full`) on the right.
-3. **Category chips**
+1. **Toolbar**
+   - Row 1: `<h1>` "Upcoming events" (`text-xl font-semibold`) + result count (`text-sm text-slate-500 dark:text-slate-400`, inside `aria-live="polite"`).
+   - Row 2: campus toggle group (segmented: All · 1337 · EMINES), full width on phones, content width from `sm`. No search input (correction 4).
+2. **Category chips**
    - Interactive `Badge` chips: "All" + 7 categories. One selected at a time (selected = filled violet, others = neutral; each chip shows its category colour dot).
    - Phones: one row, `overflow-x-auto`, hidden scrollbar, `-mx-4 px-4` so chips can scroll edge to edge. From `md`: `flex-wrap`.
    - Group semantics: `role="group" aria-label="Filter by category"`, each chip `aria-pressed`.
-4. **Event grid**
-   - `grid gap-6 sm:grid-cols-2 lg:grid-cols-3`.
+3. **Event grid**
+   - `grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3`. `grid-cols-1` is required, see §5.7.
    - Loading: 6 × `CardSkeleton`.
    - Empty: see below.
 
@@ -1217,8 +1209,8 @@ Centred in the grid area, `py-16`, inside a dashed box (`rounded-xl border borde
 
 - decorative calendar/search icon in a `size-12 rounded-full bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400` circle (`aria-hidden`)
 - title "No events match your filters" (`text-base font-semibold`)
-- hint "Try another campus or category, or clear the search." (`text-sm text-slate-500 dark:text-slate-400`)
-- `Button variant="secondary"` "Clear filters", which resets campus, category and search
+- hint "Try another campus or category." (`text-sm text-slate-500 dark:text-slate-400`)
+- `Button variant="secondary"` "Clear filters", which resets campus and category
 
 #### Dark mode map (derived by us; the mockup has none)
 
@@ -1233,29 +1225,27 @@ Centred in the grid area, `py-16`, inside a dashed box (`rounded-xl border borde
 | Card footer divider | `border-slate-100` | `border-slate-800/60` |
 | Chip (idle) | `bg-slate-100 text-slate-700` | `bg-slate-800 text-slate-300` |
 | Chip (selected) | `bg-violet-600 text-white` | `bg-violet-500 text-white` |
-| Search input | `bg-white border-slate-200` | `bg-slate-900 border-slate-800` |
 | No-flyer fallback banner | category `-100` tint + `-600` icon | category `-500/10` tint + `-400` icon |
 | Empty-state box | `border-slate-300` | `border-slate-700` |
-| Hero | same in both themes (dark gradient over photo) | |
 
-Rules: no pure black (`#000`) or pure white text on dark backgrounds other than the hero. Shadows are near-invisible on `slate-950`, so dark mode relies on borders for separation.
+Rules: no pure black (`#000`) or pure white text on dark backgrounds. Shadows are near-invisible on `slate-950`, so dark mode relies on borders for separation.
 
 #### Accessibility checklist for the feed
 
-- One `<h1>` per page: the hero title is the `<h1>`. "Upcoming events" is `<h2>`, card titles are `<h3>`.
+- One `<h1>` per page: "Upcoming events". Card titles are `<h3>` today; with no section heading between the `<h1>` and the cards, Step 3.6 should make them `<h2>` so no level is skipped.
 - Filters live in a `<search>`/`role="search"` region. The result count is announced politely when filters change.
 - Text contrast is at least 4.5:1 everywhere (the reason for corrections 9 and 10).
-- Flyer images get `alt=""` (the title is right next to them). The hero image also gets `alt=""`.
+- Flyer images get `alt=""` (the title is right next to them).
 - `motion-reduce:transform-none` on hover lifts and image zoom.
 
 #### Proposed Phase 3 build order (one step at a time, each with a bench in `src/app/page.tsx`)
 
 | Step | Deliverable |
 | --- | --- |
-| 3.1 | `src/lib/events.ts`: pure filter helpers (`filterEvents({ campus, category, query })`, `getFeaturedEvent`, campus list) + `useDebouncedValue` hook |
+| 3.1 | `src/lib/events.ts`: pure filter helpers (`filterEvents({ campus, category, query })`, campus list) + `useDebouncedValue` hook |
 | 3.2 | `EventCard` (+ RSVP button states, no-flyer fallback) |
-| 3.3 | `FeaturedEventHero` |
-| 3.4 | `FeedToolbar` (campus tabs, search) + `CategoryFilter` chips |
+| 3.3 | ~~`FeaturedEventHero`~~ dropped (§5.5) |
+| 3.4 | `FeedToolbar` (heading, count, campus filter) + `CategoryFilter` chips |
 | 3.5 | `EventGrid` with loading (`CardSkeleton`) and empty states |
 | 3.6 | Assemble `/` (replace the bench with the real page) |
 
@@ -1287,7 +1277,7 @@ Rules: no pure black (`#000`) or pure white text on dark backgrounds other than 
 
 #### Business & Product Purpose
 
-Students should be able to narrow the feed to their campus, a category they care about, or something they half-remember ("that jam thing at the courtyard"). These helpers contain all of that logic. The feed's components (Steps 3.2–3.6) only render it. The hero needs one event with an image, chosen the same way every time, so that choice lives here too.
+Students should be able to narrow the feed to their campus, a category they care about, or something they half-remember ("that jam thing at the courtyard"). These helpers contain all of that logic. The feed's components (Steps 3.2–3.6) only render it.
 
 #### Core Concepts & Engineering Decisions
 
@@ -1295,9 +1285,8 @@ Students should be able to narrow the feed to their campus, a category they care
 - **`'all'` lives in the filter types, not in the domain types.** `CampusFilter = 'all' | Campus` and `CategoryFilter = 'all' | EventCategory`. `EventCategory` (the API type) never gets a fake `'all'` value.
 - **Search normalisation.** The query and the text it searches are both turned to NFD, combining marks are stripped (Latin accents `̀-ͯ`, Arabic harakat `ً-ٟ`, `ٰ`), then lower-cased. "cinématic" finds "Cinematic", and Phase 7 Arabic search will ignore vowel marks. The ranges are written out instead of `\p{M}` because `tsconfig` targets ES2017, where Unicode property escapes aren't allowed.
 - **Words combine with AND.** The query is split on whitespace. Every word must appear somewhere in the title, club name or location. Typing more narrows the results, as people expect, and extra spaces are harmless.
-- **Time is a parameter.** `getUpcomingEvents(events, now)` and `getFeaturedEvent(events, now)` take `now` as a number instead of calling `Date.now()`, the same rule as `formatRelativeTime` (§3.5). This keeps them deterministic, so the bench can check them with fixed dates. It also means the page decides what "now" is. Step 3.6 should compute it **once on the server** and pass it down, so server and client HTML agree.
+- **Time is a parameter.** `getUpcomingEvents(events, now)` takes `now` as a number instead of calling `Date.now()`, the same rule as `formatRelativeTime` (§3.5). This keeps it deterministic, so the bench can check them with fixed dates. It also means the page decides what "now" is. Step 3.6 should compute it **once on the server** and pass it down, so server and client HTML agree.
 - **Upcoming = not ended.** An event that is happening right now (the 48-hour hackathon) stays in the feed. Sorting is by `start_time`, soonest first. `.filter()` returns a new array before `.sort()`, so the input is never mutated (bench check 14).
-- **Featured = soonest upcoming event with a flyer**, otherwise `null`, in which case the page hides the hero. The featured event also stays in the grid, so filtering never makes it disappear.
 - **`useDebouncedValue(value, delayMs = 300)`.** `useState` stores the value that was last applied. A `useEffect` keyed on `[value, delayMs]` sets a timer. Its cleanup cancels the pending timer whenever the value changes again, and on unmount. Typing "hackathon" filters (and updates the polite live region) once, not nine times. The file has no `'use client'`: it never touches `window`/`document`, and hooks can only run inside client components anyway, so the boundary belongs to the component that calls it.
 
 #### Architectural Tradeoffs
@@ -1327,7 +1316,6 @@ const CATEGORY_LABELS: Record<EventCategory, string>;
 
 filterEvents(events: EventItem[], filters: EventFilters): EventItem[];   // keeps input order, no mutation
 getUpcomingEvents(events: EventItem[], now: number): EventItem[];        // end_time > now, sorted by start_time
-getFeaturedEvent(events: EventItem[], now: number): EventItem | null;    // first upcoming with flyer_url !== ''
 
 // src/hooks/useDebouncedValue.ts
 useDebouncedValue<T>(value: T, delayMs?: number /* = 300 */): T;
@@ -1338,19 +1326,14 @@ useDebouncedValue<T>(value: T, delayMs?: number /* = 300 */): T;
 ```tsx
 'use client';
 const [filters, setFilters] = useState(DEFAULT_EVENT_FILTERS);
-const query = useDebouncedValue(filters.query);
 
 const upcoming = getUpcomingEvents(events, now);       // `now` computed once on the server
-const visible = filterEvents(upcoming, { ...filters, query });
-const featured = getFeaturedEvent(events, now);
+const visible = filterEvents(upcoming, filters);       // the feed leaves `query` at ''
 
-<Input
-  type="search"
-  value={filters.query}
-  onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value }))}
-/>
 <Button onClick={() => setFilters(DEFAULT_EVENT_FILTERS)}>Clear filters</Button>
 ```
+
+**Update (2026-11-02):** the feed has no search input (§5.1 correction 4). The `query` part of `filterEvents`, the search normalisation and `useDebouncedValue` stay: they are what the navbar search ("Search events…", ⌘K) will use when its palette is built. Until then the feed always passes `query: ''`.
 
 #### Notes for later steps
 
@@ -1382,7 +1365,7 @@ The card is the unit of the feed. In two seconds it should answer "what, when, w
 
 #### Accessibility
 
-- The title is an `h3` link (the page has `h1` hero → `h2` "Upcoming events").
+- The title is an `h3` link (the page's `h1` is "Upcoming events").
 - The date is `<time dateTime={iso}>`.
 - **RSVP button name.** Visible "RSVP" / "Going" plus screen-reader-only text: "RSVP to {title}" and "Going to {title}, cancel RSVP". Six identical "RSVP" buttons would be indistinguishable in a screen reader's button list. The visible word is at the start of the accessible name (WCAG 2.5.3 Label in Name).
 - **Spec change, no `aria-pressed`.** §5.1 proposed `aria-pressed="true"` on "Going". A toggle button whose *label also changes* is read as "Going, pressed", which says the state twice and suggests pressing it means "go". So the label carries the state, and the toast (a live region) announces the change. Focus stays on the button because it is never disabled.
@@ -1396,7 +1379,7 @@ The card is the unit of the feed. In two seconds it should answer "what, when, w
 | --- | --- | --- |
 | Stretched `::after` link | Wrap the whole card in `<Link>` | A link can't contain the RSVP `<button>` (interactive content inside `<a>` is invalid). A screen reader would also read the whole card as one giant link name. |
 | Stretched link | `onClick={() => router.push()}` on the card | That gives no real link: no middle-click or open-in-new-tab, no prefetch, and it isn't announced as a link. |
-| Controlled card (`event` + `onRsvpToggle`) | Card keeps its own RSVP state | The feed, the hero and the event page must agree on one RSVP value. Local state would drift, and the hero (Step 3.3) shows the same event. |
+| Controlled card (`event` + `onRsvpToggle`) | Card keeps its own RSVP state | The feed and the event page must agree on one RSVP value. Local state would drift. |
 | `fallback` slot on `CardBanner` | `EventCard` draws its own banner box | The aspect ratio, background and hover zoom stay in one place. Phase 4 club banners get the same slot for free. |
 | `next/image` inside the `CardBanner` primitive | Plain `<img>` | ~25× smaller downloads and automatic `srcset`. Cost: remote URLs must be allow-listed (`images.remotePatterns` in `next.config.ts`) when Phase 7 serves flyers from the API host. |
 | Label changes, no `aria-pressed` | Fixed label + `aria-pressed` | A fixed label ("RSVP" in both states) is less clear for sighted users. See Accessibility above. |
@@ -1430,7 +1413,7 @@ const handleRsvpToggle = (event: EventItem) => {
 };
 
 // `schedules` comes from a Server Component: getEventSchedules(events)
-<ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+<ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
   {events.map((event) => (
     <li key={event.id}><EventCard event={event} schedule={schedules[event.id]} onRsvpToggle={handleRsvpToggle} /></li>
   ))}
@@ -1439,6 +1422,129 @@ const handleRsvpToggle = (event: EventItem) => {
 
 #### Notes for later steps
 
-- **Step 3.3:** in Next.js 16, `next/image`'s `priority` is deprecated. The hero's LCP image should use `preload` (or `loading="eager"` + `fetchPriority="high"`), not `priority` as §5.1 says.
+- **Next.js 16:** `next/image`'s `priority` is deprecated; use `preload` for a single above-the-fold LCP image (or `loading="eager"` / `fetchPriority="high"`).
 - **Step 3.5:** `CardSkeleton` no longer matches the card. It has a status badge and three description lines that `EventCard` doesn't have, and its button placeholder is `h-8` while `Button size="sm"` is ~26px. Loading → loaded will jump unless the skeleton is reshaped (or an `EventCardSkeleton` is added).
 - **Phase 7:** `Button isLoading` sets `disabled`, which drops keyboard focus mid-request. Keep RSVP optimistic (no loading state), or give `Button` an `aria-disabled` loading mode first.
+
+### 5.5 Step 3.3 FeaturedEventHero: built, then dropped (2026-11-02)
+
+**Decision (product owner):** no hero on `/`. It was built to the §5.1 spec (flyer background, one gradient, "Featured" label, title as `<h1>`, RSVP + View details) and reviewed in the browser. The verdict: it looks heavy and adds nothing, because the featured event is already a card in the grid with the same information and the same RSVP button. The code was removed before being committed; `getFeaturedEvent` was removed from `src/lib/events.ts` with it, since nothing else used it.
+
+**What changes in the plan**
+
+- The page starts with the toolbar. "Upcoming events" becomes the page's `<h1>` (§5.1 layout and accessibility checklist updated).
+- The first card images are now the LCP element. Step 3.6 can give the first row of cards `preload` (or `loading="eager"`) if Lighthouse flags it.
+
+**Lessons kept for Step 3.6**
+
+- **`await connection()`** (from `next/server`) in `src/app/page.tsx` before calling `Date.now()`. Without it, Next.js prerenders `/` at build time and "now" freezes at the build date, so `getUpcomingEvents` would keep showing events that have already ended in production.
+- Anything time-dependent (which events are upcoming) is decided on the server and passed down, the same rule as the formatted times in §5.2.
+
+### 5.6 FeedToolbar, CategoryFilter & FilterChip (Step 3.4)
+
+**Files:** `src/components/events/FeedToolbar.tsx`, `src/components/events/CategoryFilter.tsx`, `src/components/ui/FilterChip.tsx` (new primitive), `formatEventCount` in `src/lib/events.ts`
+**Status:** ✅ Step 3.4 complete. Bench: `src/app/page.tsx` → `src/app/_bench/FeedBench.tsx` (live filters over the card grid, 6 self-checks).
+
+#### Business & Product Purpose
+
+The top of `/` now answers "what's on for me": the page title, how many events match, and two ways to narrow the list (campus, category). Searching by words is the navbar's job ("Search events…", ⌘K); there is deliberately no second search box here (§5.1 correction 4). The count gives instant feedback, so an empty result is never a surprise.
+
+#### Core Concepts & Engineering Decisions
+
+- **`FeedToolbar` is controlled and stateless.** It receives `campus`, `onCampusChange` and `resultCount`. The page owns one `EventFilters` object (§5.3), so "Clear filters" in Step 3.5 is a single `setFilters(DEFAULT_EVENT_FILTERS)`.
+- **No search input.** The first build of this step had a "Search events" box here; it was removed the same day because the navbar already has "Search events…" (⌘K). One search, one place.
+- **`children` slot inside the `<search>` landmark.** The page passes `<CategoryFilter>` in, so all filters share one landmark without `FeedToolbar` importing or configuring the chips (composition over a `showCategories` prop).
+- **Native `<search>` element.** The HTML landmark for search and filter controls (typed in React 19's JSX). Screen-reader users can jump straight to "Filter events".
+- **Campus = toggle-button group, not `Tabs`.** Three `<button aria-pressed>` in `role="group" aria-label="Campus"`, styled like the segmented `TabsList`. `Tabs` would be wrong here: it sets `aria-controls` to a panel per tab, but all three campuses filter one shared grid.
+- **`FilterChip` primitive.** A pill-shaped `<button aria-pressed>` with an optional decorative colour dot. It replaces `Badge isClickable` for filters: that renders a `<span>`, which the keyboard can't reach and screen readers don't announce as a button. On the violet "selected" fill the dot turns white (the Media dot is violet too and would vanish).
+- **Chip row layout.** Phones: one sideways-scrolling row (`overflow-x-auto`, scrollbar hidden with `[scrollbar-width:none]` + `[&::-webkit-scrollbar]:hidden`), bleeding to the screen edges with `-mx-4 px-4` (`sm:-mx-6 sm:px-6`) so the last chip visibly peeks out. From `md`: `flex-wrap`. `py-1` gives the focus ring room, because a scroll container clips anything outside its padding box.
+- **`formatEventCount(n)`:** "No events" / "1 event" / "6 events". Pure, in `lib/events.ts`; Phase 7 swaps it for `Intl.PluralRules` with Arabic plural forms (Arabic has six).
+- **No `'use client'`** in any of the three files: no hooks, no browser APIs. Their callback props already require a client parent.
+
+#### Accessibility
+
+- "Upcoming events" is the page's only `<h1>`.
+- Result count: `<p aria-live="polite">`, announced after filtering settles.
+- Toggle buttons read as "1337, toggle button, not pressed". Groups are named "Campus" and "Filter by category".
+- All controls are native buttons/inputs: Tab moves between them, Enter/Space toggles, focus rings are `ring-violet-500` (chips add a 2px offset in the page colour).
+- **Heading levels:** cards are still `<h3>` under the `<h1>`, skipping `<h2>`. Step 3.6 should pass `as="h2"` through `EventCard` (or make it the card default).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| `aria-pressed` toggle buttons | `Tabs` (`role="tablist"`) | Tabs promise one panel per tab (`aria-controls`) and arrow-key navigation; neither applies. A screen reader would announce "tab 2 of 3" for something that is a filter. |
+| `aria-pressed` toggle buttons | `role="radiogroup"` + `role="radio"` | A radio group is the more exact semantics for "pick one", but requires roving `tabIndex` and arrow-key handling to be correct. Toggle buttons are native, need no script, and screen readers announce them clearly. |
+| New `FilterChip` | Give `Badge` a button mode | A badge is a label; a chip is a control. Mixing both in one component would mean conditional element types, ARIA and hover styles in `Badge`. |
+| `children` slot for the chip row | `FeedToolbar` renders `CategoryFilter` itself | The toolbar stays small and the page decides what goes in the filter landmark (e.g. `/calendar` can reuse it without chips). |
+| Horizontal scroll on phones | Wrap chips onto 2–3 lines | Wrapping 8 chips takes ~100px of a phone screen before the first event. One scrolling row costs 40px and the peeking chip shows there's more. |
+| Hand-written `formatEventCount` | `Intl.PluralRules` now | English only until Phase 7; the function is the single place to change. |
+
+#### Component Contract
+
+```ts
+// src/components/ui/FilterChip.tsx — forwardRef<HTMLButtonElement>
+interface FilterChipProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'aria-pressed'> {
+  isSelected: boolean;     // required; sets aria-pressed and the violet fill
+  dotClassName?: string;   // e.g. 'bg-lime-500'; decorative dot, white when selected
+}
+
+// src/components/events/CategoryFilter.tsx — forwardRef<HTMLDivElement>
+interface CategoryFilterProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
+  value: CategoryFilter;                        // 'all' | EventCategory
+  onChange: (value: CategoryFilter) => void;
+}
+
+// src/components/events/FeedToolbar.tsx — forwardRef<HTMLDivElement>
+interface FeedToolbarProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
+  campus: CampusFilter;
+  onCampusChange: (campus: CampusFilter) => void;
+  resultCount: number;
+  children?: React.ReactNode;    // more filters inside the <search> landmark
+}
+
+// src/lib/events.ts
+formatEventCount(count: number): string;   // 'No events' | '1 event' | 'N events'
+```
+
+#### Usage Example
+
+```tsx
+'use client';
+const [filters, setFilters] = useState(DEFAULT_EVENT_FILTERS);
+const visible = filterEvents(events, filters);
+
+<FeedToolbar
+  campus={filters.campus}
+  onCampusChange={(campus) => setFilters((f) => ({ ...f, campus }))}
+  resultCount={visible.length}
+>
+  <CategoryFilter value={filters.category} onChange={(category) => setFilters((f) => ({ ...f, category }))} />
+</FeedToolbar>
+```
+
+#### Notes for later steps
+
+- **`Tabs` primitive bug (not fixed here):** `TabsTrigger` uses roving `tabIndex` (only the active tab is focusable) but has no arrow-key handler, so keyboard users can't reach the other tabs. Fix before anything uses `Tabs` (likely `/calendar` month/week in Phase 4).
+- **`Badge isClickable`** is now unused for filters; consider removing that mode so nobody builds an unreachable control with it.
+- **Step 3.5:** the empty state replaces the bench's placeholder line, and its "Clear filters" button resets `filters` (campus and category).
+- **Phase 7:** campus labels and `formatEventCount` go through i18n; Arabic RTL flips the chip row's scroll direction automatically (flex follows `dir`), but the negative-margin bleed should be checked.
+
+### 5.7 Phone bug fixes: page wider than the screen & `<html>` hydration warning (2026-11-02)
+
+**Files:** `src/app/_bench/FeedBench.tsx` (grid), `src/app/layout.tsx` (`<html>`)
+
+**1. The page was wider than the phone, so it looked zoomed and the navbar was cut off on the right.**
+
+- **Symptom (real phone):** the page opened slightly zoomed. After zooming out, the navbar stopped short of the right edge.
+- **Measured** in headless Chromium at 360px and 390px: every event card was 395px wide, so the document was 411px wide. `/calendar` (no cards) was fine.
+- **Cause:** on phones the grid had no column template (`grid gap-6`, columns only from `sm:`). The single implicit column is `auto`, whose minimum is the card's *min-content* width. The location line uses `truncate` (`white-space: nowrap`), so its min-content width is the full text. "Sports Complex - Main Court · UM6P Central Campus" + icon + padding ≈ 395px. The card grew to that, the page became 411px, and mobile browsers widen the layout viewport to fit the content (the "zoom"). The fixed navbars then span 411px, so part of them sits off-screen.
+- **Fix:** `grid-cols-1`. In Tailwind v4 that is `repeat(1, minmax(0, 1fr))`: the `0` minimum lets the column shrink to the screen width, and `truncate` then does its job ("…"). `sm:grid-cols-2` / `lg:grid-cols-3` already use `minmax(0, 1fr)`, which is why tablets and desktops were never affected.
+- **Rule:** every responsive grid starts with an explicit `grid-cols-1`. Step 3.5's `EventGrid` must keep it.
+
+**2. Hydration warning on `<html>`, only on the phone.**
+
+- **Message:** "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties", pointing at `<html>` with an extra `__gcrremoteframetoken="…"` attribute.
+- **Cause:** not our code. Chrome on Android adds that attribute to `<html>` before React hydrates (browser extensions do the same with other attributes).
+- **Fix:** `suppressHydrationWarning` on `<html>` in the root layout. This is what Next.js recommends for it. It only covers attribute differences on that one element, one level deep. A real mismatch anywhere inside the page (like the campus-time bug in §5.2) is still reported.
+

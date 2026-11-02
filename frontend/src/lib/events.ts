@@ -78,10 +78,6 @@ export const getUpcomingEvents = (events: EventItem[], now: number): EventItem[]
     .filter((event) => Date.parse(event.end_time) > now)
     .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time));
 
-// The hero needs an image, so it shows the soonest upcoming event that has a flyer.
-export const getFeaturedEvent = (events: EventItem[], now: number): EventItem | null =>
-  getUpcomingEvents(events, now).find((event) => event.flyer_url !== '') ?? null;
-
 // Optimistic RSVP: flips the flag and keeps the count in step, so the card updates on click.
 // Phase 7 sends the request alongside and rolls back with the previous object if it fails.
 export const toggleRsvp = (event: EventItem): EventItem => ({
@@ -89,3 +85,7 @@ export const toggleRsvp = (event: EventItem): EventItem => ({
   has_user_rsvpd: !event.has_user_rsvpd,
   rsvps_count: Math.max(0, event.rsvps_count + (event.has_user_rsvpd ? -1 : 1)),
 });
+
+// Result count for the feed toolbar: "No events", "1 event", "6 events".
+export const formatEventCount = (count: number): string =>
+  count === 0 ? 'No events' : `${count} ${count === 1 ? 'event' : 'events'}`;
