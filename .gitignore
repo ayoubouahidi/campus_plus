@@ -1,5 +1,5 @@
 # Nginx SSL certs & keys
-infrastructure/nginx/certs/*.pem
+*.pem
 infrastructure/nginx/certs/*.key
 
 # Environment secrets

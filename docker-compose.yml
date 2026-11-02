@@ -41,6 +41,7 @@ services:
       - media_data:/app/media:ro
     depends_on:
       - web
+      - frontend
   redis:
     image: redis:7-alpine
     restart: unless-stopped
