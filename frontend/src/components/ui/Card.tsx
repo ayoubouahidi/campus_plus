@@ -55,6 +55,7 @@ export interface CardBannerProps extends React.HTMLAttributes<HTMLDivElement> {
   aspectRatio?: 'video' | 'wide' | 'square';
   overlay?: React.ReactNode;
   fallback?: React.ReactNode; // replaces the default placeholder when there is no src
+  loading?: 'lazy' | 'eager'; // next/image default is 'lazy'; use 'eager' for banners visible on first paint
 }
 
 export const CardBanner = React.forwardRef<HTMLDivElement, CardBannerProps>(
@@ -66,6 +67,7 @@ export const CardBanner = React.forwardRef<HTMLDivElement, CardBannerProps>(
       aspectRatio = 'video',
       overlay,
       fallback,
+      loading,
       className = '',
       children,
       ...props
@@ -90,6 +92,7 @@ export const CardBanner = React.forwardRef<HTMLDivElement, CardBannerProps>(
             alt={alt}
             fill
             sizes={sizes}
+            loading={loading}
             className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
           />
         ) : fallback ? (

@@ -17,6 +17,8 @@ export interface EventCardProps extends Omit<React.HTMLAttributes<HTMLDivElement
   onRsvpToggle: (event: EventItem) => void;
   // 'h2' when the cards sit directly under the page <h1> (the feed grid), 'h3' under a section <h2>.
   headingLevel?: 'h2' | 'h3';
+  // 'eager' for cards in the first row: their flyer is on screen at first paint (often the LCP image).
+  imageLoading?: 'lazy' | 'eager';
 }
 
 // Grid breakpoints (1 → 2 → 3 columns, capped by max-w-7xl), so phones never download a desktop-sized flyer.
@@ -36,7 +38,7 @@ const fallbackStyles: Record<EventCategory, string> = {
 const CalendarIcon = NAV_ICONS.calendar;
 
 export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
-  ({ event, schedule, onRsvpToggle, headingLevel = 'h3', className = '', ...props }, ref) => {
+  ({ event, schedule, onRsvpToggle, headingLevel = 'h3', imageLoading, className = '', ...props }, ref) => {
     const isGoing = event.has_user_rsvpd;
 
     return (
@@ -44,6 +46,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
         <CardBanner
           src={event.flyer_url}
           sizes={FLYER_SIZES}
+          loading={imageLoading}
           fallback={
             <div className={`flex h-full w-full items-center justify-center ${fallbackStyles[event.category]}`}>
               <CalendarIcon className="h-10 w-10" />

@@ -12,6 +12,9 @@ export interface EventGridProps extends Omit<React.HTMLAttributes<HTMLDivElement
   emptyState: React.ReactNode; // shown instead of the grid when `events` is empty
 }
 
+// Widest layout is 3 columns (lg).
+const FIRST_ROW_MAX = 3;
+
 export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
   ({ events, schedules, onRsvpToggle, emptyState, className = '', ...props }, ref) => {
     const listRef = useRef<HTMLUListElement>(null);
@@ -45,7 +48,7 @@ export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
             aria-label="Events"
             className="grid grid-cols-1 gap-6 focus:outline-none sm:grid-cols-2 lg:grid-cols-3"
           >
-            {events.map((event) => (
+            {events.map((event, index) => (
               <li key={event.id}>
                 {/* Cards sit directly under the page <h1>, so their titles are <h2> (no skipped level). */}
                 <EventCard
@@ -53,6 +56,9 @@ export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
                   schedule={schedules[event.id]}
                   onRsvpToggle={onRsvpToggle}
                   headingLevel="h2"
+                  // The first row (1 card on phones, up to 3 on desktop) is on screen at first paint, so its
+                  // flyers load right away; the rest stay lazy.
+                  imageLoading={index < FIRST_ROW_MAX ? 'eager' : 'lazy'}
                 />
               </li>
             ))}

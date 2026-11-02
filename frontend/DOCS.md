@@ -23,7 +23,7 @@ This file is the living engineering record: every component, layout, or utility 
 
 ```
 src/
-├── app/                    # App Router routes, layouts, verification benches
+├── app/                    # App Router routes and layouts (`/` is the real event feed since Step 3.6)
 ├── components/
 │   ├── events/             # Event feature components built from the primitives (EventCard, ...)
 │   ├── providers/          # App-wide client context (SessionProvider)
@@ -78,7 +78,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | ----- | ------------------------------------- | -------------- |
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
-| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3), 3.2 (§5.4), 3.4 (§5.6) and 3.5 (§5.8) done; 3.3 hero dropped (§5.5); campus-time hydration fix (§5.2) |
+| 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
 | 4     | Calendar, clubs, event dossier        | ⏳             |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
@@ -1633,3 +1633,72 @@ headingLevel?: 'h2' | 'h3';   // default 'h3'
 - **Step 3.6:** the bench becomes the real `/` page: keep `FeedToolbar` + `CategoryFilter` + `EventGrid`; drop the bench label, self-checks and checklist; apply `getUpcomingEvents(events, now)` with `now` from the server (`await connection()`, §5.5).
 - **Phase 7:** loading skeleton (reshape `CardSkeleton` to `EventCard`'s geometry first), plus an error state ("Couldn't load events · Retry") using the same `EmptyState`.
 
+### 5.9 Assembled `/` page & EventFeed (Step 3.6): Phase 3 complete
+
+**Files:** `src/app/page.tsx` (Server Component), `src/components/events/EventFeed.tsx` (new, `'use client'`), `loading` prop on `CardBanner` + `imageLoading` on `EventCard` + first-row logic in `EventGrid`. Removed: `src/app/_bench/`.
+**Status:** ✅ Step 3.6 complete; Phase 3 done. `/` is the real event feed; there is no bench any more.
+
+#### Business & Product Purpose
+
+Students opening Campus Hub land on the list of events that haven't ended yet, soonest first, and can narrow it by campus and category, RSVP from the card, or open an event. Searching by name is the navbar's job (§5.1 correction 4).
+
+#### Core Concepts & Engineering Decisions
+
+- **Server page / client feed split.** `page.tsx` (server) does everything that depends on time or on the server's time-zone data, then passes plain data down:
+  - `await connection()`: render per request, so "now" is the request time, not the build time (§5.5).
+  - `getUpcomingEvents(mockEvents, Date.now())`: drops events that have ended, sorts by start time.
+  - `getEventSchedules(upcomingEvents)`: formats times on the server (§5.2).
+  `EventFeed` (client) owns the interactive state: filters, RSVPs, toasts. It is the former bench minus the bench parts.
+- **Two empty states.** "No upcoming events yet" (nothing scheduled at all, so no button: clearing filters wouldn't help) vs. "No events match your filters" + "Clear filters". With the current mock data the first one becomes real after Nov 27, 2026, when every mock event has ended.
+- **First-row flyers load eagerly.** `next/image` is lazy by default; Next warned that the first visible flyer was the Largest Contentful Paint image but lazy. `EventGrid` passes `imageLoading="eager"` to the first 3 cards (the first row on desktop; on phones it covers the first screen and a bit more), the rest stay lazy. `CardBanner` gained a `loading` prop for this.
+- **RSVP state is local.** It lives in `EventFeed`'s state and resets on reload. Phase 7 sends the request (optimistic update, roll back on failure).
+
+#### Verified (headless Chromium, 390px phone)
+
+- One `<h1>` ("Upcoming events"), no bench text, 6 cards sorted by date, page exactly 390px wide.
+- EMINES → "1 event"; RSVP → toast "You're going" and the button turns "Going".
+- Console: no errors, no hydration warnings, no LCP warning. `/` is served with `Cache-Control: no-cache, must-revalidate` (rendered per request).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Server page + one client `EventFeed` | Make the whole page `'use client'` | The server part ships no JavaScript and is the only place that can decide "now" and format times consistently. Only the interactive part is client code. |
+| `connection()` | Static page + filter ended events in the browser | Filtering in the browser uses the browser's clock (can differ from the server's) and causes a hydration mismatch; a static page would freeze "now" at the build date. |
+| Eager first row | `preload` on the first card | `preload` is for one known LCP image; which card is LCP depends on the screen width (and the first card may have no flyer). `loading="eager"` on the first row covers every layout without injecting several `<link rel="preload">`. |
+| No bench on `/` | Keep a bench below the feed | `/` is now the product. Future steps put their bench on their own route (see below). |
+
+#### Component Contract
+
+```ts
+// src/components/events/EventFeed.tsx ('use client')
+interface EventFeedProps {
+  initialEvents: EventItem[];                 // upcoming, sorted (server)
+  schedules: Record<string, EventSchedule>;   // formatted (server)
+}
+
+// Added
+CardBanner: loading?: 'lazy' | 'eager';       // passed to next/image (default lazy)
+EventCard:  imageLoading?: 'lazy' | 'eager';
+```
+
+#### Usage Example
+
+```tsx
+// src/app/page.tsx
+export default async function Home() {
+  await connection();
+  const upcomingEvents = getUpcomingEvents(mockEvents, Date.now());
+  return (
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <EventFeed initialEvents={upcomingEvents} schedules={getEventSchedules(upcomingEvents)} />
+    </div>
+  );
+}
+```
+
+#### Notes for later
+
+- **Benches from Phase 4 on:** `src/app/page.tsx` is no longer a bench. Each new step's checks go on the route being built (e.g. `/calendar`), or on a private `_bench` route if a component has no page yet. `CLAUDE.md` §5 rule 4 still says "`src/app/page.tsx`" and should be updated.
+- **Not verified:** a production build (`next build` + `next start`). The Docker image runs `npm run dev`; the production path should be checked before deployment.
+- **Phase 7:** swap `mockEvents` for the API; loading skeleton and error state (§5.8); RSVP requests with rollback.
