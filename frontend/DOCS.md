@@ -24,6 +24,7 @@ This file is the living engineering record: every component, layout, or utility 
 ```
 src/
 ├── app/                    # App Router routes and layouts (`/` is the real event feed since Step 3.6)
+│   └── test/               # Dev-only test page (`/test`): new steps are validated here first (§5.10)
 ├── components/
 │   ├── events/             # Event feature components built from the primitives (EventCard, ...)
 │   ├── providers/          # App-wide client context (SessionProvider)
@@ -1699,6 +1700,32 @@ export default async function Home() {
 
 #### Notes for later
 
-- **Benches from Phase 4 on:** `src/app/page.tsx` is no longer a bench. Each new step's checks go on the route being built (e.g. `/calendar`), or on a private `_bench` route if a component has no page yet. `CLAUDE.md` §5 rule 4 still says "`src/app/page.tsx`" and should be updated.
+- **Benches from Phase 4 on:** `src/app/page.tsx` is no longer a bench. Superseded by the `/test` page (§5.10).
 - **Not verified:** a production build (`next build` + `next start`). The Docker image runs `npm run dev`; the production path should be checked before deployment.
 - **Phase 7:** swap `mockEvents` for the API; loading skeleton and error state (§5.8); RSVP requests with rollback.
+
+### 5.10 Test Page `/test` (workflow change, 2026-11-02)
+
+**Status:** ✅ Built. File: `src/app/test/page.tsx`. `CLAUDE.md` §5 rule 4 updated.
+
+#### Business & Product Purpose
+Real pages (`/`, later `/calendar`, `/clubs`, ...) must only ever show finished, validated UI. New work needs a place to be tried in the browser first. Workflow: **build on `/test` → user validates → integrate into the real route → reset `/test` for the next step.**
+
+#### Core Concepts & Engineering Decisions
+- **Dev only:** `if (process.env.NODE_ENV === 'production') notFound();` makes it a 404 in a production build, and `metadata.robots` is `noindex, nofollow` in case it is ever reachable.
+- **Scenarios via `?scenario=`:** states that are hard to reach on the real page get a link (e.g. `empty` = "Nothing scheduled", which `/` only shows once every mock event has ended). `searchParams` is a `Promise` in Next.js 16 and is awaited. Unknown values fall back to `default`.
+- **`key={active}` on the feed:** switching scenario remounts it, so filter and RSVP state start fresh.
+- **Amber dashed panel** for the test controls and checklist, so it can never be mistaken for product UI. Not linked from the navbar.
+- First content: the Phase 3 feed (mock events + nothing scheduled) with its 5 checks.
+
+#### Architectural Tradeoffs
+- **`/test` route vs. bench in `src/app/page.tsx` (old rule):** the old rule meant the home page was a test page until the last step of each phase. A separate route keeps `/` real at all times.
+- **`/test` vs. private `_bench` folder:** `_folder` is never a route, so it can only be reached by importing it from a real page. A real route is needed to open it in the browser.
+- **Dev guard vs. deleting the file before deploy:** the guard can't be forgotten.
+
+#### Component Contract
+Route `GET /test?scenario=default|empty`. No props (page component).
+
+#### Usage
+Open `http://localhost:3000/test` (or `http://10.32.137.107:3000/test` from a phone on the network).
+

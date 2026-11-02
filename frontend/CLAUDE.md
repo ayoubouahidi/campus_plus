@@ -101,4 +101,4 @@ Executed sequentially from Phase 2 through Phase 7:
    - Explain the architectural rationale, React hooks, and accessibility patterns introduced.
    - Provide the corresponding section update for `DOCS.md` explaining the concepts, purpose, and tradeoffs.
    - Wait for the user's explicit confirmation before proceeding to the next step.
-4. **Every task and every step ships with test code in `src/app/page.tsx`** (a verification bench), so the user can test it immediately in the browser. The bench lists what to check (mouse, keyboard, screen-reader, responsive, dark mode) and is replaced by the next step's bench.
+4. **Every task and every step ships with test code on the test page `src/app/test/page.tsx` (`/test`)**, so the user can test it immediately in the browser. The test page lists what to check (mouse, keyboard, screen-reader, responsive, dark mode) and is reset for the next step. It is dev only (404 in production). Only after the user validates a step is it integrated into the real route (e.g. `src/app/page.tsx`); real pages never hold test code.
