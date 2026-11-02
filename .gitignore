@@ -1,18 +1,9 @@
-# Dependencies
-node_modules/
-/.pnp
+# Nginx SSL certs & keys
+infrastructure/nginx/certs/*.pem
+infrastructure/nginx/certs/*.key
 
-# Next.js build output & Turbopack cache
-.next/
-out/
-build/
+# Environment secrets
+.env
 
-# Logs & Environment
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.env*.local
-
-# System & OS
-.DS_Store
-*.pem
+# Django media
+media/
