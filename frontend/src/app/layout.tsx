@@ -42,9 +42,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // suppressHydrationWarning: browsers and extensions add attributes to <html> before React loads
+    // (e.g. Chrome on Android adds __gcrremoteframetoken). It ignores attribute differences on this one
+    // tag only; mismatches inside the page are still reported.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <ToastProvider>
