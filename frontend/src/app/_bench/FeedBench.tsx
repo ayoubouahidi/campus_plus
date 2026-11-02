@@ -2,17 +2,20 @@
 
 import React, { useState } from 'react';
 import { CategoryFilter } from '@/components/events/CategoryFilter';
-import { EventCard } from '@/components/events/EventCard';
+import { EventGrid } from '@/components/events/EventGrid';
 import { FeedToolbar } from '@/components/events/FeedToolbar';
+import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { useToast } from '@/components/ui/Toast';
 import { DEFAULT_EVENT_FILTERS, EventFilters, filterEvents, formatEventCount, toggleRsvp } from '@/lib/events';
 import { mockEvents } from '@/lib/mockData';
 import { EventSchedule } from '@/lib/time';
 import { EventItem } from '@/types/api';
 
-// Verification bench: Phase 3, Step 3.4 (FeedToolbar + CategoryFilter + FilterChip), rendered by src/app/page.tsx.
-// The grid and the "no results" line are stand-ins; the real EventGrid and empty state arrive in Step 3.5.
+// Verification bench: Phase 3, Step 3.5 (EventGrid + EmptyState) on top of Step 3.4's toolbar, rendered by
+// src/app/page.tsx. Step 3.6 turns this into the real page and removes the bench parts (label, checks).
 // `_bench` is a private folder: the App Router never turns it into a route.
 
 const count = (filters: Partial<EventFilters>) =>
@@ -34,7 +37,8 @@ const CHECKLIST: { area: string; steps: string[] }[] = [
       'There is no search box in the toolbar: the navbar\'s "Search events…" (⌘K) is the only search.',
       'Category chips: one selected at a time (violet). Its colour dot turns white. "All" resets the category.',
       'Both combine: EMINES + Business shows only the case competition.',
-      'Filter down to nothing (e.g. 1337 + Sports): count says "No events" and the placeholder line appears.',
+      'Filter down to nothing (e.g. 1337 + Sports): count says "No events" and the empty state appears: dashed box, calendar icon, "No events match your filters", "Clear filters".',
+      'Click "Clear filters": campus and category go back to All, all 6 events return. RSVPs you made are kept.',
       'RSVP still works on filtered cards, and the change survives switching filters.',
     ],
   },
@@ -43,6 +47,7 @@ const CHECKLIST: { area: string; steps: string[] }[] = [
     steps: [
       'Tab order: All / 1337 / EMINES → All → each category chip → the cards.',
       'Enter or Space toggles a campus button or chip. Every control shows a violet focus ring, not cut off on phones.',
+      'Filter to nothing, Tab to "Clear filters", press Enter. Then press Tab once: focus goes to the first card, not back to the top of the page.',
     ],
   },
   {
@@ -52,6 +57,8 @@ const CHECKLIST: { area: string; steps: string[] }[] = [
       'Landmarks list has a search region "Filter events".',
       'Campus buttons and chips are read as toggle buttons, "pressed" / "not pressed", in groups named "Campus" and "Filter by category".',
       'After changing a filter, the new count (e.g. "1 event") is read once.',
+      'Card titles are now heading level 2 (directly under the h1). The cards are in a list named "Events".',
+      'After "Clear filters", the screen reader says "6 events" and lands on the "Events" list.',
     ],
   },
   {
@@ -59,10 +66,13 @@ const CHECKLIST: { area: string; steps: string[] }[] = [
     steps: [
       '375px: campus buttons fill the width; chips in one row that scrolls sideways to the screen edge, no scrollbar, no page-wide horizontal scroll.',
       '≥ 640px: campus buttons shrink to their content. ≥ 768px: chips wrap onto two lines if needed.',
-      'Dark mode: idle chips slate-800, selected violet-500, campus group slate-900.',
+      'Dark mode: idle chips slate-800, selected violet-500, campus group slate-900, empty-state border slate-700, icon circle violet tint.',
+      '375px: the empty state fits the screen, text centred, button below.',
     ],
   },
 ];
+
+const CalendarIcon = NAV_ICONS.calendar;
 
 interface FeedBenchProps {
   schedules: Record<string, EventSchedule>;
@@ -90,7 +100,7 @@ export const FeedBench = ({ schedules }: FeedBenchProps) => {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <p className="text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
-        Bench · Phase 3 · Step 3.4
+        Bench · Phase 3 · Step 3.5
       </p>
 
       <FeedToolbar
@@ -104,21 +114,23 @@ export const FeedBench = ({ schedules }: FeedBenchProps) => {
         />
       </FeedToolbar>
 
-      {/* grid-cols-1 caps the phone column at the screen width (minmax(0, 1fr)); without it, a card grows to fit
-          its longest unbreakable line and the whole page gets wider than the phone (DOCS.md §5.7). */}
-      {visibleEvents.length > 0 ? (
-        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleEvents.map((event) => (
-            <li key={event.id}>
-              <EventCard event={event} schedule={schedules[event.id]} onRsvpToggle={handleRsvpToggle} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Placeholder: nothing matches. The real empty state (with &quot;Clear filters&quot;) comes in Step 3.5.
-        </p>
-      )}
+      <EventGrid
+        events={visibleEvents}
+        schedules={schedules}
+        onRsvpToggle={handleRsvpToggle}
+        emptyState={
+          <EmptyState
+            icon={<CalendarIcon className="h-6 w-6" />}
+            title="No events match your filters"
+            description="Try another campus or category."
+            action={
+              <Button variant="secondary" onClick={() => setFilters(DEFAULT_EVENT_FILTERS)}>
+                Clear filters
+              </Button>
+            }
+          />
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

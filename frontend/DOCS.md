@@ -78,7 +78,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | ----- | ------------------------------------- | -------------- |
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
-| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3), 3.2 (§5.4) and 3.4 (§5.6) done; 3.3 hero dropped (§5.5); campus-time hydration fix (§5.2) |
+| 3     | Public event feed (`/`)               | 🚧 In progress: spec §5.1, data §5.2, Steps 3.1 (§5.3), 3.2 (§5.4), 3.4 (§5.6) and 3.5 (§5.8) done; 3.3 hero dropped (§5.5); campus-time hydration fix (§5.2) |
 | 4     | Calendar, clubs, event dossier        | ⏳             |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
@@ -111,6 +111,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | Toast      | `src/components/ui/Toast.tsx`     |
 | Skeleton   | `src/components/ui/Skeleton.tsx`  |
 | FilterChip (added in Step 3.4, §5.6) | `src/components/ui/FilterChip.tsx` |
+| EmptyState (added in Step 3.5, §5.8) | `src/components/ui/EmptyState.tsx` |
 
 Full entries get added here whenever one of these is modified.
 
@@ -1177,7 +1178,7 @@ Container for every section: `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` (same as t
    - Group semantics: `role="group" aria-label="Filter by category"`, each chip `aria-pressed`.
 3. **Event grid**
    - `grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3`. `grid-cols-1` is required, see §5.7.
-   - Loading: 6 × `CardSkeleton`.
+   - Loading: deferred to Phase 7 (§5.8). Mock data is already on the page, so a skeleton would never show.
    - Empty: see below.
 
 #### Event card anatomy (`EventCard`, composed from `Card` primitives)
@@ -1246,7 +1247,7 @@ Rules: no pure black (`#000`) or pure white text on dark backgrounds. Shadows ar
 | 3.2 | `EventCard` (+ RSVP button states, no-flyer fallback) |
 | 3.3 | ~~`FeaturedEventHero`~~ dropped (§5.5) |
 | 3.4 | `FeedToolbar` (heading, count, campus filter) + `CategoryFilter` chips |
-| 3.5 | `EventGrid` with loading (`CardSkeleton`) and empty states |
+| 3.5 | `EventGrid` with empty state (loading skeleton deferred to Phase 7, §5.8) |
 | 3.6 | Assemble `/` (replace the bench with the real page) |
 
 #### Things to fix along the way
@@ -1547,4 +1548,88 @@ const visible = filterEvents(events, filters);
 - **Message:** "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties", pointing at `<html>` with an extra `__gcrremoteframetoken="…"` attribute.
 - **Cause:** not our code. Chrome on Android adds that attribute to `<html>` before React hydrates (browser extensions do the same with other attributes).
 - **Fix:** `suppressHydrationWarning` on `<html>` in the root layout. This is what Next.js recommends for it. It only covers attribute differences on that one element, one level deep. A real mismatch anywhere inside the page (like the campus-time bug in §5.2) is still reported.
+
+### 5.8 EventGrid & EmptyState (Step 3.5)
+
+**Files:** `src/components/events/EventGrid.tsx`, `src/components/ui/EmptyState.tsx` (new primitive), `headingLevel` prop on `src/components/events/EventCard.tsx`
+**Status:** ✅ Step 3.5 complete (grid + empty state). Loading skeleton deferred to Phase 7. Bench: `src/app/_bench/FeedBench.tsx`.
+
+#### Business & Product Purpose
+
+The grid is where students scan events; it has to fit every screen (1 → 2 → 3 columns) and never make the page wider than a phone. When a filter combination matches nothing, the empty state tells the student *why* the page is empty and gives a one-click way back, instead of a blank area that looks broken.
+
+**Scope decision (product owner, 2026-11-02):** the loading skeleton was left out. Events come from mock data already in the page, so there is nothing to wait for and a skeleton would never appear. It comes back in Phase 7 with the real API, where it can be tested against actual loading (and `CardSkeleton` must first be reshaped to match `EventCard`, see §5.4 notes).
+
+#### Core Concepts & Engineering Decisions
+
+- **`EventGrid` renders the list or the empty state**, never both. The empty state is a **slot** (`emptyState: ReactNode`): the grid doesn't know about filters, so the copy and the "Clear filters" action stay with the page that owns the filters.
+- **`grid-cols-1` is built in.** It's the fix from §5.7 (the phone column is `minmax(0, 1fr)`), now part of the component so no page can forget it.
+- **Card titles are `<h2>`.** The cards sit directly under the page `<h1>` ("Upcoming events"), so `EventGrid` passes `headingLevel="h2"`. `EventCard` keeps `'h3'` as its default for pages where cards sit under a section `<h2>` (e.g. a club page in Phase 4).
+- **Focus after "Clear filters".** Clicking it removes the empty state, including the focused button, so focus would fall back to `<body>` and keyboard users would restart from the top of the page. `EventGrid` notes any click inside the empty state (`onClickCapture`; keyboard Enter/Space also fire `click`). When the list comes back, a `useEffect` moves focus to the `<ul>` (`tabIndex={-1}`: focusable from script, never a Tab stop) **only if** focus is on `<body>`. The next Tab lands on the first card. Verified in headless Chromium: after Enter on "Clear filters", `document.activeElement` is the `Events` list; one Tab later it's the first card's link.
+- **`'use client'`** on `EventGrid` only (it has a ref + effect). `EmptyState` has no hooks and works as a Server Component too.
+- **`EmptyState` is generic:** `title`, `description`, decorative `icon`, `action` slot. The clubs directory and the calendar agenda (Phase 4) can reuse it.
+
+#### Accessibility
+
+- The list is `<ul aria-label="Events">`: screen readers announce "Events, list, 6 items".
+- The count in the toolbar (`aria-live="polite"`) already announces "No events" / "6 events", so the empty state itself is not a live region (no double announcement).
+- The empty-state icon is `aria-hidden`; the title is a `<p>`, not a heading: it's a message, not a section of the page.
+- Focus management after "Clear filters" (above).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| `emptyState` slot | `EventGrid` builds the empty state and takes `onClearFilters` | The grid would need to know about filters and their copy. With a slot, the page decides, and other pages can show a different message ("No events this month"). |
+| Generic `EmptyState` in `ui/` | Event-specific empty state in `events/` | The same "dashed box + icon + message + action" is needed on `/clubs` and `/calendar`. |
+| Focus moved to the list, only when focus fell to `<body>` | Always focus the list / never manage focus | Always focusing would steal focus from a mouse user who clicked elsewhere; never managing it sends keyboard users back to the top. |
+| `onClickCapture` | `onFocus`/`onBlur` tracking | Browsers differ on whether `blur` fires when the focused element is removed, so blur-based tracking is unreliable. A click is the event that actually causes the removal. |
+| `headingLevel` prop on `EventCard` | Change the default to `h2` | The right level depends on where the card is used; a prop keeps the card correct in both places. |
+| Defer the skeleton | Build it now | It would never be visible with mock data, so it couldn't be tested or judged. Build it when there's real loading. |
+
+#### Component Contract
+
+```ts
+// src/components/events/EventGrid.tsx ('use client') — forwardRef<HTMLDivElement> (wrapper)
+interface EventGridProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
+  events: EventItem[];
+  schedules: Record<string, EventSchedule>;   // server-formatted (§5.2)
+  onRsvpToggle: (event: EventItem) => void;
+  emptyState: React.ReactNode;                // shown when events is empty
+}
+
+// src/components/ui/EmptyState.tsx — forwardRef<HTMLDivElement>
+interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
+  title: string;
+  description?: string;
+  icon?: React.ReactNode;     // decorative
+  action?: React.ReactNode;   // e.g. <Button variant="secondary">
+}
+
+// EventCard (added)
+headingLevel?: 'h2' | 'h3';   // default 'h3'
+```
+
+#### Usage Example
+
+```tsx
+<EventGrid
+  events={visibleEvents}
+  schedules={schedules}
+  onRsvpToggle={handleRsvpToggle}
+  emptyState={
+    <EmptyState
+      icon={<CalendarIcon className="h-6 w-6" />}
+      title="No events match your filters"
+      description="Try another campus or category."
+      action={<Button variant="secondary" onClick={() => setFilters(DEFAULT_EVENT_FILTERS)}>Clear filters</Button>}
+    />
+  }
+/>
+```
+
+#### Notes for later steps
+
+- **Step 3.6:** the bench becomes the real `/` page: keep `FeedToolbar` + `CategoryFilter` + `EventGrid`; drop the bench label, self-checks and checklist; apply `getUpcomingEvents(events, now)` with `now` from the server (`await connection()`, §5.5).
+- **Phase 7:** loading skeleton (reshape `CardSkeleton` to `EventCard`'s geometry first), plus an error state ("Couldn't load events · Retry") using the same `EmptyState`.
 

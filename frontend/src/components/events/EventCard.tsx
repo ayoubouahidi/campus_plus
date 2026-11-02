@@ -15,6 +15,8 @@ export interface EventCardProps extends Omit<React.HTMLAttributes<HTMLDivElement
   // browser's time-zone data can disagree with the server's and break hydration (DOCS.md §5.2).
   schedule: EventSchedule;
   onRsvpToggle: (event: EventItem) => void;
+  // 'h2' when the cards sit directly under the page <h1> (the feed grid), 'h3' under a section <h2>.
+  headingLevel?: 'h2' | 'h3';
 }
 
 // Grid breakpoints (1 → 2 → 3 columns, capped by max-w-7xl), so phones never download a desktop-sized flyer.
@@ -34,7 +36,7 @@ const fallbackStyles: Record<EventCategory, string> = {
 const CalendarIcon = NAV_ICONS.calendar;
 
 export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
-  ({ event, schedule, onRsvpToggle, className = '', ...props }, ref) => {
+  ({ event, schedule, onRsvpToggle, headingLevel = 'h3', className = '', ...props }, ref) => {
     const isGoing = event.has_user_rsvpd;
 
     return (
@@ -57,7 +59,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
             </time>
           </div>
 
-          <CardTitle className="line-clamp-2">
+          <CardTitle as={headingLevel} className="line-clamp-2">
             {/* Stretched link: its ::after covers the whole card, so the card is clickable without nesting
                 the RSVP button inside a link. The ring is drawn on the ::after, i.e. around the card. */}
             <Link
