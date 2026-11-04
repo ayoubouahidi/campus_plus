@@ -16,3 +16,18 @@ db.sqlite3
 
 # Tooling
 .vscode/
+
+# [ahmed] Prevent local TLS certificates and private keys from being committed.
+infrastructure/nginx/certs/*.pem
+infrastructure/nginx/certs/*.key
+infrastructure/nginx/infrastructure/nginx/certs/*.pem
+infrastructure/nginx/infrastructure/nginx/certs/*.key
+
+# [ahmed] Ignore uploaded media and generated static files.
+media/
+staticfiles/
+
+# [ahmed] Ignore frontend dependencies and generated builds.
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo

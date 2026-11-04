@@ -1,3 +1,4 @@
+
 """
 Django settings for backend project.
 
@@ -27,15 +28,24 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# [ahmed] Read DEBUG from the environment for Docker while defaulting to local development.
+DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = []
+# [ahmed] Allow the hostnames supplied by Docker and localhost during development.
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        'DJANGO_ALLOWED_HOSTS',
+        'localhost,127.0.0.1'
+    ).split(',')
+    if host.strip()
+]
 
 
 # Application definition
 
 INSTALLED_APPS = [
-	'daphne',  # [ahmed] Runs Django with ASGI support, allowing HTTP and WebSocket connections.
+    'daphne',  # [ahmed] Runs Django with ASGI support, allowing HTTP and WebSocket connections.
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -44,15 +54,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-	'channels',  # [ahmed] Adds Django Channels functionality for handling WebSocket connections.
+    'channels',  # [ahmed] Adds Django Channels functionality for handling WebSocket connections.
 
-	'rest_framework',
+    'rest_framework',
     'rest_framework.authtoken',
     'django_filters',
     'core_data',
 
-	'realtime.apps.RealtimeConfig',  #  [ahmed] Registers our real-time Django app.
+    'realtime.apps.RealtimeConfig',  # [ahmed] Registers our real-time Django app.
 
+    'drf_spectacular',  # [ahmed] Enables OpenAPI schema generation and Swagger documentation.
 ]
 
 MIDDLEWARE = [
@@ -84,7 +95,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-ASGI_APPLICATION = 'backend.asgi.application' #  [ahmed] Tells Django where to find our ASGI application for handling HTTP and WebSocket connections.
+ASGI_APPLICATION = 'backend.asgi.application'  # [ahmed] Tells Django where to find our ASGI application for handling HTTP and WebSocket connections.
 
 
 # Database
@@ -96,6 +107,20 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# [ahmed] Use PostgreSQL inside Hamza's Docker environment when POSTGRES_HOST is provided.
+# [ahmed] Keep the original SQLite configuration for local development.
+if os.getenv('POSTGRES_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['POSTGRES_DB'],
+            'USER': os.environ['POSTGRES_USER'],
+            'PASSWORD': os.environ['POSTGRES_PASSWORD'],
+            'HOST': os.environ['POSTGRES_HOST'],
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        }
+    }
 
 
 # Password validation
@@ -134,6 +159,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# [ahmed] Collect Django static files into the shared Docker volume served by Nginx.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
@@ -149,13 +177,23 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
+
+    # [ahmed] Use drf-spectacular to generate the OpenAPI schema.
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# [ahmed] Configure API documentation for the integrated application.
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Campus Plus API',
+    'DESCRIPTION': 'Campus Plus REST API documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
 
 # Media routing for secure file uploads
 import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
 
 
 # [ahmed] Configure Redis as the shared channel layer for WebSocket messaging.
@@ -178,3 +216,12 @@ CHANNEL_LAYERS = {
     },
 }
 
+
+# [ahmed] Recognize HTTPS requests forwarded by the trusted Nginx reverse proxy.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# [ahmed] Trust local HTTPS origins for Django's CSRF protection.
+CSRF_TRUSTED_ORIGINS = [
+    'https://localhost',
+    'https://127.0.0.1',
+]

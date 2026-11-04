@@ -18,6 +18,12 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+# [ahmed] Add the OpenAPI schema and Swagger views.
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
+
 from core_data.views import (
     ClubEventViewSet,
     ClubViewSet,
@@ -26,14 +32,58 @@ from core_data.views import (
     signup,
 )
 
+
 router = DefaultRouter()
-router.register('club-events', ClubEventViewSet, basename='club-event')
-router.register('departments', DepartmentViewSet, basename='department')
-router.register('members', UserMemberViewSet, basename='member')
-router.register('clubs', ClubViewSet, basename='club')
+
+router.register(
+    "club-events",
+    ClubEventViewSet,
+    basename="club-event",
+)
+
+router.register(
+    "departments",
+    DepartmentViewSet,
+    basename="department",
+)
+
+router.register(
+    "members",
+    UserMemberViewSet,
+    basename="member",
+)
+
+router.register(
+    "clubs",
+    ClubViewSet,
+    basename="club",
+)
+
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include(router.urls)),
-    path('api/signup/', signup, name='signup'),
+    path("admin/", admin.site.urls),
+
+    path("api/", include(router.urls)),
+
+    path(
+        "api/signup/",
+        signup,
+        name="signup",
+    ),
+
+    # [ahmed] Expose the generated OpenAPI schema.
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(),
+        name="schema",
+    ),
+
+    # [ahmed] Expose Swagger UI for API documentation.
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(
+            url_name="schema",
+        ),
+        name="swagger-ui",
+    ),
 ]

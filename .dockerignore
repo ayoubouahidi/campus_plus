@@ -1,0 +1,20 @@
+# [ahmed] Exclude Git and local virtual environments.
+.git
+.venv
+**/__pycache__/
+**/*.pyc
+
+# [ahmed] Exclude credentials and local databases.
+.env
+.env.*
+db.sqlite3
+*.sqlite3
+
+# [ahmed] Exclude certificates and generated artifacts.
+infrastructure/nginx/certs/
+infrastructure/nginx/infrastructure/nginx/certs/
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+media/
+staticfiles/
