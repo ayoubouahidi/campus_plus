@@ -23,7 +23,7 @@ This file is the living engineering record: every component, layout, or utility 
 
 ```
 src/
-├── app/                    # App Router routes and layouts (`/` event feed since Step 3.6, `/calendar` since Step 4.6)
+├── app/                    # App Router routes and layouts (`/` feed since 3.6, `/calendar` since 4.6, `/events/[id]` since 4.10)
 │   └── test/               # Dev-only test page (`/test`) + its demo components: new steps are validated here first (§5.10)
 ├── components/
 │   ├── calendar/           # /calendar feature components (MonthGrid, WeekGrid, DayAgenda, dayStyles, ...)
@@ -31,7 +31,7 @@ src/
 │   ├── providers/          # App-wide client context (SessionProvider)
 │   └── ui/                 # Phase 1 atomic primitives (Button, Badge, Input, ...)
 │       └── layout/         # Phase 2 global shell (AppShell, Navbar, MobileNav, Footer, ...)
-├── hooks/                  # Reusable React hooks that aren't tied to one component (useDebouncedValue, useDayGridNavigation)
+├── hooks/                  # Reusable React hooks that aren't tied to one component (useDebouncedValue, useDayGridNavigation, useRsvpToast)
 ├── lib/                    # Pure, framework-agnostic logic (navigation config, event filters, mock fixtures)
 └── types/                  # Shared contracts (API DTOs, navigation types)
 ```
@@ -81,7 +81,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
-| 4     | Calendar, event dossier, clubs, search palette | 🚧 In progress: `/calendar` ✅ live (2026-11-05, §6.6) · next `/events/[id]` · then clubs, search palette |
+| 4     | Calendar, event dossier, clubs, search palette | 🚧 In progress: `/calendar` ✅ live (§6.6) · `/events/[id]` ✅ live (§6.10) · 4.11 modal over the feed: to decide · then clubs, search palette |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
 | 7     | i18n (Arabic RTL) & live API          | ⏳             |
@@ -141,6 +141,16 @@ Full entries get added here whenever one of these is modified.
 
 - **`AvatarGroup` uses `React.forwardRef<HTMLDivElement, AvatarGroupProps>`** instead of `React.FC`, fixing Engineering Laws 1 and 2. Props and behaviour are unchanged.
 - **Dark-mode rings are `slate-900`** (the card surface), was `slate-950` (the page surface). Stacks sit on cards, so the ring now blends in instead of drawing a dark outline.
+
+### 2.4 Modal (modified in Step 4.9)
+
+**File:** `src/components/ui/Modal.tsx`. First real use: the attendee list (§6.9). Changes are backward compatible (no prop changes).
+
+- **Named by its title.** `Modal` creates an id (`useId`) and shares it through a small `ModalContext`; `ModalTitle` reads it, and the dialog surface has `aria-labelledby` pointing at it. Screen readers announce "Who's going (42), dialog" instead of an unnamed dialog. Always render a `ModalTitle`.
+- **`role="dialog"` / `aria-modal` moved to the surface** (was on the full-screen wrapper that also held the backdrop).
+- **Focus management** (CLAUDE.md §2 rule 6): on open, focus moves to the first focusable element inside (usually the close button) or the surface (`tabIndex={-1}`); Tab / Shift+Tab are trapped with the shared `trapTabKey` (§3.7); on close, focus returns to the element that had it before (the trigger). The focus effect depends only on `isOpen`/`mounted`, so a new `onClose` arrow on each render doesn't move focus.
+- **Close button:** `aria-label="Close"` (was "Close modal"), icon `aria-hidden`, visible focus ring.
+- **Known, not fixed:** the scroll-lock/Escape effect lists `onClose` in its deps, so an inline `onClose` re-runs it each render (harmless: it restores and re-applies `overflow: hidden`). The rest of the page isn't made `inert` behind the dialog; `aria-modal` covers screen readers, the focus trap covers keyboards.
 
 ---
 
@@ -1739,7 +1749,7 @@ Open `http://localhost:3000/test` (or `http://10.32.137.107:3000/test` from a ph
 | # | Work | Why in this order |
 | --- | --- | --- |
 | 1 | `/calendar`: 4.1 `Tabs` keyboard fix ✅ · 4.2 date helpers + `MonthGrid` ✅ · 4.3 header ✅ · 4.4 selected-day agenda (under the grid on phones, see §6.4) ✅ · 4.5 week view ✅ · 4.6 assemble `/calendar` ✅ | Done 2026-11-05 |
-| 2 | `/events/[id]`: event dossier, RSVP, attendees | Every `EventCard` on `/` already links here and gets a 404; calendar agenda items link here too. Optionally also opened as a modal over the feed (intercepting route); a shared link still opens the full page |
+| 2 | `/events/[id]`: 4.7 data clean-up + main content · 4.8 RSVP card (sticky on desktop, bottom bar on phones) · 4.9 attendees + "See who's going" dialog · 4.10 assemble the route (`notFound`, metadata, back link) · 4.11 *optional* open as a modal over the feed | Every `EventCard` on `/` already links here and gets a 404; calendar agenda items link here too. Optionally also opened as a modal over the feed (intercepting route); a shared link still opens the full page |
 | 3 | `/clubs`, `/clubs/[slug]` | Club pages list event cards, which then lead somewhere real. Fix the `evt_hackathon_ai` club name and the `Tabs` underline style first |
 | 4 | Search palette (⌘K), **new task** | Searches events and clubs, so it needs both pages to exist. The trigger, shortcut and focus handling are done (§3.3); today it shows "Search is coming soon" (§3.9). Mock data now, API in Phase 7 |
 
@@ -2178,3 +2188,264 @@ export default async function CalendarPage() {
 - **URL state:** the selected day and view reset on reload and can't be shared. Putting them in the query string (`?date=…&view=week`, `router.replace`) would fix both; worth doing when the event page links back to "this day in the calendar".
 - **Phase 7:** fetch only the visible range (the 42-day window / the week) from the API, loading and error states, i18n of all calendar strings.
 - **Not verified:** a production build (`next build`), same as `/`.
+
+### 6.7 Event page data & EventDetails (Step 4.7)
+
+**Files:** `src/components/events/EventDetails.tsx` (new, Server Component), `src/components/events/eventStyles.ts` (new: `flyerFallbackStyles`, moved out of `EventCard`), `src/lib/events.ts` (`getEventById`, `getClubById`), `src/lib/calendar.ts` (`EventDateDetails`, `getEventDateDetails`), `src/lib/mockData.ts` (3 clubs added, hackathon organizer fixed). Test: `/test?event=<id>`.
+**Status:** ✅ Validated (2026-11-05).
+
+#### Business & Product Purpose
+
+Everything a student needs to decide whether to go: what it is, when, where, and who organizes it, with the flyer up top. This is the content the feed cards and the calendar agenda link to.
+
+#### Core Concepts & Engineering Decisions
+
+- **Mock data fixed first.** `mockClubs` was missing the organizers of two events (`club_um6p_sports`, `club_bde`), and the hackathon belonged to the media club with the wrong `club_name` (noted in §5.3). Added `LEET Dev` (`club_leet_dev`, now the hackathon organizer), `UM6P Sports Association` and `Student Events Committee`. Every event now has a club.
+- **Lookups as pure functions** (`getEventById(events, id)`, `getClubById(clubs, id)`), taking the list as an argument: the page passes mocks today, Phase 7 swaps the call for the API without touching components.
+- **`getEventDateDetails(event)` (server only)** gives the two "When" lines in campus time. One day: "Thursday, November 5, 2026" / "5:00 PM – 8:00 PM". Multi-day: "Friday, November 13 – Sunday, November 15, 2026" / "Starts 8:00 AM, ends 5:00 PM" (a range like "8:00 AM – 5:00 PM" would wrongly read as daily hours). It reuses `getEventDaySpan`, so the page and the calendar agree on which days an event covers. Built by hand like `formatWeekTitle` (no `formatRange`, §6.3).
+- **`EventDetails` is a Server Component** (no state, no handlers): zero JavaScript for the biggest part of the page. Interactive parts (RSVP, attendees dialog) come as separate client components in 4.8/4.9.
+- **Semantics.** `<article aria-labelledby>` named by the `h1` title; facts as a `<dl>` (When / Where / Organizer as `<dt>`, values as `<dd>`), icons `aria-hidden` (via `IconBase`); `<time dateTime>` on the date; "About this event" is an `h2` section.
+- **Flyer** via `CardBanner` (16:9, rounded, bordered), `loading="eager"` because it's the first thing on screen (LCP), `sizes` matching the main column. No flyer → the same category tint + icon as the cards (`flyerFallbackStyles`, now shared).
+- **Organizer link** to `/clubs/<slug>` (404 until the clubs step); if the club isn't known, the event's `club_name` is shown as text.
+- **Description:** `whitespace-pre-line` keeps organizers' line breaks without rendering any HTML from user content.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Server Component | One client component for the whole page | Only RSVP and the attendee dialog need state; the rest ships no JS and renders with the HTML. |
+| `<dl>` for the facts | Icon + text rows in `<div>`s | Screen readers get term/value pairs; the visual result is the same. |
+| Separate "Starts …, ends …" wording for multi-day | Always "start – end" | "8:00 AM – 5:00 PM" over three days reads as daily hours. |
+| `whitespace-pre-line` text | Markdown/HTML description | No sanitizer needed; the API sends plain text. Rich text can come later if organizers need it. |
+| Fixed ids (`event-title`, `event-about`) | `useId()` | One event per page (also in a modal over the feed, 4.11), and fixed ids make in-page links possible. |
+
+#### Component Contract
+
+```ts
+// src/components/events/EventDetails.tsx (Server Component, forwardRef<HTMLElement>)
+interface EventDetailsProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  event: EventItem;
+  club?: Club;                       // undefined → organizer name without link
+  dateDetails: EventDateDetails;     // getEventDateDetails (server)
+}
+
+// src/lib/calendar.ts (server only)
+interface EventDateDetails { date: string; time: string; isMultiDay: boolean }
+getEventDateDetails(event): EventDateDetails
+
+// src/lib/events.ts
+getEventById(events, id): EventItem | undefined
+getClubById(clubs, id): Club | undefined
+```
+
+#### Usage Example
+
+```tsx
+const event = getEventById(mockEvents, id);
+if (!event) notFound();
+<EventDetails event={event} club={getClubById(mockClubs, event.club_id)} dateDetails={getEventDateDetails(event)} />
+```
+
+#### Verified (server HTML)
+
+No flyer (`evt_workshop_cine`): no `<img>`, fallback shown, "Thursday, November 5, 2026 · 5:00 PM – 8:00 PM", organizer link `/clubs/leet-frame`. Multi-day (`evt_hackathon_ai`): "Friday, November 13 – Sunday, November 15, 2026 · Starts 8:00 AM, ends 5:00 PM", organizer `LEET Dev` → `/clubs/leet-dev`. Unknown club: name as text, no link. `/` and `/calendar` still 200; `tsc --noEmit` passes.
+
+#### Notes for later
+
+- `evt_workshop_cine`'s description says "A 2-day practical session" but the event lasts 3 hours: mock copy only, fix with the API data.
+
+### 6.8 RsvpCard & `useRsvpToast` (Step 4.8)
+
+**Files:** `src/components/events/RsvpCard.tsx` (new, `'use client'`), `src/hooks/useRsvpToast.ts` (new; `EventFeed` now uses it). Test: `src/app/test/RsvpDemo.tsx` + `/test?event=<id>` (session switcher, "Ended" scenario).
+**Status:** ✅ Validated (2026-11-05).
+
+#### Business & Product Purpose
+
+The one action on the page: say you're going (or not). It's always within reach, beside the content on desktop and as a bar above the tab bar on phones, and it explains itself when you can't act: signed out ("Log in to RSVP") or the event is over.
+
+#### Core Concepts & Engineering Decisions
+
+- **One element, two layouts.** Below `lg` the `<aside>` is `fixed` at the bottom, above the phone tab bar (`bottom-[calc(4rem+1px+env(safe-area-inset-bottom))]`, the tab bar's height; `md:bottom-0` once the tab bar is gone, with safe-area padding). From `lg` the same element is `sticky top-20` in the page's second grid column. A single DOM node means a single RSVP control for screen readers and keyboard users at every width.
+- **Spacer.** The component renders an `aria-hidden` `h-20 lg:hidden` div before the bar, so the end of the content can scroll above it.
+- **Controlled.** `event` and `onRsvpToggle` come from the parent (the page owns RSVP state so the attendee list in 4.9 updates with it), like `EventCard` in the feed.
+- **State resolved once, then tables.** `getRsvpState(event, hasEnded, session.status)` → `'ended' | 'loading' | 'signedOut' | 'going' | 'notGoing'` (ended wins over everything). `STATUS: Record<RsvpState, …>` gives the status line and colour, an `actions` record gives the control: "RSVP" (primary), "Cancel RSVP" (secondary), "Log in to RSVP" (a `Link` styled as a primary button, `?next=/events/<id>` for Phase 5), a disabled spinner while the session loads, nothing once ended.
+- **`hasEnded` comes from the server** (request time vs `end_time`), so server HTML and hydration agree.
+- **Session from `useSession()`**, so Phase 5's real auth changes nothing here.
+- **Counts:** "42 going" / "Be the first to RSVP"; after the end "87 went" / "Nobody RSVP'd".
+- **Landmark:** `<aside aria-labelledby>` named by an "RSVP" heading that is `sr-only` in the phone bar and visible on the desktop card.
+- **`useRsvpToast()`** returns `announceRsvp(before)`: "You're going" (success) / "RSVP cancelled" (info) with the event title. Feed and event page share one wording; it is called outside state updaters (Strict Mode runs those twice).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Same element repositioned by breakpoint | Inline card + separate fixed mobile bar | Two RSVP buttons in the DOM: duplicate tab stops, duplicate announcements, two places to keep in sync. |
+| Bottom bar on phones | Card at the end of the content | The action stays reachable without scrolling past a long description. |
+| "Cancel RSVP" label | "Going" toggle (as on the feed cards) | On a page with one action the explicit verb is clearer; the card's compact "Going" fits a grid. |
+| Login link for signed-out users | Disabled RSVP button | A disabled button explains nothing and drops out of the Tab order; the link says what to do. |
+| Controlled component | Card keeps its own RSVP state | The attendee list (4.9) must change with the RSVP. |
+
+#### Component Contract
+
+```ts
+// src/components/events/RsvpCard.tsx ('use client', forwardRef<HTMLElement> → the <aside>)
+interface RsvpCardProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  event: EventItem;                          // current RSVP state (controlled)
+  hasEnded: boolean;                         // server: Date.parse(end_time) <= now
+  onRsvpToggle: (before: EventItem) => void;
+}
+// Place it as the second child of: grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start
+
+// src/hooks/useRsvpToast.ts
+useRsvpToast(): (before: EventItem) => void
+```
+
+#### Usage Example
+
+```tsx
+const [event, setEvent] = useState(initialEvent);
+const announceRsvp = useRsvpToast();
+
+<div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+  <EventDetails … />
+  <RsvpCard
+    event={event}
+    hasEnded={hasEnded}
+    onRsvpToggle={(before) => {
+      setEvent(toggleRsvp);
+      announceRsvp(before);
+    }}
+  />
+</div>
+```
+
+#### Verified (server HTML)
+
+Going (`evt_workshop_cine`): "You're going · 42 going · Cancel RSVP". Not going (jam session): "87 going · RSVP". Zero: "Be the first to RSVP". Ended: "This event has ended · 87 went", no control. Spacer present. `/` still 200 after the `useRsvpToast` refactor; `tsc --noEmit` passes. Clicks, toasts, sessions and the layouts: manual checks on `/test`.
+
+#### Notes for later
+
+- **Footer under the phone bar:** the spacer sits in `<main>`, so at the very bottom of the page the bar covers the last ~5rem of the footer. Fix in 4.10 if it bothers (e.g. hide the bar once the footer is in view).
+- **Toasts on phones** appear just above the tab bar, i.e. over the RSVP bar, for 4 s. Acceptable (they report the RSVP itself); revisit with the Phase 6 toasts.
+- **Phase 7:** send the RSVP (optimistic, roll back + danger toast on failure); `/auth/login` must honour `?next=`.
+
+### 6.9 AttendeesSection & mock attendee list (Step 4.9)
+
+**Files:** `src/components/events/AttendeesSection.tsx` (new, `'use client'`), `src/lib/mockData.ts` (`getMockAttendees`), `src/components/ui/Modal.tsx` (accessibility upgrade, §2.4). Test: `src/app/test/RsvpDemo.tsx` (the card and the list share one RSVP state).
+**Status:** ✅ Validated (2026-11-05). Live on `/events/[id]` (§6.10).
+
+#### Business & Product Purpose
+
+"Who else is going?" is often what decides it. The section shows faces and names at a glance, and the full list on demand; your own RSVP shows up in it immediately.
+
+#### Core Concepts & Engineering Decisions
+
+- **The user is added on the client.** `attendees` never includes the current user; `AttendeesSection` prepends "You" when the session is signed in and `event.has_user_rsvpd` is true. RSVP clicks change `event` (shared with `RsvpCard`), so "You" appears and disappears at once, without refetching the list.
+- **Mock list:** `getMockAttendees(event)` = the event's `attendees_preview`, then deterministic generated names (fixed pools, no randomness, so server and client agree) until the length is `rsvps_count` minus the user if going. Phase 7: `GET /api/events/:id/attendees` (paginated).
+- **Summary sentence for everyone, avatars for the eyes.** `AvatarGroup` (6 + "+N" from `total`) is `aria-hidden`; the visible sentence "You, Salma Idrissi and 40 others" is what screen readers read. `summarize(names, total)` handles 1 name, 2 names, "and N others", and the case where only a count is known.
+- **Dialog for the full list** (`Modal` + `ModalHeader` + `ModalTitle` + `ModalContent`, scrolling at 65vh): avatar + name rows, a green "You" badge. The trigger has `aria-haspopup="dialog"`.
+- **Ended events** say "Who went" (heading and dialog title, `HEADINGS` table) and "Nobody RSVP'd to this event."; upcoming with no RSVPs: "Nobody has RSVP'd yet." and no button.
+- **Placement:** the main column under "About this event", inside `<section aria-labelledby>` named by its `h2` ("Who's going (42)").
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Add "You" on the client from the session | Server list includes the user | The list would go stale after every RSVP click until a refetch. |
+| `aria-hidden` avatars + sentence | Each avatar with alt text | Six initials circles read as noise ("M N, S I, …"); one sentence says it all. |
+| Dialog for the full list | Expand the list inline | 120 names would push the rest of the page down; a dialog scrolls on its own and closes back to where you were. |
+| Fix `Modal` now | Use it as is | It had no focus handling and no name, which CLAUDE.md requires for modals; this is its first user. |
+
+#### Component Contract
+
+```ts
+// src/components/events/AttendeesSection.tsx ('use client', forwardRef<HTMLElement> → <section>)
+interface AttendeesSectionProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  event: EventItem;                  // controlled, shared with RsvpCard
+  attendees: AttendeePreview[];      // everyone else (never the current user)
+  hasEnded: boolean;                 // "Who went"
+}
+
+// src/lib/mockData.ts
+getMockAttendees(event: EventItem): AttendeePreview[]
+```
+
+#### Usage Example
+
+```tsx
+<div className="space-y-8">
+  <EventDetails … />
+  <AttendeesSection event={event} attendees={attendees} hasEnded={hasEnded} />
+</div>
+```
+
+#### Verified (server HTML)
+
+Going, 42: 6 avatars + "+36", "You, Salma Idrissi and 40 others". 1: one name, no "+N". 0: "Nobody has RSVP'd yet.", no button. Ended: "Who went (87)", "You, Hamza El Amrani and 85 others". 120: "Youssef Benali, Imane Chraibi and 118 others". `tsc --noEmit` passes. The dialog (client only), focus return and RSVP sync: manual checks on `/test`.
+
+#### Notes for later
+
+- **Privacy (Phase 5):** signed-out visitors currently see attendee names, as on the feed cards. Decide with the backend whether names are public or members-only.
+- **Phase 7:** paginate the dialog list ("Load more") instead of loading everyone.
+
+### 6.10 `/events/[id]` page & EventPageShell (Step 4.10)
+
+**Files:** `src/app/events/[id]/page.tsx` (new, Server Component + `generateMetadata`), `src/app/events/[id]/not-found.tsx` (new), `src/components/events/EventPageShell.tsx` (new, `'use client'`). `/test` reset; `src/app/test/RsvpDemo.tsx` removed.
+**Status:** ✅ Live (2026-11-05). Event cards on `/` and the calendar agenda now open real pages.
+
+#### Business & Product Purpose
+
+The event page is the destination of every event link in the app, and the page students share ("are you coming?"). Unknown or removed events get a clear 404 with ways back.
+
+#### Core Concepts & Engineering Decisions
+
+- **Server page, one client shell.** `page.tsx` awaits `params` (a Promise in Next.js 16), calls `await connection()` (per-request render: "has it ended?" uses the request time), looks the event up, and computes everything server-side: `hasEnded`, `getEventDateDetails`, the club, `getMockAttendees`. `EventDetails` is rendered on the server and passed as `children` through `EventPageShell` (client), which owns the shared RSVP state (`toggleRsvp` + `useRsvpToast`) and lays out content + `AttendeesSection` (left) and `RsvpCard` (right / bottom bar). Server-rendered children inside a client component stay server-rendered: no JS for the details.
+- **`loadEvent = cache(id => …)`**: `generateMetadata` and the page both need the event; React `cache` makes it one lookup per request (one API call in Phase 7).
+- **`generateMetadata`:** `"<title> | Campus Hub"`, description truncated to 160 chars, Open Graph `title`/`description`/`type: 'article'` for link previews. The flyer as `og:image` needs an absolute URL → `metadataBase` in Phase 7. Unknown id → `"Event not found | Campus Hub"`.
+- **`notFound()` + route-level `not-found.tsx`:** unknown ids return HTTP 404 (Next adds `noindex`) with event-specific copy ("doesn't exist or was removed by its organizer") and links to Discover and the calendar, inside the normal shell. In dev the 404 UI arrives in the streamed payload because the page is dynamic; the status code is already 404.
+- **Back link "All events"** → `/`, chevron flipped in RTL. A link (not `history.back()`): it works when the page was opened from a shared link.
+
+#### Verified (server HTML via nginx)
+
+`/events/evt_hackathon_ai` 200: title "42 Campus Hackathon: Edge AI & Systems | Campus Hub", description + `og:type article`, h1 = event title, h2s About / Who's going (120) / RSVP, multi-day date, "All events" link. `/events/evt_jam_session`: RSVP card "87 going · RSVP". `/events/evt_nope` 404 with `noindex` and the "Event not found" UI/title in the payload. `/` links to `/events/…`, `/calendar` agenda links to `/events/evt_workshop_cine`. `tsc --noEmit` passes.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| `EventDetails` passed as `children` to the client shell | Shell imports `EventDetails` | Importing it into a client file would make it client code and ship its JS. |
+| React `cache` around the lookup | Look up twice | Free with mocks, one request instead of two with the API. |
+| Route-level `not-found.tsx` | Global 404 | "Event not found" with a link to the calendar is more useful than "Page not found". |
+| Back link to `/` | Browser back | Works for people arriving from a shared link; from the calendar it loses the selected day (see URL-state note in §6.6). |
+
+#### Component Contract
+
+```ts
+// src/components/events/EventPageShell.tsx ('use client')
+interface EventPageShellProps {
+  initialEvent: EventItem;
+  hasEnded: boolean;                 // server
+  attendees: AttendeePreview[];      // server (never the current user)
+  children: React.ReactNode;         // <EventDetails>, server-rendered
+}
+
+// src/app/events/[id]/page.tsx
+generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata>
+```
+
+#### Usage Example
+
+```tsx
+const event = loadEvent((await params).id);
+if (!event) notFound();
+
+<EventPageShell initialEvent={event} hasEnded={Date.parse(event.end_time) <= Date.now()} attendees={getMockAttendees(event)}>
+  <EventDetails event={event} club={getClubById(mockClubs, event.club_id)} dateDetails={getEventDateDetails(event)} />
+</EventPageShell>
+```
+
+#### Notes for later
+
+- **RSVP state is per page.** RSVP on the event page, go back to `/`: the feed shows the old state until reload (each page holds its own copy). Phase 7's API (server is the source of truth) fixes it; a shared client store isn't worth it with mocks.
+- **Footer under the phone RSVP bar** (§6.8) still open.
+- **4.11 (optional):** open the page as a modal over the feed via an intercepting route (`@modal/(.)events/[id]`); a shared link still opens this full page.
