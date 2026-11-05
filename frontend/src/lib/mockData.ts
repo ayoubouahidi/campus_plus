@@ -71,7 +71,7 @@ const ATTENDEES = {
   nora: { id: 'usr_06', full_name: 'Nora Tazi', avatar_url: null },
 } satisfies Record<string, AttendeePreview>;
 
-// Times are UTC; campus time (Africa/Casablanca) is UTC+1 in November.
+// Times are UTC. Campus time (Africa/Casablanca) is UTC+0 from Oct 2026 with tzdata 2026e (DOCS.md §5.2).
 export const mockEvents: EventItem[] = [
   {
     id: 'evt_workshop_cine',
