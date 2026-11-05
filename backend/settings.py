@@ -225,3 +225,6 @@ CSRF_TRUSTED_ORIGINS = [
     'https://localhost',
     'https://127.0.0.1',
 ]
+
+# [ahmed] Select JWT or development token authentication for WebSockets.
+WS_AUTH_BACKEND = os.getenv("WS_AUTH_BACKEND", "token_dev")

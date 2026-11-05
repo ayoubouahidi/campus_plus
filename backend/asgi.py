@@ -20,18 +20,19 @@ django_asgi_app = get_asgi_application()
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
 
-from realtime.middleware import TokenAuthMiddleware
+# [ahmed] Select WebSocket authentication through the central adapter.
+from realtime.authentication import get_websocket_auth_stack
+
 from realtime.routing import websocket_urlpatterns
 
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
 
-    # [ahmed] Validate browser origin and authenticate the WebSocket.
+    # [ahmed] Preserve origin validation for browser WebSockets.
     "websocket": AllowedHostsOriginValidator(
-        TokenAuthMiddleware(
+        get_websocket_auth_stack(
             URLRouter(websocket_urlpatterns)
         )
     ),
 })
-

@@ -12,3 +12,6 @@ channels-redis>=4.2,<5.0
 
 # [ahmed] Add Hamza's OpenAPI and Swagger documentation dependency.
 drf-spectacular
+
+# [ahmed] JWT verification for WebSockets; REST API authentication remains unchanged.
+djangorestframework-simplejwt==5.5.1

@@ -17,6 +17,9 @@ services:
       # [ahmed] Make Django's DEBUG setting configurable.
       DEBUG: ${DEBUG:-true}
 
+      # [ahmed] Enable JWT authentication for WebSockets in Docker.
+      WS_AUTH_BACKEND: jwt
+
       # [ahmed] Tell Django to use PostgreSQL inside Docker.
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

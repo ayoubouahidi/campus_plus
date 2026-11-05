@@ -111,6 +111,12 @@ Activate the virtual environment:
 source .ven/bin/activate
 ```
 
+<!-- # [ahmed] Local virtual environment instructions. -->
+
+If using the existing `.venv` directory in Ahmed's checkout, activate it with
+`source .venv/bin/activate` instead. The examples below can also be run with
+`.venv/bin/python` explicitly.
+
 Install the packages:
 
 ```bash
@@ -137,3 +143,96 @@ Check that no migration is missing:
 ```bash
 python manage.py makemigrations --check
 ```
+
+<!-- # [ahmed] WebSocket JWT documentation and verification instructions below. -->
+
+## Real-time calendar and JWT development
+
+The ASGI application serves `/ws/calendar/`. An authenticated, active Django
+user joins `calendar_updates` and receives `connection_established`, followed
+by calendar event broadcasts. Redis is the configured channel layer: it lets
+different Django processes deliver messages to connected clients.
+
+`WS_AUTH_BACKEND` selects WebSocket authentication:
+
+- `token_dev` (default): existing DRF query-token authentication, permitted only
+  with `DEBUG=True`. Use test accounts locally; URLs can enter access logs.
+- `jwt`: verifies a SimpleJWT access token from exactly one `ws_access` cookie.
+  Invalid, expired, duplicate, malformed, refresh, inactive-user, and
+  missing-user credentials are rejected. Query tokens do not authenticate in
+  this mode. There is no fallback to development tokens.
+- An unsupported value prevents application startup.
+
+The API still uses DRF tokens. Signup at `/api/signup/` returns a DRF token;
+it does **not** issue JWTs. The frontend session remains a mock. No JWT login,
+cookie issuance, refresh, logout, or 42 OAuth integration exists in this
+checkout. A NextAuth session token is not an established backend credential.
+
+For local JWT mode, start the existing Daphne application with
+`WS_AUTH_BACKEND=jwt .venv/bin/daphne backend.asgi:application` after configuring
+the environment, database, and Redis. This does not create a login endpoint.
+The authentication teammate must agree on issuance and set the `ws_access`
+cookie with `HttpOnly`, `Secure`, an appropriate `SameSite` policy, and a path
+covering `/ws/calendar/`. Middleware cannot infer these attributes from an
+incoming Cookie header. Keep access and refresh credentials out of URLs.
+
+No `SIMPLE_JWT` overrides are currently declared. Installed defaults use
+HS256, Django's secret key, a five-minute access lifetime, `user_id` mapped to
+the Django user's `id`, and `token_type=access`. Issuer and audience are not
+configured; verification respects them when configured. These defaults are
+an experimental verification contract, pending agreement with the login owner.
+
+Origins are checked using `AllowedHostsOriginValidator` and `ALLOWED_HOSTS`.
+This is a host-based policy, not an explicit HTTPS-origin allowlist. All
+authenticated users currently share the calendar group; private notifications
+are not implemented. Authentication runs at connection time: expiry, account
+disablement, logout, and revocation do not yet close an existing socket.
+
+### Environment and Docker
+
+`backend/settings.py` loads `.env`; never commit it or print its contents.
+Required settings include `DJANGO_SECRET_KEY` and `REDIS_URL`. SQLite is the
+local default. Setting `POSTGRES_HOST` selects PostgreSQL and requires
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`; `POSTGRES_PORT` defaults
+to 5432. `DEBUG`, `DJANGO_ALLOWED_HOSTS`, and `WS_AUTH_BACKEND` control the
+development and authentication settings.
+
+Compose defines `web`, `frontend`, `nginx`, `redis`, and `db`. Inside its network,
+the database is `db:5432` and Redis is `redis:6379`; these names are not local
+host service addresses. Nginx exposes HTTP on 8080 and HTTPS/WSS on 8443 and
+proxies `/ws/` to Daphne. <!-- # [ahmed] Docker JWT configuration. -->
+Compose now sets `WS_AUTH_BACKEND: jwt` for `web`. Rebuild and recreate that
+service with `docker compose up -d --build web` to apply the current code and
+configuration. A running older image may still lack JWT support. Cookie
+issuance is still required for browser authentication.
+The HTTP redirect currently omits the mapped HTTPS port; local HTTPS clients
+should connect to port 8443 directly.
+
+Compose certificate generation is provided by
+`infrastructure/nginx/gen-certs.sh`; inspect it before running. Docker startup,
+TLS trust, and WSS have not been verified in this session. Avoid deleting
+database volumes as a troubleshooting step.
+
+### Verification
+
+```bash
+.venv/bin/python manage.py check
+.venv/bin/python manage.py test realtime.test_jwt -v 1
+.venv/bin/python manage.py test -v 1
+```
+
+WebSocket tests use an in-memory channel layer and temporary SQLite database;
+they do not verify Redis, PostgreSQL, Nginx, or browser cookie issuance. In a
+restricted sandbox, handshake timeouts can result from blocked local sockets;
+the same JWT tests passed outside that sandbox. Check the traceback and runtime
+restrictions before changing application logic.
+
+Audited runtime: Python 3.14.10, Django 6.1.3, Channels 4.3.2, Daphne 4.2.3,
+channels-redis 4.3.0, DRF 3.18.3, SimpleJWT 5.5.1, PyJWT 2.15.1. SimpleJWT's
+installed metadata lists Django through 5.2 and Python through 3.13; support
+for this newer runtime needs separate compatibility review. Docker installs
+`requirements.txt`, which already declares SimpleJWT.
+
+See [architecture](docs/ahmed/ARCHITECTURE.md),
+[learning journal](docs/ahmed/LEARNING_JOURNAL.md), and
+[Ahmed's changelog](CHANGELOG_AHMED.md) for flow, exercises, and actual results.
