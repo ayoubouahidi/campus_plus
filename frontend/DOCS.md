@@ -23,17 +23,18 @@ This file is the living engineering record: every component, layout, or utility 
 
 ```
 src/
-├── app/                    # App Router routes and layouts (`/` feed since 3.6, `/calendar` 4.6, `/events/[id]` 4.10, `/clubs` 4.13)
+├── app/                    # App Router routes and layouts (`/` feed since 3.6, `/calendar` 4.6, `/events/[id]` 4.10, `/clubs` 4.13, `/clubs/[slug]` 4.15)
 │   └── test/               # Dev-only test page (`/test`) + its demo components: new steps are validated here first (§5.10)
 ├── components/
 │   ├── calendar/           # /calendar feature components (MonthGrid, WeekGrid, DayAgenda, dayStyles, ...)
 │   ├── clubs/              # /clubs feature components (ClubCard, ClubDirectory, ...)
 │   ├── filters/            # Filter controls shared by several pages (CampusToggle)
+│   ├── search/             # ⌘K search palette (SearchPalette)
 │   ├── events/             # Event feature components built from the primitives (EventCard, ...)
 │   ├── providers/          # App-wide client context (SessionProvider)
 │   └── ui/                 # Phase 1 atomic primitives (Button, Badge, Input, ...)
 │       └── layout/         # Phase 2 global shell (AppShell, Navbar, MobileNav, Footer, ...)
-├── hooks/                  # Reusable React hooks that aren't tied to one component (useDebouncedValue, useDayGridNavigation, useRsvpToast)
+├── hooks/                  # Reusable React hooks that aren't tied to one component (useDebouncedValue, useDayGridNavigation, useRsvpToast, useCampusSearch)
 ├── lib/                    # Pure, framework-agnostic logic (navigation config, event filters, mock fixtures)
 └── types/                  # Shared contracts (API DTOs, navigation types)
 ```
@@ -83,7 +84,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
-| 4     | Calendar, event dossier, clubs, search palette | 🚧 In progress: `/calendar` ✅ live (§6.6) · `/events/[id]` ✅ live (§6.10) · 4.11 modal: skipped for now · clubs: 4.12 club card ✅ · 4.13 `/clubs` ✅ live (§6.12) · next 4.14 club page header · then clubs, search palette |
+| 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
 | 7     | i18n (Arabic RTL) & live API          | ⏳             |
@@ -153,6 +154,7 @@ Full entries get added here whenever one of these is modified.
 - **`role="dialog"` / `aria-modal` moved to the surface** (was on the full-screen wrapper that also held the backdrop).
 - **Focus management** (CLAUDE.md §2 rule 6): on open, focus moves to the first focusable element inside (usually the close button) or the surface (`tabIndex={-1}`); Tab / Shift+Tab are trapped with the shared `trapTabKey` (§3.7); on close, focus returns to the element that had it before (the trigger). The focus effect depends only on `isOpen`/`mounted`, so a new `onClose` arrow on each render doesn't move focus.
 - **Close button:** `aria-label="Close"` (was "Close modal"), icon `aria-hidden`, visible focus ring.
+- **`position?: 'center' | 'top'`** (Step 4.16, default `'center'`): `'top'` anchors the dialog at 12–15vh from the top (`positionStyles: Record<ModalPosition, string>`), so a command palette doesn't jump as its results change height.
 - **Known, not fixed:** the scroll-lock/Escape effect lists `onClose` in its deps, so an inline `onClose` re-runs it each render (harmless: it restores and re-applies `overflow: hidden`). The rest of the page isn't made `inert` behind the dialog; `aria-modal` covers screen readers, the focus trap covers keyboards.
 
 ---
@@ -801,7 +803,7 @@ Every page (including the 404 page) now gets the same navbar, notifications, mob
   - `viewportFit: 'cover'` lets the page extend under the iPhone notch/home indicator. The tab bar, drawer, spacer and toasts already pad themselves with `env(safe-area-inset-*)`, which only becomes non-zero with this setting.
   - `themeColor` per colour scheme tints the phone browser's address bar to match the navbar.
 - **Dark mode root cause fixed.** `globals.css` had unlayered `body { background-color: var(--background); color: … }` rules. In Tailwind v4, utilities live in a cascade layer, and unlayered CSS always beats layered CSS, so `dark:bg-slate-950` on `<body>` could never apply. The rules are removed; `<body>` colours now come only from classes (`bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100`).
-- **Search placeholder.** Until the search palette exists, ⌘K / the search button show an info toast ("Search is coming soon"). This also proves the `ToastProvider` is wired.
+- **Search placeholder (replaced in Step 4.17, §6.17).** Until the search palette existed, ⌘K / the search button showed an info toast ("Search is coming soon"). This also proved the `ToastProvider` was wired.
 - **Bell only when signed in.** Signed-out visitors have no notifications, and the 320–375px navbar has no room for bell + "Log in" (§3.6).
 - **Verified:** `/` renders 200 with the full shell; `/calendar` returns 404 *inside* the shell (navbar, tab bar with Calendar active, `<main>`, footer). Headless Firefox screenshots: 404 at 375px, home page in dark mode at 1280px.
 
@@ -1754,7 +1756,7 @@ Open `http://localhost:3000/test` (or `http://10.32.137.107:3000/test` from a ph
 | 1 | `/calendar`: 4.1 `Tabs` keyboard fix ✅ · 4.2 date helpers + `MonthGrid` ✅ · 4.3 header ✅ · 4.4 selected-day agenda (under the grid on phones, see §6.4) ✅ · 4.5 week view ✅ · 4.6 assemble `/calendar` ✅ | Done 2026-11-05 |
 | 2 | `/events/[id]`: 4.7 data clean-up + main content · 4.8 RSVP card (sticky on desktop, bottom bar on phones) · 4.9 attendees + "See who's going" dialog · 4.10 assemble the route (`notFound`, metadata, back link) · 4.11 *optional* open as a modal over the feed | Every `EventCard` on `/` already links here and gets a 404; calendar agenda items link here too. Optionally also opened as a modal over the feed (intercepting route); a shared link still opens the full page |
 | 3 | `/clubs`, `/clubs/[slug]`: 4.12 club helpers + `ClubCard` · 4.13 `/clubs` directory with campus filter (goes live) · 4.14 club page header (banner, logo, bio, contact) · 4.15 club events (upcoming + past), `/clubs/[slug]` goes live. One scrolling page, no tabs (so the `Tabs` underline fix isn't needed yet) | Club pages list event cards, which then lead somewhere real. Fix the `evt_hackathon_ai` club name and the `Tabs` underline style first |
-| 4 | Search palette (⌘K), **new task** | Searches events and clubs, so it needs both pages to exist. The trigger, shortcut and focus handling are done (§3.3); today it shows "Search is coming soon" (§3.9). Mock data now, API in Phase 7 |
+| 4 | Search palette (⌘K), **new task**: 4.16 search logic + `SearchPalette` on `/test` · 4.17 wire it to the navbar button and ⌘K (Phase 4 done) | Searches events and clubs, so it needs both pages to exist. The trigger, shortcut and focus handling are done (§3.3); today it shows "Search is coming soon" (§3.9). Mock data now, API in Phase 7 |
 
 **Not in Phase 4:** the notification bell shows fake notifications from `AppShell`. Real ones come with Phase 6 (WebSockets), since they depend on the backend.
 
@@ -2574,3 +2576,230 @@ await connection();
 #### Verified (server HTML)
 
 `/test`: h1 "Clubs", "6 clubs", toggle with All pressed, 6 cards; `?scenario=noEmines`: "5 clubs", 5 cards. `/` still renders its toggle (All pressed) and "6 events" after the extraction. `tsc --noEmit` passes. Filtering, empty state and keyboard: manual checks on `/test`.
+
+### 6.13 ClubHeader (Step 4.14)
+
+**Files:** `src/components/clubs/ClubHeader.tsx` (new, Server Component), `src/components/clubs/ClubContactCard.tsx` (new, `'use client'`), `src/lib/clubs.ts` (`ClubContact`, `getClubContact`, `formatClubSince` (server only), `formatPhone`). Test: `/test?club=<slug>` (incl. `test-banner`, `test-long`, `&contact=none`) + `src/app/test/SessionSwitcher.tsx`.
+**Status:** ✅ Validated (2026-11-05).
+
+#### Business & Product Purpose
+
+The top of a club's page: who they are, where, since when, what they do, and, for signed-in students only, how to reach the president by email or a tap-to-call number.
+
+#### Core Concepts & Engineering Decisions
+
+- **Server Component** (no state): banner (`CardBanner` `wide`, `loading="eager"` as the LCP image, same violet gradient fallback as `ClubCard`), `xl` initials logo overlapping the banner edge (ring in the *page* colour, `slate-50` / `slate-950`, since it sits on the page, not a card), `h1` club name (`text-balance`), "campus · Since January 2026".
+- **Responsive header:** logo + name side by side from `sm`, stacked on phones. Below: About (left) + Contact card (right) from `lg` (`minmax(0,1fr) 20rem`, the same right column as the event page's RSVP card), stacked below.
+- **Contact details are for signed-in students only (product decision, 2026-11-05).** Name, email and phone of the president are hidden from visitors; everything else on the page stays public. Two layers:
+  1. **Server (the real protection):** the page passes `contact={getClubContact(club)}` only for a signed-in session and `null` otherwise, so the details are never in a visitor's HTML or RSC payload. With mock auth the session is always signed in; **Phase 5** reads the real session here, and the **Django API must omit these fields for anonymous requests** (hiding them in the UI alone is not privacy).
+  2. **Client (`ClubContactCard`):** `getContactState(session.status, contact)` → `'loading'` (skeleton, `aria-busy`, so nothing flashes) · `'locked'` (lock icon, "Contact details are only shown to signed-in students.", "Log in to see them" → `/auth/login?next=/clubs/<slug>`) · `'visible'` (needs a signed-in session **and** data). The `body: Record<ContactState, ReactNode>` table picks the content.
+- **Contact card (visible state):** president avatar + name + "President"; `mailto:` and `tel:` links with a visible label (not icon-only), so they're tappable on phones and readable on desktop. Long emails `truncate`.
+- **`formatPhone`** groups Moroccan numbers for display ("+212 6 00 00 00 00"); the `tel:` href keeps the raw value; other formats pass through unchanged. The number is `dir="ltr"` so it doesn't reorder in Arabic pages.
+- **`formatClubSince(created_at)`** (server, campus time zone, like every moment-to-date format).
+- **Semantics:** `<header>` with `h1`, then `section`s labelled "About" and "Contact" (`h2`); decorative avatars `aria-hidden`; description keeps line breaks (`whitespace-pre-line`).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Visible email/phone text links | "Email" / "Call" icon buttons | Students copy the address or read the number; a visible label also names the link for screen readers. |
+| Contact card in the right column | Contact line under the name | Mirrors the event page layout (content left, action right); keeps the header itself short. |
+| Display-only phone formatting | Store formatted numbers | The API keeps one canonical value; formatting stays a view concern. |
+| Server omits the data + client locked state | Only hide it with CSS / client check | Anything sent to the browser is readable in View Source; only not sending it protects it. The client check still handles the session changing after load. |
+| Contact card as its own client component | Make `ClubHeader` a client component | Only the card needs the session; the rest of the header stays server-rendered with no JS. |
+
+#### Component Contract
+
+```ts
+// src/components/clubs/ClubHeader.tsx (Server Component, forwardRef<HTMLElement> → <header>)
+interface ClubHeaderProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  club: Club;
+  since: string;                    // formatClubSince(club.created_at), server
+  contact: ClubContact | null;      // getClubContact(club) if signed in, else null (server decides)
+}
+
+// src/components/clubs/ClubContactCard.tsx ('use client', forwardRef<HTMLElement> → <section>)
+interface ClubContactCardProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  contact: ClubContact | null;
+  clubSlug: string;                 // login link ?next=
+}
+
+// src/lib/clubs.ts
+type ClubContact = Pick<Club, 'president_name' | 'president_email' | 'president_phone'>
+getClubContact(club): ClubContact
+formatClubSince(createdAt: string): string   // server only
+formatPhone(phone: string): string
+```
+
+#### Usage Example
+
+```tsx
+// Phase 5: isSignedIn comes from the real session on the server
+<ClubHeader club={club} since={formatClubSince(club.created_at)} contact={isSignedIn ? getClubContact(club) : null} />
+```
+
+#### Verified (server HTML)
+
+Leet Frame: "1337 Coding School · Since January 2026", About, Contact "Mouad Najjar / President", `mailto:leetframe@1337.ma`, `tel:+212600000000` displayed "+212 6 00 00 00 00". `test-banner` renders the banner image; `test-long` keeps both paragraphs. `&contact=none` (LEET Music): locked card, and the president's name, email and phone appear **nowhere** in the HTML or payload (0 matches each). `tsc --noEmit` passes.
+
+#### Notes for later
+
+- **Test switcher leak (fixed):** picking "Loading" on `/test` and then following a link left the whole app in a loading session (the session lives in the root layout and survives client navigation), so the event page's RSVP card spun forever. `SessionSwitcher` now restores the default signed-in mock session when `/test` unmounts.
+- **Phase 5 must wire the server side:** today `contact` is always sent because the mock session is always signed in; switching to "Signed out" on `/test` only exercises the client lock. Same check needed in the API.
+
+### 6.14 ClubEvents (Step 4.15)
+
+**Files:** `src/components/clubs/ClubEvents.tsx` (new, `'use client'`), `src/lib/clubs.ts` (`getClubEvents`), `src/components/events/EventGrid.tsx` (new optional props `cardHeadingLevel`, `eagerFirstRow`), `src/components/clubs/ClubDirectory.tsx` (`grid-cols-1` fix). Test: `/test?club=<slug>` (Leet Frame has 2 test-only past events).
+**Status:** ✅ Validated (2026-11-05). Live on `/clubs/[slug]` (§6.15).
+
+#### Business & Product Purpose
+
+What is this club doing next, and what has it done? Upcoming events are the same cards as on Discover (RSVP works here too); past events show the club is active.
+
+#### Core Concepts & Engineering Decisions
+
+- **`getClubEvents(events, clubId, now)`** (server, request time) → `{ upcoming (soonest first), past (most recent first) }`, split on `end_time` like the feed (an ongoing event is upcoming).
+- **Upcoming = `EventGrid`** reused with two new optional props: `cardHeadingLevel="h3"` (cards sit under the "Upcoming events" `h2`) and `eagerFirstRow={false}` (the grid is below the header, not the LCP). Defaults (`'h2'`, `true`) keep `/` unchanged. Empty: `EmptyState` "Nothing scheduled right now".
+- **RSVP state** lives in `ClubEvents` (`toggleRsvp` + `useRsvpToast`), exactly like `EventFeed`.
+- **Past events = compact list** (date from the server schedules, title as a stretched link to the event page's "ended" view, location), only rendered when there are some.
+- **`grid-cols-1` added to the clubs directory grid** (Step 4.13 had missed it): without it a card with a long unbreakable line widens the phone page (§5.7).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Reuse `EventGrid` + 2 props | A club-specific grid | Same cards, same RSVP, same phone-width fix; the props only expose what differs (heading level, image priority). |
+| Compact list for past events | Cards for past events too | Past events don't need flyers or RSVP; a dense list keeps the page short. |
+| Hide "Past events" when empty | Show an empty past section | An empty history says nothing useful. |
+
+#### Component Contract
+
+```ts
+// src/components/clubs/ClubEvents.tsx ('use client', forwardRef<HTMLDivElement>)
+interface ClubEventsProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
+  upcoming: EventItem[];                       // getClubEvents (server)
+  past: EventItem[];
+  schedules: Record<string, EventSchedule>;    // getEventSchedules([...upcoming, ...past])
+}
+
+// src/components/events/EventGrid.tsx (added)
+cardHeadingLevel?: 'h2' | 'h3';   // default 'h2'
+eagerFirstRow?: boolean;          // default true
+
+// src/lib/clubs.ts
+getClubEvents(events, clubId, now): { upcoming: EventItem[]; past: EventItem[] }
+```
+
+#### Usage Example
+
+```tsx
+const { upcoming, past } = getClubEvents(mockEvents, club.id, Date.now());
+<ClubEvents upcoming={upcoming} past={past} schedules={getEventSchedules([...upcoming, ...past])} />
+```
+
+#### Verified (server HTML)
+
+Leet Frame: "Upcoming events (1)" with the masterclass card (`h3`, no eager image), "Past events (2)": "Sun, Oct 11 · Golden Hour Photo Walk", "Fri, Sep 25 · Short Film Night: Student Premieres". Banner test club: "(0)" + "Nothing scheduled right now", no past section. `/` unchanged: 6 `h2` card titles, eager first row. `tsc --noEmit` passes.
+
+**Incident during this step:** a `{/* */}` JSX comment placed before `<ul>` inside a `? … : (…)` branch made two sibling expressions, a syntax error that took the whole dev app down (500 on every page) until fixed a minute later with a `//` comment. Comments in a parenthesized JSX branch must be JS comments or go inside the element.
+
+#### Notes for later
+
+- **Phase 7:** paginate past events (they grow every semester).
+
+### 6.15 `/clubs/[slug]` page (Step 4.15 integration): clubs done
+
+**Files:** `src/app/clubs/[slug]/page.tsx` (new, Server Component + `generateMetadata`), `src/app/clubs/[slug]/not-found.tsx` (new). `/test` reset (`SessionSwitcher.tsx` kept as a reusable test tool).
+**Status:** ✅ Live (2026-11-05). Club cards on `/clubs` and organizer links on event pages open real pages.
+
+#### Core Concepts & Engineering Decisions
+
+- **Same shape as `/events/[id]` (§6.10):** `params` awaited, `await connection()` (upcoming vs past at request time), `loadClub = cache(slug => …)` shared by `generateMetadata` and the page, `notFound()` → route-level `not-found.tsx` ("Club not found", links to the directory and Discover, HTTP 404 + `noindex`), back link "All clubs" (chevron flipped in RTL).
+- **Composition:** `ClubHeader` (server) with `contact`, then `ClubEvents` (client) with `getClubEvents` + `getEventSchedules` from the server.
+- **Contact decided on the server:** `contact={IS_SIGNED_IN ? getClubContact(club) : null}`. `IS_SIGNED_IN` is a `true` constant because mock auth is always signed in; **Phase 5 replaces it with the real server-side session** (§6.13).
+- **Metadata:** `"<club> | Campus Hub"`, the description, Open Graph `type: 'profile'`.
+
+#### Verified (server HTML via nginx)
+
+`/clubs/leet-frame` and `/clubs/um6p-sports` 200 with title "<club> | Campus Hub", h1 = club name, h2 About / Contact / "Upcoming events (1)", "All clubs" link. `/clubs/nope` 404 + `noindex`. `/clubs` links to all 6 club pages; the hackathon page's organizer link is `/clubs/leet-dev`. `/`, `/calendar`, `/test`, `/clubs` 200. `tsc --noEmit` passes. (The "Club not found" text also appears in valid pages' payload: Next ships the segment's not-found boundary definition; it isn't rendered.)
+
+### 6.16 Search logic & SearchPalette (Step 4.16)
+
+**Files:** `src/lib/search.ts` (new), `src/hooks/useCampusSearch.ts` (new), `src/components/search/SearchPalette.tsx` (new, `'use client'`), `src/components/ui/Modal.tsx` (`position` prop, §2.4), `src/lib/events.ts` (`normalizeText` exported). Test: `src/app/test/SearchDemo.tsx` ("Open search" button).
+**Status:** ✅ Validated (2026-11-05). Live through the navbar and ⌘K (§6.17).
+
+#### Business & Product Purpose
+
+The navbar promises "Search events…" and ⌘K since Phase 2. This is the window behind it: type a few letters, jump straight to an event or a club, without leaving the keyboard.
+
+#### Core Concepts & Engineering Decisions
+
+- **`searchCampus(query, { events, clubs }, now)` (pure):** same text rules as the feed (`normalizeText`: case, Latin accents and Arabic harakat ignored; every word must match somewhere). Events match on title, club, location, category label; clubs on name, campus, description. Ranking: events upcoming before past, then name starts-with (0) < name contains (1) < other field (2), then soonest; clubs by rank then A → Z. `SEARCH_LIMIT = 5` per group. `getSearchSuggestions` = next 4 upcoming events for the empty state ("Coming up").
+- **`useCampusSearch(query)` is the only data source.** Today: synchronous filtering of the mocks (`useMemo`). Phase 7: debounce (`useDebouncedValue`) + `GET /api/search?q=` behind the same return shape, so the palette doesn't change. It runs in the browser only (the palette content mounts after opening), so `Date.now()` there can't cause a hydration mismatch.
+- **WAI-ARIA combobox + listbox.** The input is `role="combobox"` with `aria-controls`, `aria-expanded`, `aria-autocomplete="list"` and `aria-activedescendant`; results are a `role="listbox"` with `role="group"` sections ("Coming up" / "Events" / "Clubs", each `aria-labelledby` its label) of `role="option"` rows (`aria-selected` on the active one). Focus never leaves the input: ↑/↓ move the active option (wrapping, `scrollIntoView({ block: 'nearest' })`), Enter opens it, Escape / outside click close (Modal). A polite live region announces "3 results" while typing.
+- **Mouse:** `mousemove` sets the active option, `mousedown` is prevented (keeps focus in the input), click opens. Opening = close + `router.push(href)`.
+- **No dates in results.** Formatting dates in the browser would use the browser's time-zone data (§5.2); rows show club · place · category (events) or "Club · campus".
+- **Built on `Modal`** (portal, scroll lock, focus trap, focus return, `ModalTitle` as an `sr-only` name), with the new `position="top"`, `size="lg"`, no padding (`p-0!`).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Combobox with `aria-activedescendant` | Move real focus into the list | The user keeps typing while arrowing; this is the APG pattern for search popups. |
+| Hook as the data boundary | Pass events/clubs as props from the layout | Props would put every event in every page's payload; the hook can switch to an API call without touching the UI. |
+| Client-side ranking now | Wait for a search endpoint | Mocks are tiny; the same pure function can rank API results or be dropped when the server ranks. |
+| Results without dates | Format dates in the browser | Avoids the server/browser time-zone disagreement entirely. |
+
+#### Component Contract
+
+```ts
+// src/components/search/SearchPalette.tsx ('use client')
+interface SearchPaletteProps { isOpen: boolean; onClose: () => void }
+
+// src/hooks/useCampusSearch.ts
+useCampusSearch(query: string): { results: SearchResults; suggestions: EventItem[] }
+
+// src/lib/search.ts
+interface SearchResults { events: EventItem[]; clubs: Club[] }
+SEARCH_LIMIT = 5
+searchCampus(query, { events, clubs }, now): SearchResults
+getSearchSuggestions(events, now): EventItem[]
+```
+
+#### Usage Example
+
+```tsx
+const [isOpen, setIsOpen] = useState(false);
+<NavbarSearch onOpen={() => setIsOpen(true)} />
+<SearchPalette isOpen={isOpen} onClose={() => setIsOpen(false)} />
+```
+
+#### Verified
+
+Node 22 in the container, `searchCampus` at 2026-11-05 12:00Z: "leet" → jam session (title starts with LEET) then workshop, hackathon; clubs leet-dev, leet-frame, leet-music. "CINÉMATIC" = "cinematic". "jam music" → jam session + LEET Music. "emines" → basketball final (title contains EMINES) before the case competition (club only) + EMINES Consulting. "zzz" and blank → nothing. Suggestions: the next 4 upcoming events. `/test` 200, `tsc --noEmit` passes. The dialog itself (keyboard, screen reader, navigation): manual checks.
+
+### 6.17 Search wired to the navbar & ⌘K (Step 4.17): Phase 4 complete
+
+**Files:** `src/components/ui/layout/AppShell.tsx` (toast placeholder → `SearchPalette`). `/test` reset; `src/app/test/SearchDemo.tsx` removed.
+**Status:** ✅ Live (2026-11-05). **Phase 4 is complete.**
+
+#### Core Concepts & Engineering Decisions
+
+- **One palette for the whole app.** `AppShell` owns `isSearchOpen`; `openSearch` / `closeSearch` are stable `useCallback`s (`NavbarSearch` re-binds its window ⌘K listener whenever `onOpen` changes, §3.3). The navbar button (icon-only on phones) and ⌘K / Ctrl+K on any page open the same `SearchPalette`, rendered once next to the tab bar and portalled to `<body>` when open.
+- **Nothing else changed:** `NavbarSearch` already had `aria-haspopup="dialog"`, the shortcut, `aria-keyshortcuts` and the platform hint (§3.3); `Modal` returns focus to the navbar button on close.
+- **Window vs. inline search box (decided 2026-11-05):** kept the palette over a text box with a dropdown in the navbar: the phone navbar only has room for an icon, ⌘K works the same on every page, and results have room for two groups.
+
+#### Verified
+
+`/`, `/calendar`, `/clubs`, `/clubs/leet-dev`, `/events/evt_hackathon_ai`, `/test`: 200 with the search button, no "Search is coming soon" left in the source. Production build (`next build` in a throwaway copy inside the container) passes with all routes: `/`, `/calendar`, `/clubs`, `/clubs/[slug]`, `/events/[id]` dynamic, `/test` static (404 in production). `tsc --noEmit` passes.
+
+#### Phase 4 summary
+
+| Route / feature | Section |
+| --- | --- |
+| `/calendar` (month/week, day agenda) | §6.1–6.6 |
+| `/events/[id]` (details, RSVP card, attendees, 404) | §6.7–6.10 |
+| `/clubs`, `/clubs/[slug]` (directory, campus filter, header, contact for signed-in students, events, 404) | §6.11–6.15 |
+| ⌘K search palette | §6.16–6.17 |
+
+**Open items carried forward:** calendar day/view in the URL (§6.6); footer under the phone RSVP bar (§6.8); RSVP state per page until the API (§6.10); Phase 5: server-side session for club contact (§6.13) and attendee-name privacy (§6.9); Phase 7: API, `metadataBase` + flyer `og:image`, search endpoint, pagination; ESLint not runnable in the container; no volume mount for live reload in Docker.
