@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { FOCUSABLE_SELECTOR, trapTabKey } from '@/lib/focus';
+
+// Lets <ModalTitle> name the dialog (aria-labelledby) without the caller wiring ids.
+const ModalContext = createContext<{ titleId: string } | null>(null);
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -32,6 +36,8 @@ export const Modal = ({
   className = '',
 }: ModalProps) => {
   const [mounted, setMounted] = useState(false);
+  const titleId = useId();
+  const surfaceRef = useRef<HTMLDivElement>(null);
 
   // Run on mount (browser only)
   useEffect(() => {
@@ -62,15 +68,22 @@ export const Modal = ({
     };
   }, [isOpen, closeOnEsc, onClose]);
 
+  // Focus: move into the dialog on open (first focusable, usually the close button; else the surface),
+  // and give it back to whatever opened it (the trigger) on close. Deps are only isOpen/mounted, so a
+  // new onClose function on re-render doesn't steal focus back.
+  useEffect(() => {
+    if (!isOpen || !mounted) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const surface = surfaceRef.current;
+    (surface?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? surface)?.focus();
+    return () => previous?.focus();
+  }, [isOpen, mounted]);
+
   // Guard: Never render on the server, and don't render if closed
   if (!mounted || !isOpen) return null;
 
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       {/* 1. Dimmed Backdrop Scrim */}
       <div
         className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
@@ -82,10 +95,17 @@ export const Modal = ({
 
       {/* 2. Modal Dialog Surface */}
       <div
+        ref={surfaceRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition-all dark:border-slate-800 dark:bg-slate-900 ${sizeStyles[size]} ${className}`}
+        // Tab / Shift+Tab cycle inside the dialog (shared helper, DOCS.md §3.7).
+        onKeyDown={(e) => surfaceRef.current && trapTabKey(e, surfaceRef.current)}
+        className={`relative w-full rounded-2xl focus:outline-none border border-slate-200 bg-white p-6 shadow-2xl transition-all dark:border-slate-800 dark:bg-slate-900 ${sizeStyles[size]} ${className}`}
       >
-        {children}
+        <ModalContext.Provider value={{ titleId }}>{children}</ModalContext.Provider>
       </div>
     </div>,
     document.body
@@ -115,10 +135,11 @@ export const ModalHeader = ({
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close modal"
-        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        aria-label="Close"
+        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
       >
         <svg
+          aria-hidden="true"
           className="h-5 w-5"
           fill="none"
           stroke="currentColor"
@@ -139,15 +160,20 @@ ModalHeader.displayName = 'ModalHeader';
 
 /* -------------------------------- ModalTitle ------------------------------- */
 
+// Gets the dialog's title id from context, so the dialog is announced by its title.
 export const ModalTitle = ({
   className = '',
   ...props
-}: React.HTMLAttributes<HTMLHeadingElement>) => (
-  <h2
-    className={`text-lg font-semibold leading-none tracking-tight text-slate-900 dark:text-slate-100 ${className}`}
-    {...props}
-  />
-);
+}: React.HTMLAttributes<HTMLHeadingElement>) => {
+  const context = useContext(ModalContext);
+  return (
+    <h2
+      id={context?.titleId}
+      className={`text-lg font-semibold leading-none tracking-tight text-slate-900 dark:text-slate-100 ${className}`}
+      {...props}
+    />
+  );
+};
 ModalTitle.displayName = 'ModalTitle';
 
 /* ----------------------------- ModalDescription ---------------------------- */
