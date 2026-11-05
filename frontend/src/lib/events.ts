@@ -52,6 +52,10 @@ const COMBINING_MARKS = /[̀-ًͯ-ٰٟ]/g;
 
 const normalizeText = (text: string): string => text.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase();
 
+// Shared by the event feed and the clubs directory. Campus-wide (UM6P Central) items only show under "All".
+export const matchesCampus = (departmentName: string, campus: CampusFilter): boolean =>
+  campus === 'all' || departmentName === CAMPUS_DEPARTMENT[campus];
+
 // Every word must appear somewhere in the title, club or location: "leet jam" narrows, it doesn't widen.
 const matchesTerms = (event: EventItem, terms: string[]): boolean => {
   if (terms.length === 0) return true;
@@ -65,7 +69,7 @@ export const filterEvents = (events: EventItem[], { campus, category, query }: E
 
   return events.filter(
     (event) =>
-      (campus === 'all' || event.department_name === CAMPUS_DEPARTMENT[campus]) &&
+      matchesCampus(event.department_name, campus) &&
       (category === 'all' || event.category === category) &&
       matchesTerms(event, terms),
   );

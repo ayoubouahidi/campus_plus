@@ -1,5 +1,6 @@
 import React from 'react';
-import { CAMPUS_FILTERS, CampusFilter, formatEventCount } from '@/lib/events';
+import { CampusToggle } from '@/components/filters/CampusToggle';
+import { CampusFilter, formatEventCount } from '@/lib/events';
 
 export interface FeedToolbarProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   campus: CampusFilter;
@@ -7,11 +8,6 @@ export interface FeedToolbarProps extends Omit<React.HTMLAttributes<HTMLDivEleme
   resultCount: number;
   children?: React.ReactNode; // extra filters inside the same search landmark (the CategoryFilter row)
 }
-
-const campusButtonStyles: Record<'selected' | 'idle', string> = {
-  selected: 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100',
-  idle: 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',
-};
 
 // No text search here on purpose: the navbar's search (⌘K, "Search events…") is the site's only search box.
 export const FeedToolbar = React.forwardRef<HTMLDivElement, FeedToolbarProps>(
@@ -27,26 +23,7 @@ export const FeedToolbar = React.forwardRef<HTMLDivElement, FeedToolbarProps>(
 
       {/* <search> is the HTML landmark for filtering controls ("search" in a screen reader's landmark list). */}
       <search aria-label="Filter events" className="block space-y-4">
-        {/* Single-choice toggle group. Not Tabs: there is one shared grid, not one panel per campus. */}
-        <div
-          role="group"
-          aria-label="Campus"
-          className="inline-flex w-full items-center rounded-xl border border-slate-200/80 bg-slate-100 p-1 sm:w-auto dark:border-slate-800 dark:bg-slate-900"
-        >
-          {CAMPUS_FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={campus === value}
-              onClick={() => onCampusChange(value)}
-              className={`flex-1 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 motion-reduce:transition-none sm:flex-none ${
-                campusButtonStyles[campus === value ? 'selected' : 'idle']
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <CampusToggle value={campus} onChange={onCampusChange} />
 
         {children}
       </search>
