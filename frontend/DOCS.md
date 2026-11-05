@@ -23,14 +23,15 @@ This file is the living engineering record: every component, layout, or utility 
 
 ```
 src/
-├── app/                    # App Router routes and layouts (`/` is the real event feed since Step 3.6)
-│   └── test/               # Dev-only test page (`/test`): new steps are validated here first (§5.10)
+├── app/                    # App Router routes and layouts (`/` event feed since Step 3.6, `/calendar` since Step 4.6)
+│   └── test/               # Dev-only test page (`/test`) + its demo components: new steps are validated here first (§5.10)
 ├── components/
+│   ├── calendar/           # /calendar feature components (MonthGrid, WeekGrid, DayAgenda, dayStyles, ...)
 │   ├── events/             # Event feature components built from the primitives (EventCard, ...)
 │   ├── providers/          # App-wide client context (SessionProvider)
 │   └── ui/                 # Phase 1 atomic primitives (Button, Badge, Input, ...)
 │       └── layout/         # Phase 2 global shell (AppShell, Navbar, MobileNav, Footer, ...)
-├── hooks/                  # Reusable React hooks that aren't tied to one component (useDebouncedValue)
+├── hooks/                  # Reusable React hooks that aren't tied to one component (useDebouncedValue, useDayGridNavigation)
 ├── lib/                    # Pure, framework-agnostic logic (navigation config, event filters, mock fixtures)
 └── types/                  # Shared contracts (API DTOs, navigation types)
 ```
@@ -80,7 +81,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
-| 4     | Calendar, clubs, event dossier        | ⏳             |
+| 4     | Calendar, event dossier, clubs, search palette | 🚧 In progress: `/calendar` ✅ live (2026-11-05, §6.6) · next `/events/[id]` · then clubs, search palette |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
 | 7     | i18n (Arabic RTL) & live API          | ⏳             |
@@ -1527,7 +1528,7 @@ const visible = filterEvents(events, filters);
 
 #### Notes for later steps
 
-- **`Tabs` primitive bug (not fixed here):** `TabsTrigger` uses roving `tabIndex` (only the active tab is focusable) but has no arrow-key handler, so keyboard users can't reach the other tabs. Fix before anything uses `Tabs` (likely `/calendar` month/week in Phase 4).
+- **`Tabs` primitive bug (fixed in Step 4.1, §6.1):** `TabsTrigger` uses roving `tabIndex` (only the active tab is focusable) but has no arrow-key handler, so keyboard users can't reach the other tabs. Fix before anything uses `Tabs` (likely `/calendar` month/week in Phase 4).
 - **`Badge isClickable`** is now unused for filters; consider removing that mode so nobody builds an unreachable control with it.
 - **Step 3.5:** the empty state replaces the bench's placeholder line, and its "Clear filters" button resets `filters` (campus and category).
 - **Phase 7:** campus labels and `formatEventCount` go through i18n; Arabic RTL flips the chip row's scroll direction automatically (flex follows `dir`), but the negative-margin bleed should be checked.
@@ -1729,3 +1730,451 @@ Route `GET /test?scenario=default|empty`. No props (page component).
 #### Usage
 Open `http://localhost:3000/test` (or `http://10.32.137.107:3000/test` from a phone on the network).
 
+---
+
+## 6. Phase 4 — Core Public Views (`/calendar`, `/clubs`, `/events/[id]`)
+
+**Phase 4 order (agreed 2026-11-04):**
+
+| # | Work | Why in this order |
+| --- | --- | --- |
+| 1 | `/calendar`: 4.1 `Tabs` keyboard fix ✅ · 4.2 date helpers + `MonthGrid` ✅ · 4.3 header ✅ · 4.4 selected-day agenda (under the grid on phones, see §6.4) ✅ · 4.5 week view ✅ · 4.6 assemble `/calendar` ✅ | Done 2026-11-05 |
+| 2 | `/events/[id]`: event dossier, RSVP, attendees | Every `EventCard` on `/` already links here and gets a 404; calendar agenda items link here too. Optionally also opened as a modal over the feed (intercepting route); a shared link still opens the full page |
+| 3 | `/clubs`, `/clubs/[slug]` | Club pages list event cards, which then lead somewhere real. Fix the `evt_hackathon_ai` club name and the `Tabs` underline style first |
+| 4 | Search palette (⌘K), **new task** | Searches events and clubs, so it needs both pages to exist. The trigger, shortcut and focus handling are done (§3.3); today it shows "Search is coming soon" (§3.9). Mock data now, API in Phase 7 |
+
+**Not in Phase 4:** the notification bell shows fake notifications from `AppShell`. Real ones come with Phase 6 (WebSockets), since they depend on the backend.
+
+### 6.1 Tabs keyboard navigation (Step 4.1)
+
+**Files:** `src/components/ui/Tabs.tsx` (`TabsList` gains `onKeyDown` handling and `aria-orientation`). Test: `src/app/test/page.tsx` + `src/app/test/TabsDemo.tsx`.
+**Status:** ✅ Validated (2026-11-03). Nothing on a real page uses `Tabs` yet, so there was nothing to integrate; `/calendar` (month/week) is the first user.
+
+#### Business & Product Purpose
+
+`/calendar` switches between month and week views, and club pages will switch sections, using `Tabs`. Before this step a keyboard user could reach only the selected tab: the others had `tabIndex={-1}` (roving tabIndex) but no key moved focus to them, so they could never be selected without a mouse. Now the arrow keys work, as the WAI-ARIA tabs pattern requires.
+
+#### Core Concepts & Engineering Decisions
+
+- **Roving tabIndex, completed.** Tab still enters the list once, on the selected tab, and the next Tab goes to the panel. Inside the list: `←`/`→` previous/next (wraps around), `Home`/`End` first/last.
+- **Automatic activation.** Moving focus also selects the tab (the APG default when a panel shows without a delay; ours are in memory). The handler calls `target.click()`, so it goes through `TabsTrigger`'s `onClick`: the tab is selected, `onValueChange` fires and the consumer's own `onClick` runs, with no second code path.
+- **Handler on `TabsList`, not on each trigger.** One `onKeyDown` on the `role="tablist"` element finds the enabled tabs with `querySelectorAll('[role="tab"]:not([disabled])')`. Disabled tabs are skipped. A consumer's `onKeyDown` runs first and can call `preventDefault()` to opt out.
+- **Lookup table for moves.** `TAB_MOVES: Record<TabNavKey, (current, count, isRtl) => number>` (Engineering Law 4): adding a key fails the build until it has a move.
+- **RTL-ready.** `getComputedStyle(list).direction === 'rtl'` swaps `←` and `→`, so "next" follows the reading order in Arabic (Phase 7) with no prop.
+- **`aria-orientation="horizontal"`** tells screen readers which arrows to use (it is the default for `tablist`, but stating it is free and explicit).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Read the tabs from the DOM on key press | Each trigger registers itself in context (array of refs) | Registration needs effects, ordering logic and re-renders. The DOM is already in the right order and is only read on a key press, never during render, so it is SSR-safe without a mount guard. |
+| Automatic activation | Manual (arrows move focus, Enter/Space select) | Panels are instant, so selecting on focus saves a keypress. Manual is better only when a panel fetches data; switch then. |
+| `target.click()` | Call `setActiveTab(value)` from the list | The list doesn't know the trigger values. `click()` reuses the trigger's own logic and keeps `onClick` side effects consistent between mouse and keyboard. |
+| Skip disabled tabs | Keep them focusable (APG allows both) | Our disabled tabs have nothing behind them; focusing one would say "dimmed" and do nothing. |
+| Read direction from CSS | `dir` prop on `Tabs` | `dir` is inherited from `<html>` or any ancestor; reading the computed value is always right and needs no wiring. |
+
+#### Component Contract
+
+No new props. Behaviour added to `TabsList`:
+
+```ts
+// TabsListProps unchanged: extends React.HTMLAttributes<HTMLDivElement> + variant?: 'segmented' | 'underline'
+// Keys handled on role="tablist": ArrowLeft, ArrowRight (swapped in RTL), Home, End.
+// onKeyDown (consumer) runs first; event.preventDefault() there skips the built-in handling.
+```
+
+#### Usage Example
+
+```tsx
+const [view, setView] = useState('month');
+
+<Tabs value={view} onValueChange={setView}>
+  <TabsList aria-label="Calendar view">
+    <TabsTrigger value="month">Month</TabsTrigger>
+    <TabsTrigger value="week">Week</TabsTrigger>
+  </TabsList>
+  <TabsContent value="month">…</TabsContent>
+  <TabsContent value="week">…</TabsContent>
+</Tabs>
+```
+
+#### Notes for later
+
+- **Always pass a `defaultValue` or `value` that matches a tab.** The default is `''`; if no tab matches, every tab has `tabIndex={-1}` and the list can't be reached with Tab at all.
+- **`underline` variant styling:** the active trigger uses the segmented look (white pill + shadow) in both variants. Fix when a club page first uses `underline`.
+- **Not run:** ESLint (the Docker image has no `eslint.config`). `tsc --noEmit` passes inside the container.
+
+### 6.2 Calendar date helpers & MonthGrid (Step 4.2)
+
+**Files:** `src/lib/calendar.ts` (new), `src/components/calendar/MonthGrid.tsx` (new, `'use client'`). Test: `src/app/test/page.tsx` + `src/app/test/CalendarDemo.tsx` (scenarios `default`, `busy`, `edges`).
+**Status:** ✅ Validated (2026-11-03). Live on `/calendar` (§6.6).
+
+#### Business & Product Purpose
+
+The month view answers "what's on this month, and which days are busy?" at a glance. Students tap (or arrow to) a day to see its events; on phones each day shows coloured dots, on larger screens the first event titles.
+
+#### Core Concepts & Engineering Decisions
+
+- **`DayKey` = `'YYYY-MM-DD'` string.** A date, not a moment. It crosses the server → client boundary unchanged, compares with `===` and sorts with `<`.
+- **Two kinds of date code, kept apart.**
+  - *Moment → campus date* (`toCampusDayKey`, `getEventIdsByDay`) needs time-zone data, which differs between runtimes (§5.2). **Server only**: the page computes `todayKey` and the per-day map and passes them down.
+  - *Date arithmetic* (`addDays`, `addMonths`, `weekdayIndex`, `buildMonthMatrix`) maps a `DayKey` to UTC midnight, so no time zone is involved and it's safe in the browser. Labels (`formatMonthTitle`, `formatDayLabel`) format that UTC midnight with `timeZone: 'UTC'` for the same reason.
+- **The selected day decides the month.** `MonthGrid` has no `month` prop: it shows the month of `selectedKey`. One piece of state, and the selected (focusable) day is always on screen. Prev/next month in Step 4.3 = `addMonths(selected, ±1)`.
+- **Fixed 6 × 7 grid**, Monday first: the height never changes between months (no layout jump), leading/trailing days are dimmed and clickable (they switch month).
+- **Multi-day events** are listed on every day they cover; the end is exclusive (ending at 00:00 doesn't spill over). Each day's list is in start-time order.
+- **Ids per day, not events.** The server sends `Record<DayKey, string[]>`; the client resolves ids against its single events list (`useMemo`), so an RSVP changes one object and every day showing it agrees.
+- **WAI-ARIA grid (date-picker keys).** `<table role="grid">` named by the month; `<th scope="col"><abbr title="Monday">Mon</abbr>`; `aria-selected` on the `td`; a `<button>` per day with roving `tabIndex` (only the selected day is a Tab stop), `aria-current="date"` on today, and a full label ("Thursday, November 5, 5 events"). Keys: arrows ±1 day / ±1 week, `Home`/`End` Monday/Sunday, `PageUp`/`PageDown` same day ±1 month (clamped: Jan 31 → Feb 28). Moving selects, as in `Tabs`. Arrows swap in RTL.
+- **Focus after re-render.** A move can land in another month, i.e. on a newly rendered button. `selectDay` sets a `focusPending` ref; an effect on `selectedKey` focuses `button[data-day=…]`. Only grid interaction sets the flag, so outside changes (e.g. a "Today" button) don't steal focus.
+- **Cell content is `aria-hidden`.** Dots and chips are visual; the count is in the label and the agenda (4.4) lists the events, so screen readers don't hear every title on every Tab.
+- **Style tables:** `dayNumberStyles: Record<DayTone, …>` (today / selected / inMonth / outside, resolved by `getDayTone` in that priority), `chipStyles` and `dotStyles: Record<EventCategory, …>`, `GRID_MOVES: Record<GridNavKey, …>`.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| `DayKey` strings + UTC-midnight maths | A date library (date-fns-tz, Luxon) | ~60 lines cover what we need with zero bundle cost. Time zones only matter on the server, where `Intl` already handles them. |
+| Group days on the server | Group in the browser with `Intl` + `timeZone` | Browsers carry different tzdata for Morocco (§5.2): days near midnight could land on different dates than on the server and cause hydration mismatches. |
+| Month derived from `selectedKey` | Separate `month` and `selected` state | Two states can disagree (selected day not visible = no Tab stop). One state can't. |
+| Fixed 6 rows | 4–6 rows depending on the month | Content below the grid (agenda) doesn't jump when changing month. |
+| `<table role="grid">` + buttons | `div` CSS grid + `role="grid"`/`row`/`gridcell` | Native table semantics give rows/columns and header association for free; buttons give click, Enter and Space for free. |
+| Selection follows arrows | Arrows move focus, Enter selects | The agenda updates instantly with no fetch; one keypress saved per day, same model as `Tabs`. |
+
+#### Component Contract
+
+```ts
+// src/lib/calendar.ts
+type DayKey = string; // 'YYYY-MM-DD', campus date
+interface CalendarDay { key: DayKey; day: number; inMonth: boolean }
+CALENDAR_WEEKS = 6; WEEKDAYS: { short; long }[] // Monday first
+addDays(key, n), addMonths(key, n) /* clamped */, weekdayIndex(key) /* 0 = Mon */, isSameMonth(a, b)
+buildMonthMatrix(key): CalendarDay[]            // 42 days
+formatMonthTitle(key) /* "November 2026" */, formatDayLabel(key) /* "Thursday, November 5" */
+// Server only:
+toCampusDayKey(ms): DayKey
+getEventIdsByDay(events): Record<DayKey, string[]>
+
+// src/components/calendar/MonthGrid.tsx ('use client', forwardRef<HTMLTableElement>)
+interface MonthGridProps extends React.TableHTMLAttributes<HTMLTableElement> {
+  selectedKey: DayKey;                          // also picks the month shown
+  todayKey: DayKey;                             // server, campus time
+  eventsByDay: Record<DayKey, EventItem[]>;     // start-time order
+  onSelectDay: (key: DayKey) => void;
+}
+```
+
+#### Usage Example
+
+```tsx
+// Server page
+await connection();
+const todayKey = toCampusDayKey(Date.now());
+<Calendar events={events} eventIdsByDay={getEventIdsByDay(events)} todayKey={todayKey} />
+
+// Client
+const [selected, setSelected] = useState(todayKey);
+<MonthGrid selectedKey={selected} todayKey={todayKey} eventsByDay={eventsByDay} onSelectDay={setSelected} />
+```
+
+#### Verified (server HTML via nginx)
+
+6 rows × 7 days in every scenario; today (Nov 3) is the only Tab stop with `aria-current="date"`; the hackathon is on Nov 13–15, not 16; the busy scenario reads "Thursday, November 5, 5 events" and shows "+3 more" once; January 2027 runs Mon Dec 28 → Sun Feb 7. `tsc --noEmit` passes. Keyboard, RTL and phone layout: manual checks on `/test`.
+
+#### Notes for later
+
+- **Mock data** is all November 2026; other months are empty until Phase 7's API (which should accept a date range: the 42-day window of `buildMonthMatrix`).
+- **Phase 7 i18n:** `WEEKDAYS`, the formatters (`'en'`) and "+N more" / "N events".
+
+### 6.3 CalendarHeader & calendar views (Step 4.3)
+
+**Files:** `src/components/calendar/CalendarHeader.tsx` (new, `'use client'`); `src/lib/calendar.ts` (added `CalendarView`, `CALENDAR_VIEWS`, `isCalendarView`, `CALENDAR_STEPS`, `CALENDAR_TITLES`, `formatWeekTitle`). Test: `src/app/test/CalendarDemo.tsx`.
+**Status:** ✅ Validated (2026-11-04). Live on `/calendar` (§6.6).
+
+#### Business & Product Purpose
+
+Students need to see which month (or week) they're looking at, step forward to plan ahead, get back to today in one tap, and switch between the month overview and the week detail.
+
+#### Core Concepts & Engineering Decisions
+
+- **Header inside `<Tabs>`, panels outside it.** `CalendarHeader` renders the `TabsList`; the page renders one `TabsContent` per view under the same `<Tabs value={view}>`. That keeps the `aria-controls` ↔ `aria-labelledby` wiring of the `Tabs` primitive intact while the header stays a self-contained row.
+- **Views as tables.** `CALENDAR_STEPS: Record<CalendarView, (key, ±1) => DayKey>` (month = `addMonths`, clamped; week = ±7 days) and `CALENDAR_TITLES: Record<CalendarView, (key) => string>`. Adding a view (e.g. "day") fails the build until it has a step and a title.
+- **Prev/next move the selection.** Still one piece of state (§6.2): `selectedKey` moves by a step and the view follows it. Today = `setSelectedKey(todayKey)`.
+- **`formatWeekTitle` by hand**: "Nov 2 – 8, 2026" / "Nov 30 – Dec 6, 2026" / "Dec 28, 2026 – Jan 3, 2027". Not `Intl.DateTimeFormat#formatRange`: its spacing around the dash (thin vs. normal spaces) differs between ICU versions, i.e. between Node and browsers, which would be a hydration mismatch.
+- **Accessibility.** The icon buttons have names that follow the view ("Previous month" / "Next week"). The title is an `aria-live="polite"` heading: after pressing "Next month" focus stays on the button, so the new title is read out. Chevrons are `aria-hidden` and flip in RTL (`rtl:-scale-x-100`), so "previous" points the right way in Arabic.
+- **Panel Tab stop.** `TabsContent` has `tabIndex={0}` by default (for panels without focusable content). The month panel passes `tabIndex={-1}` because the grid already has a Tab stop (the selected day).
+- **`headingLevel`** (`'h2'` default): the page decides the outline, as with `EventCard`.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Header renders only the `TabsList` | Header owns `<Tabs>` and takes the panels as `children` | The page keeps the layout between header and panels (e.g. agenda next to the grid in 4.4); the header doesn't become a layout component. |
+| Callbacks (`onPrevious`/`onNext`/`onToday`) | Header gets `selectedKey` + `onSelectDay` and computes steps itself | The header stays dumb and testable; the page is the single place that owns calendar state. |
+| Title passed in as a string | Header formats it from `selectedKey` | The same header could show a day or a range without new props. |
+| `aria-live` on the title | Announce nothing; move focus to the grid after Next | Moving focus away from the button breaks repeated presses ("Next, Next, Next"). |
+| Today always enabled | Disabled when today is selected | A disabled button drops out of the Tab order and moves the controls under the user's finger; pressing it on today is harmless. |
+
+#### Component Contract
+
+```ts
+// src/components/calendar/CalendarHeader.tsx ('use client', forwardRef<HTMLDivElement>)
+// Must be rendered inside <Tabs value={view}>.
+interface CalendarHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+  title: string;                 // CALENDAR_TITLES[view](selectedKey)
+  view: CalendarView;            // picks the prev/next labels
+  onPrevious: () => void;
+  onNext: () => void;
+  onToday: () => void;
+  headingLevel?: 'h1' | 'h2';    // default 'h2'
+}
+
+// src/lib/calendar.ts (client-safe)
+type CalendarView = 'month' | 'week';
+CALENDAR_VIEWS: { value: CalendarView; label: string }[]
+isCalendarView(value: string): value is CalendarView
+CALENDAR_STEPS: Record<CalendarView, (key: DayKey, direction: -1 | 1) => DayKey>
+CALENDAR_TITLES: Record<CalendarView, (key: DayKey) => string>
+formatWeekTitle(key): string
+```
+
+#### Usage Example
+
+```tsx
+const [selected, setSelected] = useState(todayKey);
+const [view, setView] = useState<CalendarView>('month');
+
+<Tabs value={view} onValueChange={(next) => isCalendarView(next) && setView(next)}>
+  <CalendarHeader
+    title={CALENDAR_TITLES[view](selected)}
+    view={view}
+    onPrevious={() => setSelected((key) => CALENDAR_STEPS[view](key, -1))}
+    onNext={() => setSelected((key) => CALENDAR_STEPS[view](key, 1))}
+    onToday={() => setSelected(todayKey)}
+  />
+  <TabsContent value="month" tabIndex={-1}>
+    <MonthGrid selectedKey={selected} todayKey={todayKey} eventsByDay={eventsByDay} onSelectDay={setSelected} />
+  </TabsContent>
+  <TabsContent value="week">…</TabsContent>
+</Tabs>
+```
+
+#### Verified
+
+Server HTML: title "November 2026" in the live heading, "Previous month" / "Next month" labels, Month tab selected, month panel `tabindex="-1"`. Node 22 in the container: `formatWeekTitle` gives the three formats above; `CALENDAR_STEPS.month('2027-01-31', 1)` = `2027-02-28`, `('2028-03-31', -1)` = `2028-02-29`, `week('2026-12-29', 1)` = `2027-01-05`. `tsc --noEmit` passes.
+
+#### Notes for later
+
+- **Double announcement:** selecting a day in another month from the grid announces the day (focus) and the new title (live region). Acceptable; revisit if screen-reader testing finds it noisy.
+- **Phase 7 i18n:** `STEP_LABELS`, `CALENDAR_VIEWS` labels, "Today", `formatWeekTitle` patterns.
+
+### 6.4 DayAgenda & event times (Step 4.4)
+
+**Files:** `src/components/calendar/DayAgenda.tsx` (new, no `'use client'` needed: no state or handlers); `src/lib/calendar.ts` (added `EventTimes`, `getEventTimes`, `formatAgendaTime`; `getEventIdsByDay` now shares `getEventDaySpan`). Test: `src/app/test/CalendarDemo.tsx`, `src/app/test/page.tsx`. Also fixed the stale "UTC+1 in November" comment in `src/lib/mockData.ts`.
+**Status:** ✅ Validated (2026-11-04).
+
+#### Business & Product Purpose
+
+The grid shows *that* a day is busy; the agenda shows *what* is on: time, title, club, place, category, and whether you're going. Each row opens the event page.
+
+#### Core Concepts & Engineering Decisions
+
+- **Times per event, wording per day.** The server sends `EventTimes = { startDay, endDay, start, end }` per event (`getEventTimes`, formatted in campus time). `formatAgendaTime(times, day)` (pure, client-safe) turns that into the label for the day shown: `5:00 PM – 8:00 PM` for a one-day event; for multi-day events `From 8:00 AM` (first day), `All day` (middle days), `Until 5:00 PM` (last day).
+- **One source for "which days does an event cover".** `getEventDaySpan` is used by both `getEventIdsByDay` (grid) and `getEventTimes` (agenda), so the two can never disagree.
+- **Stretched link per row**, same as `EventCard`: the title is the only link and its `::after` covers the row, so the whole row is clickable and the focus ring wraps the row.
+- **Category accent with `border-s-4`** (logical "start" side) from `accentStyles: Record<EventCategory, string>`: it moves to the right edge in RTL with no extra code. Category and "Going" use the existing `Badge`.
+- **Landmark:** `<section aria-labelledby>` named by the day heading ("Thursday, November 5"), then the count, then a `<ul>` of links. The empty day reuses `EmptyState` (as planned in §5.8) with tighter padding.
+- **Tab order:** header controls → selected day in the grid → the day's events. The grid arrows update the list; no live region, since the grid cell's label already says "N events".
+- **Layout (page's job):** under the grid below `lg`; from `lg` a `minmax(0,1fr) 20rem` two-column grid with the agenda `sticky top-20` (below the navbar).
+
+#### Deviation from the plan: no drawer on phones
+
+The brief said "selected-day agenda drawer". On phones the list is placed **under the grid** instead:
+- A drawer opening on every tap gets in the way of browsing days (tap, close, tap, close).
+- The 6-row grid on a phone is ~400px tall, so the list starts within the first screen and is reached by scrolling.
+- No extra overlay, focus trap or scroll lock to maintain.
+Revisit if phone testing shows the list is too far down.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Server sends start/end day + time; client picks the wording | Server sends a label per (event, day) | One entry per event instead of one per day it covers, and the wording rules stay in one pure function. |
+| `DayAgenda` gets `events` for one day | It gets `eventsByDay` + `dayKey` and looks up itself | It stays reusable for any list of events on a day (e.g. the week view's selected day). |
+| List under the grid on phones | Bottom-sheet drawer | See "Deviation" above. |
+| Badges for category and "Going" | Coloured text only | Same visual language as the feed cards; `Badge` already handles dark mode. |
+
+#### Component Contract
+
+```ts
+// src/components/calendar/DayAgenda.tsx (forwardRef<HTMLElement>)
+interface DayAgendaProps extends React.HTMLAttributes<HTMLElement> {
+  dayKey: DayKey;
+  events: EventItem[];                        // that day's events, start-time order
+  eventTimes: Record<string, EventTimes>;     // getEventTimes (server)
+  headingLevel?: 'h2' | 'h3';                 // default 'h2'
+}
+
+// src/lib/calendar.ts
+interface EventTimes { startDay: DayKey; endDay: DayKey; start: string; end: string }
+getEventTimes(events): Record<string, EventTimes>   // server only (time zone)
+formatAgendaTime(times, day): string                 // client-safe
+```
+
+#### Usage Example
+
+```tsx
+<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+  <Tabs value={view} onValueChange={…}>…header + MonthGrid…</Tabs>
+  <DayAgenda
+    dayKey={selected}
+    events={eventsByDay[selected] ?? []}
+    eventTimes={eventTimes}
+    className="lg:sticky lg:top-20"
+  />
+</div>
+```
+
+#### Verified
+
+Server HTML: busy day lists 5 events in time order (8:00 AM … 5:00 PM – 8:00 PM masterclass) with "Going" badges; the default scenario shows today's heading and "Nothing on this day"; hackathon times are `8:00 AM` / `5:00 PM` (container Node, tzdata **2026e**: campus time is UTC+0 in Nov 2026). `tsc --noEmit` passes. Layout, keyboard, RTL: manual checks on `/test`.
+
+#### Notes for later
+
+- Rows link to `/events/[id]`, which 404s until the event page (next after `/calendar`).
+- **Phase 7 i18n:** "From / Until / All day", "No events / N events", empty-state copy.
+
+### 6.5 WeekGrid, shared day styles & `useDayGridNavigation` (Step 4.5)
+
+**Files:** `src/components/calendar/WeekGrid.tsx` (new), `src/components/calendar/dayStyles.ts` (new), `src/hooks/useDayGridNavigation.ts` (new), `src/components/calendar/MonthGrid.tsx` (refactored onto the two shared modules, no visible change except `text-left` → `text-start` for RTL), `src/lib/calendar.ts` (`buildWeekDays`). Test: `/test?view=week` (combine with `scenario=busy`).
+**Status:** ✅ Validated (2026-11-05). Live on `/calendar` (§6.6).
+
+#### Business & Product Purpose
+
+The week view answers "what does my week look like?" with times: seven columns, each listing that day's events with their time, so students can plan around classes.
+
+#### Core Concepts & Engineering Decisions
+
+- **Same grid, one row.** `<table role="grid">` named by the week title ("Nov 2 – 8, 2026"), weekday `<th>`s, one `<tr>` of 7 day buttons. Same labels, `aria-current="date"`, `aria-selected` and roving `tabIndex` as the month view, so screen-reader users meet one pattern.
+- **Shared keyboard logic: `useDayGridNavigation(selectedKey, onSelectDay)`** returns `{ gridRef, selectDay, handleKeyDown }`. It holds `GRID_MOVES` (arrows, Home/End, PageUp/PageDown, RTL swap) and the "focus the day after re-render" effect that used to live in `MonthGrid`. In the week view ↑/↓ (±7 days) and ←/→ past Sunday/Monday move to the next/previous week; the week shown follows `selectedKey`.
+- **Shared look: `dayStyles.ts`** holds `DayTone`, `getDayTone`, `dayNumberStyles`, `dayCellStyles`, `chipStyles`, `dotStyles`, `describeCount`, `MAX_DOTS`. Today/selected/category colours can't drift between the views.
+- **Responsive content.** From `md` (768px) each column is `h-80` and shows up to 4 chips (time from `formatAgendaTime` + 2-line title) and "+N more"; overflow is clipped so long titles can't break the row. Below `md` a column is ~45–100px wide: day number + dots only, and the agenda underneath has the details (same split as the month view at `sm`).
+- **`buildWeekDays(key)`** returns Monday → Sunday with `inMonth: true`: a week view doesn't dim days of the next month.
+- **Test page:** `?view=week` opens the demo in week view (so the server HTML can be checked and the view linked to).
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Day columns listing events | Hour-by-hour time grid (events positioned by start/end) | Positions need campus hours computed on the server per event and overlap handling; student events are few per day, so a list is clearer and works at every width. Revisit if days get crowded. |
+| Extract a hook + style module now | Copy MonthGrid's code into WeekGrid | Two copies of keyboard and focus logic would drift; the second user is the right time to extract. |
+| Hook returns a `selectDay` used for clicks too | Hook only handles keys | Clicking a day of another month re-renders the button elsewhere; the same "focus after render" path keeps focus on it. |
+| Chips from `md`, dots below | Chips at every width | Seven columns on a 390px phone are ~50px wide: text would be unreadable. |
+
+#### Component Contract
+
+```ts
+// src/components/calendar/WeekGrid.tsx ('use client', forwardRef<HTMLTableElement>)
+interface WeekGridProps extends React.TableHTMLAttributes<HTMLTableElement> {
+  selectedKey: DayKey;                        // also picks the week shown
+  todayKey: DayKey;
+  eventsByDay: Record<DayKey, EventItem[]>;
+  eventTimes: Record<string, EventTimes>;     // getEventTimes (server)
+  onSelectDay: (key: DayKey) => void;
+}
+
+// src/hooks/useDayGridNavigation.ts
+useDayGridNavigation<T extends HTMLElement>(selectedKey, onSelectDay): {
+  gridRef: RefObject<T | null>;               // put on the grid element (merge with a forwarded ref)
+  selectDay: (key: DayKey) => void;           // use for clicks too
+  handleKeyDown: (event: KeyboardEvent<T>) => void;
+}
+// Day buttons must carry data-day={key}; only the selected one has tabIndex 0.
+
+// src/lib/calendar.ts
+buildWeekDays(key): CalendarDay[]             // Monday → Sunday
+```
+
+#### Usage Example
+
+```tsx
+<TabsContent value="week" tabIndex={-1}>
+  <WeekGrid
+    selectedKey={selected}
+    todayKey={todayKey}
+    eventsByDay={eventsByDay}
+    eventTimes={eventTimes}
+    onSelectDay={setSelected}
+  />
+</TabsContent>
+```
+
+#### Verified
+
+Server HTML of `/test?scenario=busy&view=week`: grid named "Nov 2 – 8, 2026", 7 cells, "Thursday, November 5, 5 events", 4 chips + "+1 more", chip times `8:00 AM – 9:00 AM` … and `7:00 PM – 10:00 PM` (jam session, Nov 7). Month view after the refactor: 42 cells, "+3 more" on Nov 5 as before. `tsc --noEmit` passes. Keyboard, widths, RTL: manual checks on `/test`.
+
+### 6.6 `/calendar` page & EventCalendar (Step 4.6): calendar done
+
+**Files:** `src/app/calendar/page.tsx` (new, Server Component), `src/components/calendar/EventCalendar.tsx` (new, `'use client'`). `/test` reset to "nothing under test"; `src/app/test/CalendarDemo.tsx` removed.
+**Status:** ✅ Live (2026-11-05). The navbar and tab-bar "Calendar" links no longer lead to the 404 page.
+
+#### Business & Product Purpose
+
+Students can browse every campus event by month or week, pick a day, and open an event from that day's list, on the page the navigation has pointed to since Phase 2.
+
+#### Core Concepts & Engineering Decisions
+
+- **Same server/client split as `/` (§5.9).** `page.tsx` calls `await connection()` (render per request, so "today" is the request date), then computes everything that needs the campus time zone: `todayKey` (`toCampusDayKey`), `eventIdsByDay` (`getEventIdsByDay`), `eventTimes` (`getEventTimes`). `EventCalendar` gets plain data and owns the interactive state.
+- **`EventCalendar` = the validated demo minus the test parts** (RTL checkbox, `initialKey` / `initialView`): `selectedKey` (starts at today) + `view` (starts at month); `eventsByDay` resolved from ids with `useMemo`; header + month/week panels inside one `<Tabs>`, `DayAgenda` beside (lg) or under the grid.
+- **All events, not only upcoming.** Unlike the feed, a calendar also shows what already happened.
+- **Headings.** The visible title is the month/week (an `h2` in the header, it changes as you browse), so the page `h1` "Calendar" is `sr-only`. Outline: h1 Calendar → h2 "November 2026" → h2 day agenda.
+- **Metadata:** `title: 'Calendar | Campus Hub'` plus a description.
+
+#### Verified (server HTML via nginx)
+
+`/calendar` 200, `<title>Calendar | Campus Hub</title>`, h1 "Calendar", grid "November 2026" with 42 days, today (Nov 5) marked `aria-current="date"` with "1 event" and its agenda; navbar link and phone tab bar both `aria-current="page"` on Calendar; no test-page leftovers. `/` and `/test` still 200. `tsc --noEmit` passes.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| New `EventCalendar` component, page stays tiny | Put the state in `page.tsx` | A page with state must be a Client Component, which would move the time-zone work to the browser (§5.2). |
+| sr-only `h1` | Visible "Calendar" heading above the header | The month title already says where you are; two big titles stacked is noise. Screen readers still get a page heading. |
+| Selected day/view in React state | In the URL (`?date=2026-11-05&view=week`) | Simpler for now; see notes. |
+
+#### Component Contract
+
+```ts
+// src/components/calendar/EventCalendar.tsx ('use client')
+interface EventCalendarProps {
+  events: EventItem[];
+  eventIdsByDay: Record<DayKey, string[]>;     // server
+  eventTimes: Record<string, EventTimes>;      // server
+  todayKey: DayKey;                            // server
+}
+```
+
+#### Usage Example
+
+```tsx
+// src/app/calendar/page.tsx
+export default async function CalendarPage() {
+  await connection();
+  const events = mockEvents;
+  return (
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <h1 className="sr-only">Calendar</h1>
+      <EventCalendar
+        events={events}
+        eventIdsByDay={getEventIdsByDay(events)}
+        eventTimes={getEventTimes(events)}
+        todayKey={toCampusDayKey(Date.now())}
+      />
+    </div>
+  );
+}
+```
+
+#### Notes for later
+
+- **URL state:** the selected day and view reset on reload and can't be shared. Putting them in the query string (`?date=…&view=week`, `router.replace`) would fix both; worth doing when the event page links back to "this day in the calendar".
+- **Phase 7:** fetch only the visible range (the 42-day window / the week) from the API, loading and error states, i18n of all calendar strings.
+- **Not verified:** a production build (`next build`), same as `/`.

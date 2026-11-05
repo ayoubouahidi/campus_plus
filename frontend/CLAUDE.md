@@ -4,7 +4,7 @@
 
 Act as a Staff Frontend Architect & Design Systems Engineer, collaborating with the user to build **Campus Hub**: an enterprise-grade, accessible event discovery, club management, and RSVP web platform for 1337 Coding School and EMINES (UM6P).
 
-> Where we are right now: see the roadmap in `DOCS.md` §1.6 and the **Status** line of the latest entry in §3.
+> Where we are right now: see the roadmap in `DOCS.md` §1.6 and the **Status** line of the latest entry in the last section.
 
 ---
 
@@ -76,10 +76,11 @@ Executed sequentially from Phase 2 through Phase 7:
   - Task 2.5: Root layout integration in `src/app/layout.tsx` (wrapping with `ToastProvider`)
 - **Phase 3: Public Event Feed (`/`)**
   - Featured event hero banner, segmented campus tabs (All, 1337, EMINES), interactive category chips, debounced search bar, 3-column event grid, and empty states.
-- **Phase 4: Core Public Views**
+- **Phase 4: Core Public Views** (in this order, see `DOCS.md` §6)
   - `/calendar`: 7-column monthly/weekly date matrix + selected-day agenda drawer.
+  - `/events/[id]`: Dedicated event dossier with RSVP ticket flow and attendee stacks (fixes the event card links on `/`).
   - `/clubs` & `/clubs/[slug]`: Student club directory and detailed club brand profiles.
-  - `/events/[id]`: Dedicated event dossier with RSVP ticket flow and attendee stacks.
+  - Search palette (⌘K): searches events and clubs; the navbar trigger already exists.
 - **Phase 5: Student Authentication & Route Guards**
   - `/auth/login` & `/auth/register`: Dual email credentials and 42 Intra OAuth.
   - Route guards for signed-in student pages (`/profile`); signed-out visitors keep the public views.
