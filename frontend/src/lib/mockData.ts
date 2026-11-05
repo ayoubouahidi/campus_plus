@@ -60,6 +60,48 @@ export const mockClubs: Club[] = [
     president_email: 'consulting@emines.um6p.ma',
     created_at: '2026-01-20T09:30:00Z',
   },
+  {
+    id: 'club_leet_dev',
+    department_id: 'dept_1337',
+    department_name: '1337 Coding School',
+    name: 'LEET Dev',
+    slug: 'leet-dev',
+    description: 'Systems programming, hackathons, and open-source projects built by 1337 students.',
+    logo_url: '/placeholder-club.png',
+    banner_url: null,
+    president_name: 'Anas B.',
+    president_phone: '+212633445566',
+    president_email: 'leetdev@1337.ma',
+    created_at: '2026-01-10T08:00:00Z',
+  },
+  {
+    id: 'club_um6p_sports',
+    department_id: 'dept_um6p',
+    department_name: 'UM6P Central Campus',
+    name: 'UM6P Sports Association',
+    slug: 'um6p-sports',
+    description: 'Inter-school leagues, tournaments, and weekly training sessions at the UM6P sports complex.',
+    logo_url: '/placeholder-club.png',
+    banner_url: null,
+    president_name: 'Kenza R.',
+    president_phone: '+212644556677',
+    president_email: 'sports@um6p.ma',
+    created_at: '2026-01-05T09:00:00Z',
+  },
+  {
+    id: 'club_bde',
+    department_id: 'dept_um6p',
+    department_name: 'UM6P Central Campus',
+    name: 'Student Events Committee',
+    slug: 'student-events',
+    description: 'Campus-wide celebrations, welcome days, and end-of-semester events for every school.',
+    logo_url: '/placeholder-club.png',
+    banner_url: null,
+    president_name: 'Omar L.',
+    president_phone: '+212655667788',
+    president_email: 'events@um6p.ma',
+    created_at: '2026-01-02T10:00:00Z',
+  },
 ];
 
 // Small pool the attendee previews draw from (initials fallback: no avatar images yet)
@@ -107,8 +149,8 @@ export const mockEvents: EventItem[] = [
   },
   {
     id: 'evt_hackathon_ai',
-    club_id: 'club_leet_frame',
-    club_name: '1337 Coding School',
+    club_id: 'club_leet_dev',
+    club_name: 'LEET Dev',
     department_name: '1337 Coding School',
     title: '42 Campus Hackathon: Edge AI & Systems',
     description: '48-hour systems development sprint focusing on C++, microservices, and network protocols.',
@@ -210,3 +252,20 @@ export const mockNotifications: AppNotification[] = [
     is_read: true,
   },
 ];
+
+// Full attendee list for /events/[id] (Phase 7: GET /api/events/:id/attendees). The current user is NOT
+// included: the page adds "You" from the session, so the list follows RSVP clicks. Starts with the event's
+// preview, then deterministic fake names until the count matches rsvps_count (minus the user if going).
+const FIRST_NAMES = ['Aya', 'Mehdi', 'Rania', 'Ilyas', 'Sara', 'Othmane', 'Lina', 'Adam', 'Hiba', 'Zakaria', 'Meryem', 'Reda'];
+const LAST_NAMES = ['Alaoui', 'Bennani', 'Cherkaoui', 'Daoudi', 'El Fassi', 'Ghazi', 'Hajji', 'Idrissi', 'Jabri', 'Kettani'];
+
+export const getMockAttendees = (event: EventItem): AttendeePreview[] => {
+  const others = Math.max(0, event.rsvps_count - (event.has_user_rsvpd ? 1 : 0));
+  const preview = event.attendees_preview.slice(0, others);
+  const generated = Array.from({ length: others - preview.length }, (_, i) => ({
+    id: `usr_gen_${event.id}_${i}`,
+    full_name: `${FIRST_NAMES[i % FIRST_NAMES.length]} ${LAST_NAMES[Math.floor(i / FIRST_NAMES.length) % LAST_NAMES.length]}`,
+    avatar_url: null,
+  }));
+  return [...preview, ...generated];
+};

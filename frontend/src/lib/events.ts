@@ -1,4 +1,4 @@
-import { EventCategory, EventItem } from '@/types/api';
+import { Club, EventCategory, EventItem } from '@/types/api';
 
 export type Campus = '1337' | 'emines';
 export type CampusFilter = 'all' | Campus;
@@ -89,3 +89,9 @@ export const toggleRsvp = (event: EventItem): EventItem => ({
 // Result count for the feed toolbar: "No events", "1 event", "6 events".
 export const formatEventCount = (count: number): string =>
   count === 0 ? 'No events' : `${count} ${count === 1 ? 'event' : 'events'}`;
+
+// Lookups for /events/[id]. Phase 7 replaces them with GET /api/events/:id (and the club embedded or fetched).
+export const getEventById = (events: EventItem[], id: string): EventItem | undefined =>
+  events.find((event) => event.id === id);
+
+export const getClubById = (clubs: Club[], id: string): Club | undefined => clubs.find((club) => club.id === id);

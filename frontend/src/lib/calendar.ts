@@ -199,6 +199,43 @@ export const getEventTimes = (events: EventItem[]): Record<string, EventTimes> =
     })
   );
 
+// Date and time lines for the event page, in campus time. Server only.
+//   One day:   "Thursday, November 5, 2026"                        · "5:00 PM – 8:00 PM"
+//   Multi-day: "Friday, November 13 – Sunday, November 15, 2026"   · "Starts 8:00 AM, ends 5:00 PM"
+// The year is written once when both days share it. Built by hand (not formatRange) for the same reason
+// as formatWeekTitle: ICU versions disagree on the spacing.
+export interface EventDateDetails {
+  date: string;
+  time: string;
+  isMultiDay: boolean;
+}
+
+const campusLongDayFormatter = new Intl.DateTimeFormat('en', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  timeZone: CAMPUS_TIME_ZONE,
+});
+
+export const getEventDateDetails = (event: EventItem): EventDateDetails => {
+  const { first, last } = getEventDaySpan(event);
+  const startMs = Date.parse(event.start_time);
+  const endMs = Date.parse(event.end_time);
+  const [start, end] = [campusTimeFormatter.format(startMs), campusTimeFormatter.format(endMs)];
+  const [startYear, endYear] = [first.slice(0, 4), last.slice(0, 4)];
+
+  if (first === last) {
+    return { date: `${campusLongDayFormatter.format(startMs)}, ${startYear}`, time: `${start} – ${end}`, isMultiDay: false };
+  }
+
+  const startDay = campusLongDayFormatter.format(startMs);
+  // The last day is the one before an exclusive midnight end (see getEventDaySpan).
+  const endDay = campusLongDayFormatter.format(Math.max(startMs, endMs - 1));
+  const date =
+    startYear === endYear ? `${startDay} – ${endDay}, ${endYear}` : `${startDay}, ${startYear} – ${endDay}, ${endYear}`;
+  return { date, time: `Starts ${start}, ends ${end}`, isMultiDay: true };
+};
+
 /* ------------------------- Agenda time label (any runtime) ------------------------- */
 
 // What an event's time looks like on one given day of the agenda. Pure string work on server-made
