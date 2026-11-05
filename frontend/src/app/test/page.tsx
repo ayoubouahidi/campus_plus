@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation';
 // Workflow: build the step here → the user validates it in the browser → move it into the real route
 // (e.g. src/app/page.tsx) → reset this page for the next step. Dev only: it is a 404 in production.
 // Optional scenarios: read `searchParams` (a Promise in Next.js 16) and switch on ?scenario=<key>
-// (see git history, e.g. Step 4.5, for an example).
+// (see git history, e.g. Steps 4.5 and 4.9, for examples).
 
 export const metadata: Metadata = {
   title: 'Test page',
@@ -25,11 +25,15 @@ export default function TestPage() {
       >
         <p className="font-semibold">Test page: nothing under test</p>
         <p className="mt-2">
-          The calendar is live at{' '}
+          Live:{' '}
           <Link href="/calendar" className="font-medium underline underline-offset-2">
             /calendar
+          </Link>{' '}
+          and event pages, e.g.{' '}
+          <Link href="/events/evt_hackathon_ai" className="font-medium underline underline-offset-2">
+            /events/evt_hackathon_ai
           </Link>
-          . The next step (event page, <code>/events/[id]</code>) starts here.
+          .
         </p>
       </section>
     </div>
