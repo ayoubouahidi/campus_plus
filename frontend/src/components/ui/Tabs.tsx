@@ -88,8 +88,41 @@ Tabs.displayName = 'Tabs';
 
 /* -------------------------------- TabsList -------------------------------- */
 
+// Keys that move focus between tabs (WAI-ARIA tabs pattern, horizontal tablist).
+type TabNavKey = 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End';
+
+const isTabNavKey = (key: string): key is TabNavKey =>
+  key === 'ArrowLeft' || key === 'ArrowRight' || key === 'Home' || key === 'End';
+
+// Index of the tab to move to. Arrows wrap around; in RTL, Left/Right swap so "next" follows reading order.
+const TAB_MOVES: Record<TabNavKey, (current: number, count: number, isRtl: boolean) => number> = {
+  ArrowRight: (current, count, isRtl) => (current + (isRtl ? -1 : 1) + count) % count,
+  ArrowLeft: (current, count, isRtl) => (current + (isRtl ? 1 : -1) + count) % count,
+  Home: () => 0,
+  End: (_current, count) => count - 1,
+};
+
 export const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
-  ({ children, variant = 'segmented', className = '', ...props }, ref) => {
+  ({ children, variant = 'segmented', className = '', onKeyDown, ...props }, ref) => {
+    // Roving tabIndex: only the active tab is in the Tab order, so the arrow keys move between tabs.
+    // Moving focus also selects the tab (automatic activation): panels render instantly, no fetch.
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      onKeyDown?.(event);
+      if (event.defaultPrevented || !isTabNavKey(event.key)) return;
+
+      const tabs = Array.from(
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])')
+      );
+      const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+      if (tabs.length === 0 || current === -1) return;
+
+      event.preventDefault();
+      const isRtl = getComputedStyle(event.currentTarget).direction === 'rtl';
+      const target = tabs[TAB_MOVES[event.key](current, tabs.length, isRtl)];
+      target.focus();
+      target.click(); // reuses TabsTrigger's onClick: selects the tab and fires the consumer's onClick
+    };
+
     const variantStyles = {
       segmented:
         'inline-flex items-center rounded-xl bg-slate-100 p-1 text-slate-500 dark:bg-slate-900 dark:text-slate-400 border border-slate-200/80 dark:border-slate-800',
@@ -101,6 +134,8 @@ export const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
       <div
         ref={ref}
         role="tablist"
+        aria-orientation="horizontal"
+        onKeyDown={handleKeyDown}
         className={`${variantStyles[variant]} ${className}`}
         {...props}
       >

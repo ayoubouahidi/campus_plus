@@ -239,8 +239,9 @@ Segmented navigation controls with WAI-ARIA tab semantics and roving keyboard in
 ```tsx
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
-<Tabs defaultValue="all" onValueChange="{(val)"> console.log('Active tab:', val)}>
-  <TabsList variant="segmented">
+<Tabs defaultValue="all" onValueChange={(val) => console.log('Active tab:', val)}>
+  {/* aria-label names the tab list for screen readers. Keyboard: ← → Home End (DOCS.md §6.1) */}
+  <TabsList variant="segmented" aria-label="Campus">
     <TabsTrigger value="all">All Campus</TabsTrigger>
     <TabsTrigger value="1337">1337 Benguerir</TabsTrigger>
     <TabsTrigger value="emines">EMINES School</TabsTrigger>
