@@ -8,7 +8,7 @@ import { FeedToolbar } from '@/components/events/FeedToolbar';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NAV_ICONS } from '@/components/ui/layout/navIcons';
-import { useToast } from '@/components/ui/Toast';
+import { useRsvpToast } from '@/hooks/useRsvpToast';
 import { DEFAULT_EVENT_FILTERS, EventFilters, filterEvents, toggleRsvp } from '@/lib/events';
 import { EventSchedule } from '@/lib/time';
 
@@ -25,7 +25,7 @@ const CalendarIcon = NAV_ICONS.calendar;
 export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
   const [events, setEvents] = useState<EventItem[]>(initialEvents);
   const [filters, setFilters] = useState<EventFilters>(DEFAULT_EVENT_FILTERS);
-  const { showToast } = useToast();
+  const announceRsvp = useRsvpToast();
 
   const visibleEvents = filterEvents(events, filters);
 
@@ -33,11 +33,7 @@ export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
   // object, so the toast is decided here, outside the state updater (updaters run twice in Strict Mode).
   const handleRsvpToggle = (event: EventItem) => {
     setEvents((current) => current.map((item) => (item.id === event.id ? toggleRsvp(item) : item)));
-    showToast(
-      event.has_user_rsvpd
-        ? { title: 'RSVP cancelled', description: event.title, variant: 'info' }
-        : { title: "You're going", description: event.title, variant: 'success' },
-    );
+    announceRsvp(event);
   };
 
   return (
