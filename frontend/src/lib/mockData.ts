@@ -25,7 +25,7 @@ export const mockClubs: Club[] = [
     name: 'Leet Frame',
     slug: 'leet-frame',
     description: 'Audiovisual, photography, and cinematic storytelling community at 1337.',
-    logo_url: '/placeholder-club.png',
+    logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Mouad Najjar',
     president_phone: '+212600000000',
@@ -39,7 +39,7 @@ export const mockClubs: Club[] = [
     name: 'LEET Music',
     slug: 'leet-music',
     description: 'Live performance, beat production, DJing, and campus jam sessions.',
-    logo_url: '/placeholder-club.png',
+    logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Saad M.',
     president_phone: '+212611223344',
@@ -53,7 +53,7 @@ export const mockClubs: Club[] = [
     name: 'EMINES Consulting Club',
     slug: 'emines-consulting',
     description: 'Business case resolution, consulting frameworks, and industry networking.',
-    logo_url: '/placeholder-club.png',
+    logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Yassine K.',
     president_phone: '+212622334455',
@@ -67,7 +67,7 @@ export const mockClubs: Club[] = [
     name: 'LEET Dev',
     slug: 'leet-dev',
     description: 'Systems programming, hackathons, and open-source projects built by 1337 students.',
-    logo_url: '/placeholder-club.png',
+    logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Anas B.',
     president_phone: '+212633445566',
@@ -81,7 +81,7 @@ export const mockClubs: Club[] = [
     name: 'UM6P Sports Association',
     slug: 'um6p-sports',
     description: 'Inter-school leagues, tournaments, and weekly training sessions at the UM6P sports complex.',
-    logo_url: '/placeholder-club.png',
+    logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Kenza R.',
     president_phone: '+212644556677',
@@ -95,7 +95,7 @@ export const mockClubs: Club[] = [
     name: 'Student Events Committee',
     slug: 'student-events',
     description: 'Campus-wide celebrations, welcome days, and end-of-semester events for every school.',
-    logo_url: '/placeholder-club.png',
+    logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Omar L.',
     president_phone: '+212655667788',
