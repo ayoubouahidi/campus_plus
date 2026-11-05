@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/layout/MobileNav';
 import { FooterLegal, FooterNav } from '@/components/ui/layout/Footer';
 import { useSession } from '@/components/providers/SessionProvider';
-import { useToast } from '@/components/ui/Toast';
+import { SearchPalette } from '@/components/search/SearchPalette';
 import { FOOTER_GROUPS } from '@/lib/navigation';
 import { mockNotifications } from '@/lib/mockData';
 import { AppNotification } from '@/types/notification';
@@ -38,10 +38,9 @@ export interface AppShellProps {
 }
 
 // The one client component that wires the shell together: it owns the state the parts share
-// (search trigger, notification feed) and reads the session. Pages render inside <main>.
+// (search palette, notification feed) and reads the session. Pages render inside <main>.
 export const AppShell = ({ children, footer }: AppShellProps) => {
   const { session } = useSession();
-  const { showToast } = useToast();
 
   // Mock feed until the Phase 6 WebSocket layer owns it
   const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
@@ -56,14 +55,10 @@ export const AppShell = ({ children, footer }: AppShellProps) => {
     setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true })));
   }, []);
 
-  // Placeholder until the search palette exists: confirms ⌘K / the button work
-  const openSearch = useCallback(() => {
-    showToast({
-      title: 'Search is coming soon',
-      description: 'Finding events and clubs from anywhere will open here.',
-      variant: 'info',
-    });
-  }, [showToast]);
+  // ⌘K palette (Step 4.17). Stable callbacks: NavbarSearch re-binds its window ⌘K listener when onOpen changes.
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const openSearch = useCallback(() => setIsSearchOpen(true), []);
+  const closeSearch = useCallback(() => setIsSearchOpen(false), []);
 
   return (
     <MobileNav>
@@ -93,6 +88,8 @@ export const AppShell = ({ children, footer }: AppShellProps) => {
       <MobileTabBarSpacer />
 
       <MobileTabBar sessionStatus={session.status} />
+      {/* Portalled to <body> when open; one instance for the whole app (navbar button and ⌘K). */}
+      <SearchPalette isOpen={isSearchOpen} onClose={closeSearch} />
       <MobileNavDrawer session={session}>
         <div className="space-y-4">
           <FooterNav variant="compact" groups={DRAWER_FOOTER_GROUPS} aria-label="Campus links" />

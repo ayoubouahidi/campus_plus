@@ -8,16 +8,24 @@ import { FOCUSABLE_SELECTOR, trapTabKey } from '@/lib/focus';
 const ModalContext = createContext<{ titleId: string } | null>(null);
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
+export type ModalPosition = 'center' | 'top';
 
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   size?: ModalSize;
+  // 'top' for command palettes: results grow downwards without the box jumping as they change.
+  position?: ModalPosition;
   closeOnOverlayClick?: boolean;
   closeOnEsc?: boolean;
   children: React.ReactNode;
   className?: string;
 }
+
+const positionStyles: Record<ModalPosition, string> = {
+  center: 'items-center',
+  top: 'items-start pt-[12vh] sm:pt-[15vh]',
+};
 
 const sizeStyles: Record<ModalSize, string> = {
   sm: 'max-w-sm',
@@ -30,6 +38,7 @@ export const Modal = ({
   isOpen,
   onClose,
   size = 'md',
+  position = 'center',
   closeOnOverlayClick = true,
   closeOnEsc = true,
   children,
@@ -83,7 +92,7 @@ export const Modal = ({
   if (!mounted || !isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className={`fixed inset-0 z-50 flex justify-center p-4 sm:p-6 ${positionStyles[position]}`}>
       {/* 1. Dimmed Backdrop Scrim */}
       <div
         className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"

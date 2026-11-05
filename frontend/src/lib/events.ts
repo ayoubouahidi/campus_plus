@@ -50,7 +50,7 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
 // Latin accents (é → e) and Arabic harakat, so "cinematic" finds "Cinématic" and Phase 7 search ignores vowel marks.
 const COMBINING_MARKS = /[̀-ًͯ-ٰٟ]/g;
 
-const normalizeText = (text: string): string => text.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase();
+export const normalizeText = (text: string): string => text.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase();
 
 // Shared by the event feed and the clubs directory. Campus-wide (UM6P Central) items only show under "All".
 export const matchesCampus = (departmentName: string, campus: CampusFilter): boolean =>
