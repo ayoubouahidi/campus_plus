@@ -23,10 +23,12 @@ This file is the living engineering record: every component, layout, or utility 
 
 ```
 src/
-├── app/                    # App Router routes and layouts (`/` feed since 3.6, `/calendar` since 4.6, `/events/[id]` since 4.10)
+├── app/                    # App Router routes and layouts (`/` feed since 3.6, `/calendar` 4.6, `/events/[id]` 4.10, `/clubs` 4.13)
 │   └── test/               # Dev-only test page (`/test`) + its demo components: new steps are validated here first (§5.10)
 ├── components/
 │   ├── calendar/           # /calendar feature components (MonthGrid, WeekGrid, DayAgenda, dayStyles, ...)
+│   ├── clubs/              # /clubs feature components (ClubCard, ClubDirectory, ...)
+│   ├── filters/            # Filter controls shared by several pages (CampusToggle)
 │   ├── events/             # Event feature components built from the primitives (EventCard, ...)
 │   ├── providers/          # App-wide client context (SessionProvider)
 │   └── ui/                 # Phase 1 atomic primitives (Button, Badge, Input, ...)
@@ -81,7 +83,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 0–1   | 10 atomic primitives                  | ✅ Done        |
 | 2     | Global shell & layout                 | ✅ Done        |
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
-| 4     | Calendar, event dossier, clubs, search palette | 🚧 In progress: `/calendar` ✅ live (§6.6) · `/events/[id]` ✅ live (§6.10) · 4.11 modal over the feed: to decide · then clubs, search palette |
+| 4     | Calendar, event dossier, clubs, search palette | 🚧 In progress: `/calendar` ✅ live (§6.6) · `/events/[id]` ✅ live (§6.10) · 4.11 modal: skipped for now · clubs: 4.12 club card ✅ · 4.13 `/clubs` ✅ live (§6.12) · next 4.14 club page header · then clubs, search palette |
 | 5     | Student auth & route guards           | ⏳             |
 | 6     | Real-time WebSockets                  | ⏳             |
 | 7     | i18n (Arabic RTL) & live API          | ⏳             |
@@ -141,6 +143,7 @@ Full entries get added here whenever one of these is modified.
 
 - **`AvatarGroup` uses `React.forwardRef<HTMLDivElement, AvatarGroupProps>`** instead of `React.FC`, fixing Engineering Laws 1 and 2. Props and behaviour are unchanged.
 - **Dark-mode rings are `slate-900`** (the card surface), was `slate-950` (the page surface). Stacks sit on cards, so the ring now blends in instead of drawing a dark outline.
+- **`'use client'` added (Step 4.12).** `Avatar` uses `useState` and an `onError` handler, so it must be a Client Component (Engineering Law 5). It only worked before because every caller was already client code; the server-rendered `ClubCard` would have failed.
 
 ### 2.4 Modal (modified in Step 4.9)
 
@@ -1750,7 +1753,7 @@ Open `http://localhost:3000/test` (or `http://10.32.137.107:3000/test` from a ph
 | --- | --- | --- |
 | 1 | `/calendar`: 4.1 `Tabs` keyboard fix ✅ · 4.2 date helpers + `MonthGrid` ✅ · 4.3 header ✅ · 4.4 selected-day agenda (under the grid on phones, see §6.4) ✅ · 4.5 week view ✅ · 4.6 assemble `/calendar` ✅ | Done 2026-11-05 |
 | 2 | `/events/[id]`: 4.7 data clean-up + main content · 4.8 RSVP card (sticky on desktop, bottom bar on phones) · 4.9 attendees + "See who's going" dialog · 4.10 assemble the route (`notFound`, metadata, back link) · 4.11 *optional* open as a modal over the feed | Every `EventCard` on `/` already links here and gets a 404; calendar agenda items link here too. Optionally also opened as a modal over the feed (intercepting route); a shared link still opens the full page |
-| 3 | `/clubs`, `/clubs/[slug]` | Club pages list event cards, which then lead somewhere real. Fix the `evt_hackathon_ai` club name and the `Tabs` underline style first |
+| 3 | `/clubs`, `/clubs/[slug]`: 4.12 club helpers + `ClubCard` · 4.13 `/clubs` directory with campus filter (goes live) · 4.14 club page header (banner, logo, bio, contact) · 4.15 club events (upcoming + past), `/clubs/[slug]` goes live. One scrolling page, no tabs (so the `Tabs` underline fix isn't needed yet) | Club pages list event cards, which then lead somewhere real. Fix the `evt_hackathon_ai` club name and the `Tabs` underline style first |
 | 4 | Search palette (⌘K), **new task** | Searches events and clubs, so it needs both pages to exist. The trigger, shortcut and focus handling are done (§3.3); today it shows "Search is coming soon" (§3.9). Mock data now, API in Phase 7 |
 
 **Not in Phase 4:** the notification bell shows fake notifications from `AppShell`. Real ones come with Phase 6 (WebSockets), since they depend on the backend.
@@ -2449,3 +2452,125 @@ if (!event) notFound();
 - **RSVP state is per page.** RSVP on the event page, go back to `/`: the feed shows the old state until reload (each page holds its own copy). Phase 7's API (server is the source of truth) fixes it; a shared client store isn't worth it with mocks.
 - **Footer under the phone RSVP bar** (§6.8) still open.
 - **4.11 (optional):** open the page as a modal over the feed via an intercepting route (`@modal/(.)events/[id]`); a shared link still opens this full page.
+
+### 6.11 Club helpers & ClubCard (Step 4.12)
+
+**Files:** `src/lib/clubs.ts` (new), `src/components/clubs/ClubCard.tsx` (new, Server Component), `src/components/ui/Avatar.tsx` (`'use client'`, §2.3), `src/lib/mockData.ts` (club `logo_url` → `''`). Test: `/test`.
+**Status:** ✅ Validated (2026-11-05), after the footer fix below.
+
+#### Business & Product Purpose
+
+The directory card answers "what is this club and is it active?": name, campus, what they do, and how many events are coming up. One tap opens the club.
+
+#### Core Concepts & Engineering Decisions
+
+- **Mock logos fixed.** Every club had `logo_url: '/placeholder-club.png'`, a file that doesn't exist: each logo made a failing request before `Avatar` fell back to initials. Now `''` (no logo uploaded), so initials show immediately.
+- **`lib/clubs.ts` (pure):** `getClubBySlug`, `getUpcomingEventCounts(events, now)` (club id → count of events not yet ended; server side because it depends on the request time), `formatUpcomingCount` ("No upcoming events" / "1 upcoming event" / "3 upcoming events"), `sortClubsByName` (`localeCompare` with `sensitivity: 'base'`: case and accents ignored).
+- **`ClubCard` is a Server Component**: `Card` + `CardBanner` (`wide` 21:9; violet gradient fallback, so cards with and without banners keep the same height) + `Avatar` logo overlapping the banner (`-mt-6`, ring in the card colour, `aria-hidden` since the name is next to it) + heading + campus + description (`line-clamp-2`) + upcoming count.
+- **Footer = `CardFooter`** (full-width divider, `p-5 pt-4`), like `EventCard`. The first version put the count inside the padded body, so its divider stopped short of the edges and the row sat tight against the card bottom (spotted in review).
+- **One link per card**: stretched link on the club name (same pattern as `EventCard` / `DayAgenda`), so each card is one tab stop and its accessible name is the club name.
+- **`headingLevel`** (`'h2'` default) for the directory under the page `h1`.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Count on the server, pass a number | Card counts from the events list | "Upcoming" depends on the request time; a number is all the card needs. |
+| Gradient fallback | Default `CardBanner` placeholder | Same visual weight as a real banner, no "Campus Hub Event" text on a club card. |
+| `logo_url: ''` in mocks | Add a placeholder image file | Initials are more distinctive than one shared placeholder, and no request is made. |
+| Alphabetical order | Most active first | Predictable for scanning; activity is shown on each card. Revisit with real data. |
+
+#### Component Contract
+
+```ts
+// src/components/clubs/ClubCard.tsx (Server Component, forwardRef<HTMLDivElement>)
+interface ClubCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
+  club: Club;
+  upcomingCount: number;           // getUpcomingEventCounts (server)
+  headingLevel?: 'h2' | 'h3';      // default 'h2'
+}
+
+// src/lib/clubs.ts
+getClubBySlug(clubs, slug): Club | undefined
+getUpcomingEventCounts(events, now): Record<string, number>   // read with ?? 0
+formatUpcomingCount(count): string
+sortClubsByName(clubs): Club[]
+```
+
+#### Usage Example
+
+```tsx
+await connection();
+const counts = getUpcomingEventCounts(mockEvents, Date.now());
+
+<ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  {sortClubsByName(mockClubs).map((club) => (
+    <li key={club.id}>
+      <ClubCard club={club} upcomingCount={counts[club.id] ?? 0} />
+    </li>
+  ))}
+</ul>
+```
+
+#### Verified (server HTML)
+
+8 cards (6 clubs + 2 test clubs) sorted A → Z ("Association…", "EMINES…", "LEET Dev", "Leet Frame", "LEET Music", …), each linking to `/clubs/<slug>`, initials logos, gradient fallback (image for the banner test club), "1 upcoming event" / "No upcoming events"; no `placeholder-club` requests. `/`, `/calendar`, `/events/…` still 200 after the `Avatar` change; `tsc --noEmit` passes.
+
+### 6.12 ClubDirectory & shared CampusToggle (Step 4.13)
+
+**Files:** `src/components/clubs/ClubDirectory.tsx` (new, `'use client'`), `src/components/filters/CampusToggle.tsx` (new, extracted from `FeedToolbar`), `src/lib/events.ts` (`matchesCampus` exported, used by `filterEvents`), `src/lib/clubs.ts` (`filterClubsByCampus`, `formatClubCount`), `src/components/events/FeedToolbar.tsx` (uses `CampusToggle`). Test: `/test` (scenario `noEmines`).
+**Status:** ✅ Live (2026-11-05) on `/clubs` (`src/app/clubs/page.tsx`: `connection()`, `sortClubsByName`, `getUpcomingEventCounts`, metadata "Clubs | Campus Hub"). Club cards link to `/clubs/<slug>`, a 404 until Step 4.15.
+
+#### Business & Product Purpose
+
+Students browse every club, narrowed to their campus with the same control they already know from Discover.
+
+#### Core Concepts & Engineering Decisions
+
+- **One campus control, one campus rule.** The All / 1337 / EMINES toggle group moved out of `FeedToolbar` into `CampusToggle` (same markup: `role="group"` + `aria-pressed` buttons, `Record<'selected' | 'idle', string>` styles). `matchesCampus(departmentName, campus)` is now the single rule used by `filterEvents` and `filterClubsByCampus`: campus-wide (UM6P Central) items only appear under All, on both pages.
+- **`ClubDirectory` (client)** owns the campus state. Structure mirrors the feed: `h1` "Clubs" + polite live count ("6 clubs" → "1 club"), intro line, `<search aria-label="Filter clubs">` landmark around the toggle, then the `ClubCard` grid (1/2/3 columns) or an `EmptyState` with "Show all clubs".
+- **Server does the time/data work:** the page sorts (`sortClubsByName`) and counts (`getUpcomingEventCounts` with the request time) and passes plain data.
+- **`ClubCard` now renders inside a client component**, so it ships as client code here. It has no server-only logic, so nothing changes in behaviour; the cost is a few hundred bytes.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Extract `CampusToggle` | Copy the buttons into the clubs page | Two copies of a control drift (styles, ARIA). The second user is the time to extract (as with `useDayGridNavigation`). |
+| `matchesCampus` shared | Separate club rule (e.g. campus-wide clubs under every campus) | One mental model across pages. If students expect UM6P-wide clubs under each campus, change the rule once for both. |
+| Filter on the client | `?campus=` URL + server filtering | Instant, no request, tiny list. A URL param can come with the API if the list grows. |
+| Cards become client code | Server-render all cards, hide with CSS | Hiding keeps hidden cards in the accessibility tree unless also `hidden`; plain filtering is simpler and correct. |
+
+#### Component Contract
+
+```ts
+// src/components/filters/CampusToggle.tsx (forwardRef<HTMLDivElement>)
+interface CampusToggleProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
+  value: CampusFilter;
+  onChange: (campus: CampusFilter) => void;
+}
+
+// src/components/clubs/ClubDirectory.tsx ('use client')
+interface ClubDirectoryProps {
+  clubs: Club[];                              // sorted on the server
+  upcomingCounts: Record<string, number>;     // server, request time
+}
+
+// src/lib/events.ts
+matchesCampus(departmentName: string, campus: CampusFilter): boolean
+// src/lib/clubs.ts
+filterClubsByCampus(clubs, campus): Club[]
+formatClubCount(count): string
+```
+
+#### Usage Example
+
+```tsx
+// src/app/clubs/page.tsx (Step 4.13 integration)
+await connection();
+<ClubDirectory clubs={sortClubsByName(mockClubs)} upcomingCounts={getUpcomingEventCounts(mockEvents, Date.now())} />
+```
+
+#### Verified (server HTML)
+
+`/test`: h1 "Clubs", "6 clubs", toggle with All pressed, 6 cards; `?scenario=noEmines`: "5 clubs", 5 cards. `/` still renders its toggle (All pressed) and "6 events" after the extraction. `tsc --noEmit` passes. Filtering, empty state and keyboard: manual checks on `/test`.
