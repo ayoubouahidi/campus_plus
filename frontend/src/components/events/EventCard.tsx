@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { EventCategory, EventItem } from '@/types/api';
+import { EventItem } from '@/types/api';
 import { Card, CardBanner, CardTitle, CardFooter } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar, AvatarGroup } from '@/components/ui/Avatar';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { CheckIcon, MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { CATEGORY_LABELS } from '@/lib/events';
 import { EventSchedule } from '@/lib/time';
+import { flyerFallbackStyles } from './eventStyles';
 
 export interface EventCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   event: EventItem;
@@ -24,16 +25,6 @@ export interface EventCardProps extends Omit<React.HTMLAttributes<HTMLDivElement
 // Grid breakpoints (1 → 2 → 3 columns, capped by max-w-7xl), so phones never download a desktop-sized flyer.
 const FLYER_SIZES = '(min-width: 1280px) 400px, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw';
 
-// No-flyer fallback: category tint + icon, so the grid keeps its rhythm and the category still reads at a glance.
-const fallbackStyles: Record<EventCategory, string> = {
-  Tech: 'bg-lime-100 text-lime-600 dark:bg-lime-500/10 dark:text-lime-400',
-  Media: 'bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400',
-  Music: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400',
-  Sports: 'bg-teal-100 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400',
-  Business: 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400',
-  Gaming: 'bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/10 dark:text-fuchsia-400',
-  EventsOrganization: 'bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
-};
 
 const CalendarIcon = NAV_ICONS.calendar;
 
@@ -48,7 +39,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
           sizes={FLYER_SIZES}
           loading={imageLoading}
           fallback={
-            <div className={`flex h-full w-full items-center justify-center ${fallbackStyles[event.category]}`}>
+            <div className={`flex h-full w-full items-center justify-center ${flyerFallbackStyles[event.category]}`}>
               <CalendarIcon className="h-10 w-10" />
             </div>
           }
