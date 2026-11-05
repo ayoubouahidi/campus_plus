@@ -52,7 +52,8 @@ export const ClubDirectory = ({ clubs, upcomingCounts }: ClubDirectoryProps) => 
           }
         />
       ) : (
-        <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        // grid-cols-1 caps the phone column at the screen width (same fix as the event grid, §5.7).
+        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((club) => (
             <li key={club.id}>
               <ClubCard club={club} upcomingCount={upcomingCounts[club.id] ?? 0} />

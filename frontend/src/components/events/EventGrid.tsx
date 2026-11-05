@@ -10,13 +10,20 @@ export interface EventGridProps extends Omit<React.HTMLAttributes<HTMLDivElement
   schedules: Record<string, EventSchedule>; // pre-formatted on the server (DOCS.md §5.2)
   onRsvpToggle: (event: EventItem) => void;
   emptyState: React.ReactNode; // shown instead of the grid when `events` is empty
+  // 'h2' when the cards sit directly under the page <h1> (the feed), 'h3' under a section <h2> (a club page).
+  cardHeadingLevel?: 'h2' | 'h3';
+  // true when the grid is at the top of the page (its first row is the LCP), false further down.
+  eagerFirstRow?: boolean;
 }
 
 // Widest layout is 3 columns (lg).
 const FIRST_ROW_MAX = 3;
 
 export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
-  ({ events, schedules, onRsvpToggle, emptyState, className = '', ...props }, ref) => {
+  (
+    { events, schedules, onRsvpToggle, emptyState, cardHeadingLevel = 'h2', eagerFirstRow = true, className = '', ...props },
+    ref
+  ) => {
     const listRef = useRef<HTMLUListElement>(null);
     // Set when something inside the empty state is activated (e.g. "Clear filters"). Clicks include
     // Enter/Space on a button, so this covers keyboard users too.
@@ -50,15 +57,15 @@ export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
           >
             {events.map((event, index) => (
               <li key={event.id}>
-                {/* Cards sit directly under the page <h1>, so their titles are <h2> (no skipped level). */}
+                {/* No skipped heading level: h2 under the page <h1>, h3 under a section <h2>. */}
                 <EventCard
                   event={event}
                   schedule={schedules[event.id]}
                   onRsvpToggle={onRsvpToggle}
-                  headingLevel="h2"
+                  headingLevel={cardHeadingLevel}
                   // The first row (1 card on phones, up to 3 on desktop) is on screen at first paint, so its
                   // flyers load right away; the rest stay lazy.
-                  imageLoading={index < FIRST_ROW_MAX ? 'eager' : 'lazy'}
+                  imageLoading={eagerFirstRow && index < FIRST_ROW_MAX ? 'eager' : 'lazy'}
                 />
               </li>
             ))}
