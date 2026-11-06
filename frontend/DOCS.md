@@ -77,6 +77,19 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 5. Anything touching `window`/`document`/portals declares `'use client'` and uses a mount guard.
 6. WAI-ARIA: `useId()` label binding, focus management for overlays, `aria-hidden` on decorative icons, `aria-label` on icon-only buttons.
 
+### 1.5b Development Setup (2026-11-06)
+
+| Command (repo root) | What it does |
+| --- | --- |
+| `make dev` | Starts everything with `docker-compose.dev.yml`: `./frontend` is mounted into the container, so edits hot-reload in `next dev` (~2 s, no rebuild, no copying). `node_modules` and `.next` stay in the container (anonymous volumes): the host has no `node_modules`. |
+| `make up` | Unchanged team default: the image's baked-in copy of the code, no live reload. |
+| `make typecheck` | `tsc --noEmit` inside the container. |
+| `make lint` | ESLint inside the container (`frontend/eslint.config.mjs`: Next 16 flat config, `core-web-vitals` + `typescript`). |
+
+- **ESLint config** didn't exist before (installed but never configured), so `eslint` always failed. First run: 10 errors + 1 warning, all in existing code, none breaking the build: `react-hooks/purity` for `Date.now()` in the per-request server pages (intentional after `connection()`) and in `useCampusSearch` (real: read during render); `react-hooks/set-state-in-effect` for the `setMounted(true)` mount guards in `Modal`, `MobileNav`, `NotificationPopover` (the pattern CLAUDE.md rule 5 prescribes; modern replacement: `useSyncExternalStore`) and the popover's clock; `no-img-element` in `Avatar`. **Follow-up:** a dedicated lint cleanup (and updating CLAUDE.md rule 5) before making lint a required check.
+- **`frontend/.dockerignore`** keeps `node_modules`, `.next` and build output out of the image context.
+- Run `npm install` for new dependencies inside the container (`docker compose exec frontend npm install <pkg>`), then `make dev` rebuilds the image so the anonymous `node_modules` volume matches.
+
 ### 1.6 Roadmap Status
 
 | Phase | Scope                                 | Status         |

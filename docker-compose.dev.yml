@@ -1,0 +1,11 @@
+# Opt-in dev overrides: `make dev` (or `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`).
+# The plain `make up` / docker-compose.yml are unchanged for the rest of the team.
+services:
+  frontend:
+    volumes:
+      # Source from the host: edits hot-reload in `next dev` without rebuilding the image.
+      - ./frontend:/app
+      # Keep the container's own dependencies and build cache (the host has none, and a host copy
+      # built for macOS would be the wrong platform anyway).
+      - /app/node_modules
+      - /app/.next
