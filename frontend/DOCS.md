@@ -906,6 +906,62 @@ if (!club) notFound();   // renders src/app/not-found.tsx with a 404 status
 
 ---
 
+### 3.11 CampusBackground (added 2026-11-05)
+
+**Files:** `src/components/ui/layout/CampusBackground.tsx` (Server Component), `src/components/ui/layout/CampusBackground.module.css`; rendered once in `src/app/layout.tsx` (`BACKGROUND_INTENSITY = 0.8`).
+**Status:** ✅ Live on every page. Concept and drawing by the user; adapted to the app.
+
+#### Business & Product Purpose
+
+Gives Campus Hub a sense of place: a hairline elevation of the UM6P campus (stepped portals, claustra grids, the slotted tower, the solar pergola with tree-columns) along the bottom, 1337-style circuit traces with the Benguerir coordinates in the top corners, and a faint 42° lattice at the edges. Content stays on calm, plain surfaces.
+
+#### Core Concepts & Engineering Decisions
+
+- **Behind everything, painted once.** `position: fixed; inset: 0; z-index: -1`. `<body>`'s `bg-slate-50` / `bg-slate-950` is propagated to the canvas, so the layer shows above it and below all content. Cards, navbar (`/80` + blur), tab bar (`/90`) and the solid footer sit on top. Rendered once in the root layout: its SVG `<pattern>` ids (`cb-iso-a/b`, `cb-perf`, `cb-lattice`) are document-global.
+- **Readability contract.** Art only at the edges: the lattice is masked out of the centre, the horizon fades in from its top edge, and a radial veil (the page colour at ~72%) covers the content zone. Line-art opacity ≈ 16% light / 20% dark × `intensity`; the site uses **0.8**.
+- **Colours tied to the design tokens.** The base is the page surface (`slate-50` / `slate-950`) so white / slate-900 surfaces don't look foreign; the user's warm/cool palette lives in the sky gradient and glows; facade lines are terracotta (campus), circuit nodes are brand violet (`violet-600` / `violet-400`).
+- **Theme = the OS**, like every `dark:` style in this app (Tailwind's default `prefers-color-scheme` variant). `theme="light" | "dark"` can force it (used for testing).
+- **Responsive.** Corner circuits only from 640px and start below the navbar (`top: 4rem`) so they don't show through its translucent bar. Below 768px the horizon sits above the phone tab bar (`bottom: calc(4rem + 1px + env(safe-area-inset-bottom))`) instead of behind it.
+- **Static.** The proposal had one animated "data packet"; removed at the user's request (no animation code left). Hidden in print and `forced-colors` mode, `aria-hidden`, `pointer-events: none`, `contain: strict`.
+- **CSS Module** instead of an injected `<style>` string: bundled and cached once, hashed class names, vendor prefixes (`-webkit-mask-image`) added by the bundler.
+
+#### Architectural Tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Inline SVG drawn from constants | A background image (PNG/SVG file) | Crisp at any size, colours from CSS variables (light/dark), hairlines stay 1px (`vector-effect: non-scaling-stroke`). |
+| Base = page tokens | The proposal's plaster / night-indigo base | White cards and the translucent navbar would look like a different material on a beige page. |
+| `fixed` layer | Background on `<body>` / scrolling with the page | The skyline stays anchored to the viewport bottom on long pages; one layer, composited once. |
+| CSS Module | `<style dangerouslySetInnerHTML>` | Not re-sent with every render, cached by the browser, prefixed automatically. |
+
+#### Component Contract
+
+```ts
+// src/components/ui/layout/CampusBackground.tsx (Server Component)
+type CampusBackgroundTheme = 'system' | 'light' | 'dark';
+interface CampusBackgroundProps {
+  theme?: CampusBackgroundTheme;   // default 'system' (OS)
+  intensity?: number;              // line-art opacity multiplier, clamped 0–1.5, default 1
+  className?: string;
+}
+```
+
+#### Usage Example
+
+```tsx
+// src/app/layout.tsx: once, first child of <body>
+<CampusBackground intensity={BACKGROUND_INTENSITY} />
+```
+
+#### Verified
+
+Every route (`/`, `/calendar`, `/clubs`, `/clubs/leet-dev`, `/events/…`, `/test`, the global 404) renders exactly one background with `--cb-k: 0.8` and no animated path; the compiled CSS keeps the masks, dark-mode media query, phone offsets and print / forced-colors rules (with `-webkit-` prefixes). Production build passes. Look and scroll smoothness: checked by the user in the browser.
+
+#### Notes for later
+
+- **Tuning:** change `BACKGROUND_INTENSITY` in the layout (one number). A different intensity on one page can't be done with a second instance (the SVG ids are global); give that page its own veil or surface instead.
+- **A theme toggle** (if ever added) should set `theme` from the same source as the rest of the app.
+
 ## 4. Study Guide: React & Next.js Concepts Used in Phase 2
 
 Every concept below is used in real code in this repo. For each one: **what it is**, **where we used it**, **the gotcha** that matters in practice, and a **check yourself** question. If you can answer the question without looking, you've got it.

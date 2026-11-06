@@ -22,13 +22,14 @@ export default function TestPage() {
       <h1 className="sr-only">Test page</h1>
       <section
         aria-label="Test controls"
-        className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200"
+        className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: nothing under test (Phase 4 complete)</p>
+        <p className="font-semibold">Test page: nothing under test</p>
         <p className="mt-2">
-          Live: Discover, <Link href="/calendar" className="font-medium underline underline-offset-2">/calendar</Link>,{' '}
+          The campus background is now site-wide (root layout). Live: Discover,{' '}
+          <Link href="/calendar" className="font-medium underline underline-offset-2">/calendar</Link>,{' '}
           <Link href="/clubs" className="font-medium underline underline-offset-2">/clubs</Link>, club and event pages,
-          and search (navbar button or ⌘K / Ctrl+K on any page).
+          search (⌘K).
         </p>
       </section>
     </div>

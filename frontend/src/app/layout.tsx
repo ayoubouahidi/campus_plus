@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AppShell } from "@/components/ui/layout/AppShell";
+import { CampusBackground } from "@/components/ui/layout/CampusBackground";
 import { Footer, FooterBrand, FooterLegal, FooterNav } from "@/components/ui/layout/Footer";
 import { mockCurrentUser } from "@/lib/mockData";
 import { SessionState } from "@/types/session";
@@ -33,6 +34,10 @@ export const viewport: Viewport = {
   ],
 };
 
+// Site-wide campus backdrop: line-art opacity multiplier (1 = tuned default, 0 = off). 0.8 keeps it quiet
+// behind text-heavy pages. One number to tune (DOCS.md §3.11).
+const BACKGROUND_INTENSITY = 0.8;
+
 // Mock until Phase 5 reads the real session (cookie / auth API) here on the server
 const INITIAL_SESSION: SessionState = { status: "signed-in", user: mockCurrentUser };
 
@@ -51,6 +56,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        {/* Fixed, behind everything (z-index -1), decorative. Rendered once: its SVG ids are global. */}
+        <CampusBackground intensity={BACKGROUND_INTENSITY} />
         <ToastProvider>
           <SessionProvider initialSession={INITIAL_SESSION}>
             {/* Footer is built here, on the server, and passed through the client shell as a slot */}
