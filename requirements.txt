@@ -1,17 +1,7 @@
-Django>=4.2
-djangorestframework>=3.14
-django-filter>=23.5
-psycopg2-binary>=2.9
-Pillow>=10.0
-python-dotenv>=1.0
-
-# [ahmed] Preserve the real-time backend dependencies.
-channels>=4.3,<5.0
-daphne>=4.2,<5.0
-channels-redis>=4.2,<5.0
-
-# [ahmed] Add Hamza's OpenAPI and Swagger documentation dependency.
+Django
+djangorestframework
 drf-spectacular
-
-# [ahmed] JWT verification for WebSockets; REST API authentication remains unchanged.
-djangorestframework-simplejwt==5.5.1
+channels
+daphne
+psycopg[binary]
+channels-redis
