@@ -4,6 +4,7 @@ Campus Hub is the event discovery, club management, and RSVP platform for **1337
 This file is the living engineering record: every component, layout, or utility gets an entry here when it is created or changed.
 
 > **New to the codebase? Start with [`ARCHITECTURE.md`](./ARCHITECTURE.md)**: how the app fits together, where things live, how data and state flow, and a study guide of the React / Next.js concepts used.
+> **What the frontend needs from each teammate:** [`TEAM_NEEDS.md`](./TEAM_NEEDS.md).
 > Day-to-day usage snippets for the Phase 1 primitives live in [`COMPONENT-USAGE.md`](./COMPONENT-USAGE.md).
 > This file covers **why** things are built the way they are.
 

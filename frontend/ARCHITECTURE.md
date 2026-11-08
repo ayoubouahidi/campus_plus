@@ -615,8 +615,7 @@ Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, sc
 | ESLint findings in older code (mount guards, `Date.now` purity) | DOCS §1.5b |
 | Calendar day/view in the URL; footer under the phone RSVP bar | DOCS §6.6, §6.8 |
 | RSVP state per page until the API | DOCS §6.10 |
-| **`web` (Django) won't start after a rebuild on `Mouad`:** commit `7a0c578` (Hamza/Ahmed, 2026-11-06) makes the Dockerfile `COPY . .` and run `backend.asgi:application`, but the `backend/` code lives on Ahmed's branch, not here. It also renames env vars (`SECRET_KEY` → `DJANGO_SECRET_KEY`, `REDIS_HOST` → `REDIS_URL`) and drops `depends_on`. The frontend doesn't call Django yet, so pages still work; fixed when Ahmed's backend is merged (needs `DJANGO_SECRET_KEY` in `.env`) | backend team |
-| Backend requests: `/auth/sync` endpoint (Phase 5), UUID upload names + upload size limit (§7.5), `department_slug` on events (DOCS §5.3) | this table |
+| **What we need from Ahmed (API), Ayoub (login/dashboard), Hamza (infra)**: RSVP endpoints, event/club fields, `/auth/sync`, nginx `/api/auth/` route, upload rules | [`TEAM_NEEDS.md`](./TEAM_NEEDS.md) |
 
 ---
 
