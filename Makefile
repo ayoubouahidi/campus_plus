@@ -14,6 +14,10 @@ lint:
 typecheck:
 	docker compose exec frontend npx tsc --noEmit
 
+# Drop Next's resized-image cache (needed after replacing a public/ image but keeping its file name).
+clear-images:
+	docker compose exec frontend rm -rf /app/.next/dev/cache/images /app/.next/cache/images
+
 logs:
 	docker compose logs -f
 
@@ -26,4 +30,4 @@ fclean: clean
 
 re: fclean up
 
-.PHONY: up dev down logs lint typecheck clean fclean re
+.PHONY: up dev down logs lint typecheck clear-images clean fclean re

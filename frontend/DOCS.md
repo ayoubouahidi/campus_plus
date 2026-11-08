@@ -3,6 +3,7 @@
 Campus Hub is the event discovery, club management, and RSVP platform for **1337 Coding School** and **EMINES (UM6P)**.
 This file is the living engineering record: every component, layout, or utility gets an entry here when it is created or changed.
 
+> **New to the codebase? Start with [`ARCHITECTURE.md`](./ARCHITECTURE.md)**: how the app fits together, where things live, how data and state flow, and a study guide of the React / Next.js concepts used.
 > Day-to-day usage snippets for the Phase 1 primitives live in [`COMPONENT-USAGE.md`](./COMPONENT-USAGE.md).
 > This file covers **why** things are built the way they are.
 
@@ -89,6 +90,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 - **ESLint config** didn't exist before (installed but never configured), so `eslint` always failed. First run: 10 errors + 1 warning, all in existing code, none breaking the build: `react-hooks/purity` for `Date.now()` in the per-request server pages (intentional after `connection()`) and in `useCampusSearch` (real: read during render); `react-hooks/set-state-in-effect` for the `setMounted(true)` mount guards in `Modal`, `MobileNav`, `NotificationPopover` (the pattern CLAUDE.md rule 5 prescribes; modern replacement: `useSyncExternalStore`) and the popover's clock; `no-img-element` in `Avatar`. **Follow-up:** a dedicated lint cleanup (and updating CLAUDE.md rule 5) before making lint a required check.
 - **`frontend/.dockerignore`** keeps `node_modules`, `.next` and build output out of the image context.
 - Run `npm install` for new dependencies inside the container (`docker compose exec frontend npm install <pkg>`), then `make dev` rebuilds the image so the anonymous `node_modules` volume matches.
+- **Replaced an image in `public/` but still see the old one?** Next caches resized images by URL, not content. Rename the file, or run `make clear-images` and hard-refresh (ARCHITECTURE §7.5). Keep source images ≤ ~2000 px: the 77 MB `basketball.png` (8256 px) timed out the optimizer until it was resized to 1600 px (2026-11-06).
 
 ### 1.6 Roadmap Status
 
@@ -2872,3 +2874,40 @@ Node 22 in the container, `searchCampus` at 2026-11-05 12:00Z: "leet" → jam se
 | ⌘K search palette | §6.16–6.17 |
 
 **Open items carried forward:** calendar day/view in the URL (§6.6); footer under the phone RSVP bar (§6.8); RSVP state per page until the API (§6.10); Phase 5: server-side session for club contact (§6.13) and attendee-name privacy (§6.9); Phase 7: API, `metadataBase` + flyer `og:image`, search endpoint, pagination; ESLint not runnable in the container; no volume mount for live reload in Docker.
+
+
+---
+
+## 7. Phase 5 — Student Authentication (prep notes, 2026-11-06)
+
+Not started. Ayoub's login (organizer dashboard, branch `Ayoub`, `dashboard_campus/`) will be handed over and adapted here. Read-only review of that branch:
+
+### 7.1 What Ayoub's login does
+
+- **Auth.js v5** (`next-auth@^5.0.0-beta.32`) with the **`42-school` provider** only; `session: { strategy: 'jwt' }` (encrypted session cookie, no DB); `pages: { signIn: '/login', error: '/login' }`.
+- **`signIn` callback → `syncWithBackend(profile)`**: `POST ${BACKEND_URL}/auth/sync` with header `x-internal-key: ${BACKEND_INTERNAL_KEY}` and `{ fortyTwoId, login, email, firstName, lastName, imageUrl, campus }`; expects `{ token, user: { id, role } }`. Non-OK → sign-in refused (`/login?error=AccessDenied`). **Dev fallback:** without `BACKEND_URL` it returns a fake `dev-token` / role `member`.
+- **Session shape** (`types/next-auth.d.ts`): `session.backendToken`, `session.user.{ id, role, login }` + Auth.js defaults (`name`, `email`, `image`).
+- **Login page**: split layout (campus photo `/UM6P_Campus.webp` left from `lg`, form right), email/password form **that is a stub** (always "Use the 42 Intra button to sign in."), "Continue with 42 Intra" → `signIn('42-school', { callbackUrl: '/admin' })`, copy for club managers ("CampusPulse").
+- **`middleware.ts`** redirects signed-out users to `/login?callbackUrl=…`.
+
+### 7.2 Gaps to close when integrating
+
+| Gap | Detail | Proposed fix |
+| --- | --- | --- |
+| Backend endpoint | `POST /auth/sync` (internal key) doesn't exist in Ahmed's backend (branch `Ahmed`: `api/signup/` returns a DRF `Token`; JWT only for WebSockets) | Agree the endpoint with Ahmed: create/update the `UserMember` from the 42 profile, return a token the REST API accepts |
+| `middleware.ts` | Deprecated in Next.js 16 (renamed `proxy.ts`, see `node_modules/next/dist/docs/.../proxy.md`); its matcher `/dashboard/:path*` doesn't match the dashboard's real routes (`/admin`, `/super_admin`), so it currently protects nothing | Here: `proxy.ts` (or server-side checks in pages) matching `/profile` |
+| Email/password | UI only, no backend | Keep 42 only for students at first, or define `POST /api/auth/login` with Ahmed |
+| Versions | Dashboard: Next 16.4.2 / React 19.3; here: Next 16.3.5 / React 19.2.8 | Install `next-auth@5 beta` here and check it builds; or align versions |
+| 42 OAuth app | Redirect URI must include this app: `https://<host>/api/auth/callback/42-school` | Ask Ayoub which 42 app (client id) and add our URI, or a second app |
+| Env | `AUTH_SECRET`, `AUTH_42_SCHOOL_ID`, `AUTH_42_SCHOOL_SECRET`, `AUTH_TRUST_HOST=true` (behind nginx), `BACKEND_URL`, `BACKEND_INTERNAL_KEY` | `.env` for the frontend service (never committed) |
+| Naming / copy | "CampusPulse", "manage your club", `callbackUrl: '/admin'` | "Campus Hub", student copy, `callbackUrl` = the `?next=` our pages already send (`/auth/login?next=…`) |
+| Two apps, one host? | Both use Auth.js cookies; on the same host they'd share cookie names | Different subdomains, or different `AUTH_URL` / cookie prefix |
+
+### 7.3 How it plugs into this app
+
+1. **Route** `/auth/login` (our links already point there with `?next=`) using our primitives and layout (inside the shell, campus background), reusing Ayoub's 42 button and error handling.
+2. **`src/auth.ts`** (Auth.js config) + `src/app/api/auth/[...nextauth]/route.ts`.
+3. **Session:** the root layout calls `await auth()` on the server and passes the mapped user to `SessionProvider` (`INITIAL_SESSION` mock goes away); `useSession()` consumers (navbar, RSVP card, attendees, contact card) don't change. Map Auth.js `{ name, email, image, login, role }` → our `User`.
+4. **Server-side privacy (Phase 4 debts):** `/clubs/[slug]` replaces `IS_SIGNED_IN = true` with the real session (§6.13); decide attendee-name visibility (§6.9).
+5. **Guards:** `/profile` redirects signed-out visitors to `/auth/login?next=/profile`.
+6. **Logout** in the navbar session menu → `signOut()`.
