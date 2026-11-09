@@ -11,7 +11,7 @@ export async function backendFetch<T>(path: string, init: RequestInit = {}): Pro
     headers: {
       "Content-Type": "application/json",
       ...init.headers,
-      Authorization: `Bearer ${session.backendToken}`,
+      Authorization: `Token ${session.backendToken}`,
     },
     cache: "no-store",
   });

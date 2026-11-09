@@ -18,7 +18,10 @@ type BackendSyncResponse = { token: string; user: BackendUser };
 async function syncWithBackend(p: FortyTwoProfile): Promise<BackendSyncResponse | null> {
   // Dev fallback so you can build the UI before the backend exists
   if (!process.env.BACKEND_URL) {
-    return { token: "dev-token", user: { id: String(p.id), role: "member" } };
+    if (process.env.NODE_ENV !== "production") {
+      return { token: "dev-token", user: { id: String(p.id), role: "STUDENT" } };
+    }
+    return null;
   }
 
   try {

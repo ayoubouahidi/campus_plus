@@ -36,3 +36,36 @@ export const weeklyRegistrations = [
   { day: "Sat", value: 50 },
   { day: "Sun", value: 100 },
 ];
+
+export const members = [
+  { name: "Salma Idrissi", role: "Club Admin", joined: "Jan 12, 2025", status: "Active" },
+  { name: "Omar Benali", role: "Member", joined: "Feb 03, 2025", status: "Active" },
+  { name: "Lina Amrani", role: "Event Coordinator", joined: "Mar 18, 2025", status: "Active" },
+  { name: "Hamza Kettani", role: "Member", joined: "Apr 09, 2025", status: "Active" },
+  { name: "Nora El Fassi", role: "Member", joined: "May 27, 2025", status: "Pending" },
+];
+
+export const announcements = [
+  {
+    title: "AI Buildathon registration is open",
+    message: "Members can register for the AI Buildathon and Demo Day until November 18.",
+    date: "Nov 10, 2025",
+  },
+  {
+    title: "Weekly club meeting",
+    message: "The next club meeting will take place in the innovation lab on Thursday at 17:00.",
+    date: "Nov 08, 2025",
+  },
+  {
+    title: "New workshop materials available",
+    message: "The materials for the Robotics Assembly Workshop are now available to members.",
+    date: "Nov 05, 2025",
+  },
+];
+
+export const eventRegistrations = [
+  { event: "AI Buildathon & Demo Day", registered: 128, capacity: 150 },
+  { event: "Robotics Assembly Workshop", registered: 42, capacity: 60 },
+  { event: "Intro to Quantum Computing", registered: 48, capacity: 80 },
+  { event: "Robotics Sprint 2025", registered: 34, capacity: 50 },
+];
