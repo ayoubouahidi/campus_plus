@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+.env.*
+**/__pycache__/
+*.sqlite3
+frontend/
+media/
+staticfiles/
+infrastructure/nginx/certs/
