@@ -13,7 +13,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-        
+
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DEBUG: ${DEBUG:-true}
@@ -45,7 +45,7 @@ services:
       - static_data:/app/staticfiles:ro
       - media_data:/app/media:ro
     depends_on:
-      - web
+      - backend
       - frontend
   redis:
     image: redis:7-alpine
