@@ -1,3 +1,5 @@
+.PHONY: up down logs clean
+
 up:
 	docker compose up -d --build
 
