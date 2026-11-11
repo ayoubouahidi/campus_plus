@@ -1,5 +1,5 @@
 services:
-  web:
+  backend:
     build: .
     restart: unless-stopped
 
@@ -11,26 +11,20 @@ services:
       - media_data:/app/media
       
     environment:
-      # [ahmed] Match the variable used in backend/settings.py.
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
 
-      # [ahmed] Make Django's DEBUG setting configurable.
       DEBUG: ${DEBUG:-true}
 
-      # [ahmed] Enable JWT authentication for WebSockets in Docker.
       WS_AUTH_BACKEND: jwt
 
-      # [ahmed] Tell Django to use PostgreSQL inside Docker.
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
 
-      # [ahmed] Match the Redis URL used by the realtime app.
       REDIS_URL: redis://redis:6379/0
 
-      # [ahmed] Allow Nginx's Docker hostname and localhost.
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,web
 
   frontend:
