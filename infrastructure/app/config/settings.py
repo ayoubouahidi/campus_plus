@@ -52,11 +52,19 @@ TEMPLATES = [
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.ScopedRateThrottle",
+    ],
+
+    "DEFAULT_THROTTLE_RATES": {
+        "public": "60/min",
+        "login": "5/min",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Transcendence API",
-    "DESCRIPTION": "Campus Plus API Documentation",
+    "TITLE": "Campus hub API",
+    "DESCRIPTION": "Campus Hub API Documentation",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
 }
