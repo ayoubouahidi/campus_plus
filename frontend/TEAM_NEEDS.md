@@ -11,15 +11,19 @@
 | # | Rule | Why |
 | --- | --- | --- |
 | 0.1 | **Push only to your own branch** and merge through a PR. Never push to someone else's branch. | `Mouad` received an infra commit (`7a0c578`) on 2026-11-06 that pointed Docker at a backend that isn't on that branch, so `web` couldn't start. It was reverted on 2026-11-08 (still safe on the `Hamza` branch). |
-| 0.2 | **Merge order to `master`:** infra + backend (Hamza + Ahmed) → frontend (Mouad) → dashboard (Ayoub) | Each layer needs the one below it to run. |
+| 0.2 | **Merge order to `master`:** infra + backend (Hamza + Ahmed + backend API teammate) → frontend (Mouad) → dashboard (Ayoub) | Each layer needs the one below it to run. |
 | 0.3 | One `.env.example` at the repo root listing **every** variable (never real secrets) | Today variables are spread across branches with different names (`SECRET_KEY` vs `DJANGO_SECRET_KEY`, `REDIS_HOST` vs `REDIS_URL`). |
 | 0.4 | Times in the API are **ISO 8601 UTC** (`2026-11-05T17:00:00Z`). The frontend converts to campus time (`Africa/Casablanca`). | Ahmed's settings already use `TIME_ZONE='UTC'`, `USE_TZ=True`. Keep it. |
 
 ---
 
-## 1. Ahmed (backend API, branch `Ahmed`)
+## 1. Backend API & data: new teammate (replaces DASH, from 2026-11-16)
 
-What exists today: `/api/clubs/`, `/api/club-events/`, `/api/departments/`, `/api/members/`, `/api/signup/` (DRF token), Swagger at `/api/docs/`, WebSocket `/ws/calendar/` with JWT.
+Owns `core_data` (models, serializers, views, permissions, filters, uploads). Starts from the `Ahmed` branch, which has the latest API. Onboarding README given separately (Mouad's Desktop: `README_BACKEND_TEAMMATE.md`).
+
+**Security, fix first:** `/api/clubs/` allows anonymous PUT/PATCH/DELETE (only `create` is protected), and `/api/departments/` has no permissions at all (DRF default `AllowAny`).
+
+What exists today (on `Ahmed`): `/api/clubs/`, `/api/club-events/`, `/api/departments/`, `/api/members/`, `/api/signup/` (DRF token), Swagger at `/api/docs/`, WebSocket `/ws/calendar/` with JWT.
 
 ### 1.1 RSVP: missing entirely (blocks the main feature)
 
@@ -54,7 +58,23 @@ What exists today: `/api/clubs/`, `/api/club-events/`, `/api/departments/`, `/ap
 | `president_name`, `president_email`, `president_phone` | `president` (id), `contact_email` | Add name + phone. **Privacy:** return these **only to signed-in users**, enforced by the API (the frontend already hides them, but data that leaves the server is public). |
 | `member_count`, `event_count`, `meeting_*`, `is_active` | exist | Good, the frontend will start showing them |
 
-### 1.4 Auth (with Ayoub's 42 login), Phase 5
+### 1.4 Lists and pagination
+
+The frontend expects DRF pagination: `{count, next, previous, results}` (`ApiResponse<T>`). Today no `DEFAULT_PAGINATION_CLASS` is set, so lists are plain arrays. Add `PageNumberPagination` (page size ~20).
+
+### 1.5 Uploads (flyers, logos, avatars)
+
+- **Unique file name per upload** (UUID in `upload_to`). Replacing an image must give a **new URL**, otherwise caches keep showing the old one (ARCHITECTURE §7.5).
+- **Reject huge files** (> 10 MB or > 4000 px). A single 77 MB photo once timed out the image service.
+- Return **absolute** URLs.
+
+---
+
+## 1b. Ahmed: real-time + backend auth (branch `Ahmed`)
+
+Owns `realtime` (Channels, Daphne, Redis, WebSocket JWT) and, with Ayoub, **authentication**.
+
+### 1b.1 Auth: Django side of login (Phase 5, with Ayoub)
 
 | Need | Detail |
 | --- | --- |
@@ -65,17 +85,7 @@ What exists today: `/api/clubs/`, `/api/club-events/`, `/api/departments/`, `/ap
 | `GET /api/me/` | The current user from the token |
 | Email/password | 42 is enough for students? `api/signup/` exists. **Decide** whether EMINES students (no 42 account) sign up with email. |
 
-### 1.5 Lists and pagination
-
-The frontend expects DRF pagination: `{count, next, previous, results}` (`ApiResponse<T>`). Today no `DEFAULT_PAGINATION_CLASS` is set, so lists are plain arrays. Add `PageNumberPagination` (page size ~20).
-
-### 1.6 Uploads (flyers, logos, avatars)
-
-- **Unique file name per upload** (UUID in `upload_to`). Replacing an image must give a **new URL**, otherwise caches keep showing the old one (ARCHITECTURE §7.5).
-- **Reject huge files** (> 10 MB or > 4000 px). A single 77 MB photo once timed out the image service.
-- Return **absolute** URLs.
-
-### 1.7 Real-time (WebSocket `/ws/calendar/`), Phase 6
+### 1b.2 Real-time (WebSocket `/ws/calendar/`), Phase 6
 
 Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data": <event in the same shape as the API> }`. For `event_deleted`, `data` can be `{ "id": … }`. The frontend already uses these three names (`WebSocketEventType`).
 
