@@ -7,4 +7,4 @@
 frontend/
 media/
 staticfiles/
-infrastructure/nginx/certs/
+infrastructure/nginx/certs/*

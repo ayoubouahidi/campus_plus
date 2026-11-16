@@ -4,13 +4,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- Environment & Security ---
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS =  [
-    "localhost",
-    "127.0.0.1",
-    "campushub.ma",
-]
+ALLOWED_HOSTS = os.getenv(
+    "DJANGO_ALLOWED_HOSTS",
+    "localhost,127.0.0.1"
+).split(",")
 # --- Core Infra & Static Services ---
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -71,11 +70,16 @@ SPECTACULAR_SETTINGS = {
 
 
 # --- Redis Pub/Sub Broker (Channels Layer) ---
+REDIS_URL = os.getenv(
+    "REDIS_URL",
+    "redis://redis:6379/0"
+)
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(os.getenv("REDIS_HOST", "redis"), 6379)],
+            "hosts": [REDIS_URL],
         },
     },
 }
@@ -112,3 +116,4 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+WS_AUTH_BACKEND = os.getenv("WS_AUTH_BACKEND", "jwt")
