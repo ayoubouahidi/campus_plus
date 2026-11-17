@@ -156,7 +156,7 @@ Know nothing about events or clubs. Reused everywhere.
 
 | Folder | Files | Used by |
 | --- | --- | --- |
-| `events/` | `EventFeed` (feed state: filters + RSVP), `FeedToolbar`, `CategoryFilter`, `EventGrid`, `EventCard`, `EventDetails` (server), `EventPageShell` (event page state), `RsvpCard`, `AttendeesSection`, `eventStyles.ts` | `/`, `/events/[id]`, club pages |
+| `events/` | `EventFeed` (feed state: filters + RSVP), `FeedToolbar`, `CategoryFilter`, `EventGrid`, `EventCard`, `EventDetails` (server), `EventBackLink` (server), `EventPageShell` (event page state), `RsvpCard`, `AttendeesSection`, `eventStyles.ts` | `/`, `/events/[id]`, club pages |
 | `calendar/` | `EventCalendar` (state: selected day + view), `CalendarHeader`, `MonthGrid`, `WeekGrid`, `DayAgenda`, `dayStyles.ts` | `/calendar` |
 | `clubs/` | `ClubDirectory` (state: campus filter), `ClubCard`, `ClubHeader` (server), `ClubContactCard`, `ClubEvents` (state: RSVP) | `/clubs`, `/clubs/[slug]` |
 | `search/` | `SearchPalette` | AppShell (navbar + ⌘K) |
@@ -364,7 +364,7 @@ The design keeps the swap small: replace `mockEvents`/`mockClubs` reads in the *
 | Toasts | `ToastProvider` (root) | anyone | Context + `useToast()` |
 | Search open, notifications | `AppShell` | navbar button, palette, bell | props |
 | Feed filters + RSVPs | `EventFeed` | toolbar, chips, grid, cards | props + callbacks |
-| Calendar selected day + view | `EventCalendar` | header, grids, agenda | props + callbacks |
+| Calendar selected day + view | `EventCalendar`, mirrored in the URL (`?date=…&view=week`, DOCS §6.18) | header, grids, agenda; event pages' back link | props + callbacks; query string |
 | Event page RSVP | `EventPageShell` | `RsvpCard`, `AttendeesSection` | props + callbacks |
 | Club directory campus | `ClubDirectory` | toggle, grid | props |
 | Tabs selection | `Tabs` (or its parent if controlled) | `TabsTrigger`, `TabsContent` | internal Context |
@@ -522,6 +522,7 @@ unmount  → component removed: effect cleanups run → DOM removed → its stat
 | `useContext` | Read a provider's value | `useSession`, `useToast`, Tabs internals |
 | Custom hooks | Reusable stateful logic | `useDayGridNavigation`, `useRsvpToast`, `useCampusSearch` |
 
+- **URL state:** state that should survive reload, sharing and Back lives in the query string. The calendar reads `?date&view` once (`useSearchParams`) and writes changes with `history.replaceState` (DOCS §6.18).
 - **Derived state:** don't store what you can compute. The calendar stores only `selectedKey`; the month shown is *derived* from it. The search palette's options are derived from `query`.
 - **Controlled vs uncontrolled:** `Tabs` accepts `value` + `onValueChange` (parent owns state) **or** `defaultValue` (Tabs owns it).
 
@@ -613,7 +614,7 @@ Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, sc
 | **Phase 6** real-time notifications (WebSockets `/ws/calendar/`) | roadmap |
 | **Phase 7** Django API instead of mocks, Arabic RTL + i18n, loading/error states, RSVP requests, `og:image` | roadmap |
 | ESLint findings in older code (mount guards, `Date.now` purity) | DOCS §1.5b |
-| Calendar day/view in the URL; footer under the phone RSVP bar | DOCS §6.6, §6.8 |
+| Footer under the phone RSVP bar | DOCS §6.8 |
 | RSVP state per page until the API | DOCS §6.10 |
 | **What we need from Ahmed (API), Ayoub (login/dashboard), Hamza (infra)**: RSVP endpoints, event/club fields, `/auth/sync`, nginx `/api/auth/` route, upload rules | [`TEAM_NEEDS.md`](./TEAM_NEEDS.md) |
 

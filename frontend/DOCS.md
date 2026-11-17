@@ -2262,7 +2262,7 @@ export default async function CalendarPage() {
 
 #### Notes for later
 
-- **URL state:** the selected day and view reset on reload and can't be shared. Putting them in the query string (`?date=…&view=week`, `router.replace`) would fix both; worth doing when the event page links back to "this day in the calendar".
+- ~~**URL state:** the selected day and view reset on reload and can't be shared.~~ Done in §6.18 (2026-11-17), with `history.replaceState` instead of `router.replace`.
 - **Phase 7:** fetch only the visible range (the 42-day window / the week) from the API, loading and error states, i18n of all calendar strings.
 - **Not verified:** a production build (`next build`), same as `/`.
 
@@ -2874,10 +2874,80 @@ Node 22 in the container, `searchCampus` at 2026-11-05 12:00Z: "leet" → jam se
 | `/clubs`, `/clubs/[slug]` (directory, campus filter, header, contact for signed-in students, events, 404) | §6.11–6.15 |
 | ⌘K search palette | §6.16–6.17 |
 
-**Open items carried forward:** calendar day/view in the URL (§6.6); footer under the phone RSVP bar (§6.8); RSVP state per page until the API (§6.10); Phase 5: server-side session for club contact (§6.13) and attendee-name privacy (§6.9); Phase 7: API, `metadataBase` + flyer `og:image`, search endpoint, pagination; ESLint not runnable in the container; no volume mount for live reload in Docker.
+**Open items carried forward:** ~~calendar day/view in the URL (§6.6)~~ done §6.18; footer under the phone RSVP bar (§6.8); RSVP state per page until the API (§6.10); Phase 5: server-side session for club contact (§6.13) and attendee-name privacy (§6.9); Phase 7: API, `metadataBase` + flyer `og:image`, search endpoint, pagination; ESLint not runnable in the container; no volume mount for live reload in Docker.
 
 
 ---
+
+### 6.18 Calendar place in the URL & EventBackLink (Step 4.18, 2026-11-17)
+
+**Status:** ✅ Validated on `/test` and live on `/calendar` and `/events/[id]`.
+
+**Files:** `src/lib/calendar.ts` (URL helpers), `src/components/calendar/EventCalendar.tsx` (`urlState`), `src/components/calendar/DayAgenda.tsx` (`eventHref`), `src/components/events/EventBackLink.tsx` (new), `src/app/calendar/page.tsx`, `src/app/events/[id]/page.tsx`.
+
+#### Business & product purpose
+
+Before, the calendar's selected day and view lived **only in React state**, which is memory inside the open tab. The address bar always said `/calendar`. So:
+
+- **Reload** → React starts from scratch → back to today, Month view.
+- **Copy the link** to a friend → they get `/calendar` → today, Month view, not the day you meant.
+- **Open an event, then go back** (link or Back button) → the calendar page is rendered again from `/calendar` → today again. The event page's only link was "All events" → `/`, the feed, even when you came from the calendar.
+
+A student planning "what's on next Saturday" lost their place every time. Now the place is in the URL: `/calendar?date=2026-11-21&view=week`. The URL is the only part of the page state that survives a reload, a shared link, and history navigation.
+
+#### Core concepts & engineering decisions
+
+- **URL as state, read once.** `EventCalendar` reads `date`/`view` from `useSearchParams()` in a `useState` initialiser, then React state leads and every change writes the URL (`show(date, view)`). One function for all changes: header arrows, Today, day clicks, view tabs.
+- **`window.history.replaceState`**, which Next.js 16 integrates with its router (`useSearchParams`/`usePathname` stay in sync, no server request). `router.replace` would re-render the dynamic page on the server for every click.
+- **Replace, not push:** clicking through days doesn't fill the Back button's history. Back leaves the calendar in one press.
+- **`useSearchParams`, not server props, for the start value.** On Back/Forward, Next restores a cached server render made for the *old* URL; the client hook reads the URL we wrote, so the calendar reopens where it was.
+- **Defaults stay out of the URL:** today and Month are omitted, so a shared plain `/calendar` means "today" for whoever opens it.
+- **Validation, never errors:** `isDayKey` checks the format and that the date exists (round trip rejects `2026-02-30`); `isCalendarView` checks the view. Anything invalid is ignored → today / Month.
+- **Back link that knows the origin:** agenda links become `/events/<id>?from=calendar&date=…&view=…` (`eventFromCalendarHref`). The event page reads only `from`, `date` and `view`, validates them, and `EventBackLink` builds the href itself, so a crafted URL can't turn the back link into a link to another site (no open redirect).
+- **`urlState` is opt-in** (default `false`): a calendar embedded elsewhere later (e.g. on a club page) shouldn't rewrite that page's URL.
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| `history.replaceState` | `router.replace` / `<Link>` per day | No server round trip or re-render per click; focus stays on the grid day |
+| Read from `useSearchParams` on mount | Server `searchParams` → props | Back/Forward restore the URL we wrote, not the server render's |
+| `replaceState` | `pushState` per day | Back shouldn't step through every clicked day |
+| `?from=calendar` + validated date/view | `history.back()` button | Works from shared links and new tabs; no open redirect |
+| Omit today / Month | Always write both | Shared plain links stay "today" |
+
+#### Component contract
+
+```ts
+// lib/calendar.ts (client-safe)
+interface CalendarLocation { date?: DayKey; view?: CalendarView }
+isDayKey(value): value is DayKey
+readCalendarLocation(get: (name) => string | null | undefined): CalendarLocation
+calendarQuery(location): string            // '' | '?date=…&view=week'
+calendarHref(location?): string            // '/calendar…'
+eventFromCalendarHref(eventId, location): string
+
+// EventCalendar: new prop
+urlState?: boolean                          // default false
+
+// DayAgenda: new prop
+eventHref?: (event: EventItem) => string    // default `/events/${id}`
+
+// EventBackLink (forwardRef<HTMLAnchorElement>, server-safe)
+calendar?: CalendarLocation                 // set → "Back to calendar" (that day); omitted → "All events" (/)
+```
+
+#### Usage
+
+```tsx
+<EventCalendar events={events} eventIdsByDay={…} eventTimes={…} todayKey={todayKey} urlState />
+<EventBackLink calendar={{ date: '2026-11-21', view: 'week' }} className="mb-6" />
+```
+
+#### Notes
+
+- If a page links to `/calendar?date=…` **while the calendar is already open**, the calendar keeps its current state (the URL is read once). Nothing does this today; add a `key` or a sync effect if it's ever needed.
+- The URL keeps `from=calendar` when an event link is shared from the calendar. Harmless: the recipient's back link goes to that calendar day.
 
 ## 7. Phase 5 — Student Authentication (prep notes, 2026-11-06)
 

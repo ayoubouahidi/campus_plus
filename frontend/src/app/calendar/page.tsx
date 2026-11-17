@@ -28,6 +28,7 @@ export default async function CalendarPage() {
         eventIdsByDay={getEventIdsByDay(events)}
         eventTimes={getEventTimes(events)}
         todayKey={toCampusDayKey(Date.now())}
+        urlState
       />
     </div>
   );

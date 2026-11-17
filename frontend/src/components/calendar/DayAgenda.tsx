@@ -15,7 +15,12 @@ export interface DayAgendaProps extends React.HTMLAttributes<HTMLElement> {
   // From getEventTimes on the server, keyed by event id.
   eventTimes: Record<string, EventTimes>;
   headingLevel?: 'h2' | 'h3';
+  // Where each event links to. Default: its page. EventCalendar passes one that remembers the calendar's
+  // place, so the event page can link back to this day (eventFromCalendarHref).
+  eventHref?: (event: EventItem) => string;
 }
+
+const defaultEventHref = (event: EventItem) => `/events/${event.id}`;
 
 /* ------------------------------ Style tables ------------------------------ */
 
@@ -38,7 +43,7 @@ const describeCount = (count: number): string =>
 // The selected day's events, under the month grid on phones and beside it on large screens.
 // No hooks besides useId and no handlers: it renders the same on server and client.
 export const DayAgenda = React.forwardRef<HTMLElement, DayAgendaProps>(
-  ({ dayKey, events, eventTimes, headingLevel: Heading = 'h2', className = '', ...props }, ref) => {
+  ({ dayKey, events, eventTimes, headingLevel: Heading = 'h2', eventHref = defaultEventHref, className = '', ...props }, ref) => {
     const headingId = useId();
 
     return (
@@ -73,7 +78,7 @@ export const DayAgenda = React.forwardRef<HTMLElement, DayAgendaProps>(
                   <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {/* Stretched link (as in EventCard): the whole row is clickable, the ring is drawn around it. */}
                     <Link
-                      href={`/events/${event.id}`}
+                      href={eventHref(event)}
                       className="after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-violet-500"
                     >
                       {event.title}

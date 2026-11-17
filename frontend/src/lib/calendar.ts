@@ -128,6 +128,51 @@ export const CALENDAR_TITLES: Record<CalendarView, (key: DayKey) => string> = {
   week: formatWeekTitle,
 };
 
+/* ---------------------------- URL state (any runtime) ---------------------------- */
+// The calendar keeps its place in the query string: /calendar?date=2026-11-21&view=week. Both are optional
+// (no date = today, no view = month), so a plain /calendar stays clean and still works when shared.
+
+export interface CalendarLocation {
+  date?: DayKey;
+  view?: CalendarView;
+}
+
+const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// A real 'YYYY-MM-DD' date: the round trip rejects 2026-02-30, 2026-13-01 and the like.
+export const isDayKey = (value: string | null | undefined): value is DayKey =>
+  typeof value === 'string' && DAY_KEY_PATTERN.test(value) && utcToKey(keyToUtc(value)) === value;
+
+// Reads date/view from any query-string source (URLSearchParams, useSearchParams, a page's searchParams via
+// a small getter). Invalid values are dropped, never thrown on: a mistyped link still opens the calendar.
+export const readCalendarLocation = (get: (name: string) => string | null | undefined): CalendarLocation => {
+  const date = get('date');
+  const view = get('view');
+  return {
+    date: isDayKey(date) ? date : undefined,
+    view: view && isCalendarView(view) ? view : undefined,
+  };
+};
+
+// '?date=…&view=week', or '' when everything is default. Month is the default view, so it's left out.
+export const calendarQuery = ({ date, view }: CalendarLocation): string => {
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  if (view && view !== 'month') params.set('view', view);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
+
+export const calendarHref = (location: CalendarLocation = {}): string => `/calendar${calendarQuery(location)}`;
+
+// An event page opened from the calendar remembers where it came from, so its back link can return there.
+export const eventFromCalendarHref = (eventId: string, { date, view }: CalendarLocation): string => {
+  const params = new URLSearchParams({ from: 'calendar' });
+  if (date) params.set('date', date);
+  if (view && view !== 'month') params.set('view', view);
+  return `/events/${eventId}?${params.toString()}`;
+};
+
 /* --------------------------- Moments → days (server only) -------------------------- */
 // Turning a moment into a campus date needs time-zone data, which differs between runtimes
 // (see CAMPUS_TIME_ZONE in lib/time.ts). Run these on the server and pass the result down.
