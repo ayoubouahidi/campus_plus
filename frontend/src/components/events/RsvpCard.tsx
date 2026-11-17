@@ -51,8 +51,9 @@ const LOGIN_LINK_STYLES =
 
 /* --------------------------------- RsvpCard -------------------------------- */
 
-// One element, two layouts: below lg a bar fixed above the phone tab bar (always reachable while reading);
-// from lg a card that sticks beside the content. A single DOM node means a single RSVP button for
+// One element, two layouts: below lg a bar that sticks to the bottom of the screen (above the phone tab bar)
+// while the event is being read, then comes to rest at the end of the content, so it never covers the
+// footer (sticky, not fixed: DOCS.md §6.19); from lg a card that sticks beside the content. A single DOM node means a single RSVP button for
 // screen readers and one tab stop, whatever the screen size.
 export const RsvpCard = React.forwardRef<HTMLElement, RsvpCardProps>(
   ({ event, hasEnded, onRsvpToggle, className = '', ...props }, ref) => {
@@ -82,37 +83,32 @@ export const RsvpCard = React.forwardRef<HTMLElement, RsvpCardProps>(
     };
 
     return (
-      <>
-        {/* Below lg: reserves the bar's height at the end of the content so it never hides the last lines. */}
-        <div aria-hidden="true" className="h-20 lg:hidden" />
-
-        <aside
-          ref={ref}
-          aria-labelledby={headingId}
-          className={`fixed inset-x-0 bottom-[calc(4rem+1px+env(safe-area-inset-bottom))] z-30 border-t border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur-md md:bottom-0 md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:sticky lg:top-20 lg:bottom-auto lg:rounded-xl lg:border lg:bg-white lg:p-5 lg:backdrop-blur-none dark:border-slate-800 dark:bg-slate-950/95 lg:dark:bg-slate-900 ${className}`}
-          {...props}
-        >
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 lg:flex-col lg:items-stretch">
-            <div className="min-w-0 space-y-0.5">
-              <h2
-                id={headingId}
-                className="sr-only lg:not-sr-only lg:mb-2 lg:text-base lg:font-semibold lg:text-slate-900 lg:dark:text-slate-100"
-              >
-                RSVP
-              </h2>
-              {status && (
-                <p className={`flex items-center gap-1.5 text-sm font-semibold ${status.tone}`}>
-                  {state === 'going' && <CheckIcon className="h-4 w-4" />}
-                  {status.text}
-                </p>
-              )}
-              <p className="text-sm text-slate-500 dark:text-slate-400">{describeCount(event.rsvps_count, state)}</p>
-            </div>
-
-            {actions[state] && <div className="shrink-0 lg:[&>*]:w-full">{actions[state]}</div>}
+      <aside
+        ref={ref}
+        aria-labelledby={headingId}
+        className={`sticky bottom-[calc(4rem+1px+env(safe-area-inset-bottom))] z-30 -mx-4 border-t border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 md:bottom-0 md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:top-20 lg:bottom-auto lg:mx-0 lg:rounded-xl lg:border lg:bg-white lg:p-5 lg:backdrop-blur-none dark:border-slate-800 dark:bg-slate-950/95 lg:dark:bg-slate-900 ${className}`}
+        {...props}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 lg:flex-col lg:items-stretch">
+          <div className="min-w-0 space-y-0.5">
+            <h2
+              id={headingId}
+              className="sr-only lg:not-sr-only lg:mb-2 lg:text-base lg:font-semibold lg:text-slate-900 lg:dark:text-slate-100"
+            >
+              RSVP
+            </h2>
+            {status && (
+              <p className={`flex items-center gap-1.5 text-sm font-semibold ${status.tone}`}>
+                {state === 'going' && <CheckIcon className="h-4 w-4" />}
+                {status.text}
+              </p>
+            )}
+            <p className="text-sm text-slate-500 dark:text-slate-400">{describeCount(event.rsvps_count, state)}</p>
           </div>
-        </aside>
-      </>
+
+          {actions[state] && <div className="shrink-0 lg:[&>*]:w-full">{actions[state]}</div>}
+        </div>
+      </aside>
     );
   }
 );

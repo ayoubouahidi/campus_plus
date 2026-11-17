@@ -429,7 +429,7 @@ Follows the **operating system** (`prefers-color-scheme`): Tailwind's default `d
 
 - **Responsive grid:** `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`. Keep `grid-cols-1`: it caps the phone column at the screen width (without it a long word widens the whole page, DOCS §5.7).
 - **Stretched link:** the card title's `<Link>` gets `after:absolute after:inset-0`, so its invisible `::after` covers the whole card: one link, one tab stop, whole card clickable (EventCard, ClubCard, DayAgenda).
-- **`sticky`** (RSVP card, agenda beside the grid) and **`fixed`** (phone RSVP bar, tab bar, background).
+- **`sticky`** (RSVP card and phone RSVP bar, agenda beside the grid) and **`fixed`** (tab bar, background). Sticky stops at the end of its container (so the phone RSVP bar rests above the footer, DOCS §6.19) and breaks under any ancestor with `overflow` set.
 - **Logical properties for Arabic (RTL):** `text-start`, `border-s-4`, `rtl:-scale-x-100` on arrows: they flip automatically when the page is `dir="rtl"`.
 - **Safe areas:** `env(safe-area-inset-bottom)` keeps bars above the iPhone home indicator.
 
@@ -614,7 +614,6 @@ Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, sc
 | **Phase 6** real-time notifications (WebSockets `/ws/calendar/`) | roadmap |
 | **Phase 7** Django API instead of mocks, Arabic RTL + i18n, loading/error states, RSVP requests, `og:image` | roadmap |
 | ESLint findings in older code (mount guards, `Date.now` purity) | DOCS §1.5b |
-| Footer under the phone RSVP bar | DOCS §6.8 |
 | RSVP state per page until the API | DOCS §6.10 |
 | **What we need from Ahmed (API), Ayoub (login/dashboard), Hamza (infra)**: RSVP endpoints, event/club fields, `/auth/sync`, nginx `/api/auth/` route, upload rules | [`TEAM_NEEDS.md`](./TEAM_NEEDS.md) |
 

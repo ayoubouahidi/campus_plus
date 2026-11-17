@@ -2343,7 +2343,7 @@ The one action on the page: say you're going (or not). It's always within reach,
 #### Core Concepts & Engineering Decisions
 
 - **One element, two layouts.** Below `lg` the `<aside>` is `fixed` at the bottom, above the phone tab bar (`bottom-[calc(4rem+1px+env(safe-area-inset-bottom))]`, the tab bar's height; `md:bottom-0` once the tab bar is gone, with safe-area padding). From `lg` the same element is `sticky top-20` in the page's second grid column. A single DOM node means a single RSVP control for screen readers and keyboard users at every width.
-- **Spacer.** The component renders an `aria-hidden` `h-20 lg:hidden` div before the bar, so the end of the content can scroll above it.
+- ~~**Spacer.** The component renders an `aria-hidden` `h-20 lg:hidden` div before the bar, so the end of the content can scroll above it.~~ Replaced in §6.19: the phone bar is now `sticky`, no spacer.
 - **Controlled.** `event` and `onRsvpToggle` come from the parent (the page owns RSVP state so the attendee list in 4.9 updates with it), like `EventCard` in the feed.
 - **State resolved once, then tables.** `getRsvpState(event, hasEnded, session.status)` → `'ended' | 'loading' | 'signedOut' | 'going' | 'notGoing'` (ended wins over everything). `STATUS: Record<RsvpState, …>` gives the status line and colour, an `actions` record gives the control: "RSVP" (primary), "Cancel RSVP" (secondary), "Log in to RSVP" (a `Link` styled as a primary button, `?next=/events/<id>` for Phase 5), a disabled spinner while the session loads, nothing once ended.
 - **`hasEnded` comes from the server** (request time vs `end_time`), so server HTML and hydration agree.
@@ -2402,7 +2402,7 @@ Going (`evt_workshop_cine`): "You're going · 42 going · Cancel RSVP". Not goin
 
 #### Notes for later
 
-- **Footer under the phone bar:** the spacer sits in `<main>`, so at the very bottom of the page the bar covers the last ~5rem of the footer. Fix in 4.10 if it bothers (e.g. hide the bar once the footer is in view).
+- ~~**Footer under the phone bar:** the spacer sits in `<main>`, so at the very bottom of the page the bar covers the last ~5rem of the footer. Fix in 4.10 if it bothers (e.g. hide the bar once the footer is in view).~~ Fixed in §6.19 (`sticky` instead of `fixed`).
 - **Toasts on phones** appear just above the tab bar, i.e. over the RSVP bar, for 4 s. Acceptable (they report the RSVP itself); revisit with the Phase 6 toasts.
 - **Phase 7:** send the RSVP (optimistic, roll back + danger toast on failure); `/auth/login` must honour `?next=`.
 
@@ -2524,7 +2524,7 @@ if (!event) notFound();
 #### Notes for later
 
 - **RSVP state is per page.** RSVP on the event page, go back to `/`: the feed shows the old state until reload (each page holds its own copy). Phase 7's API (server is the source of truth) fixes it; a shared client store isn't worth it with mocks.
-- **Footer under the phone RSVP bar** (§6.8) still open.
+- ~~**Footer under the phone RSVP bar** (§6.8) still open.~~ Fixed in §6.19.
 - **4.11 (optional):** open the page as a modal over the feed via an intercepting route (`@modal/(.)events/[id]`); a shared link still opens this full page.
 
 ### 6.11 Club helpers & ClubCard (Step 4.12)
@@ -2874,7 +2874,7 @@ Node 22 in the container, `searchCampus` at 2026-11-05 12:00Z: "leet" → jam se
 | `/clubs`, `/clubs/[slug]` (directory, campus filter, header, contact for signed-in students, events, 404) | §6.11–6.15 |
 | ⌘K search palette | §6.16–6.17 |
 
-**Open items carried forward:** ~~calendar day/view in the URL (§6.6)~~ done §6.18; footer under the phone RSVP bar (§6.8); RSVP state per page until the API (§6.10); Phase 5: server-side session for club contact (§6.13) and attendee-name privacy (§6.9); Phase 7: API, `metadataBase` + flyer `og:image`, search endpoint, pagination; ESLint not runnable in the container; no volume mount for live reload in Docker.
+**Open items carried forward:** ~~calendar day/view in the URL (§6.6)~~ done §6.18; ~~footer under the phone RSVP bar (§6.8)~~ done §6.19; RSVP state per page until the API (§6.10); Phase 5: server-side session for club contact (§6.13) and attendee-name privacy (§6.9); Phase 7: API, `metadataBase` + flyer `og:image`, search endpoint, pagination; ESLint not runnable in the container; no volume mount for live reload in Docker.
 
 
 ---
@@ -2948,6 +2948,46 @@ calendar?: CalendarLocation                 // set → "Back to calendar" (that 
 
 - If a page links to `/calendar?date=…` **while the calendar is already open**, the calendar keeps its current state (the URL is read once). Nothing does this today; add a `key` or a sync effect if it's ever needed.
 - The URL keeps `from=calendar` when an event link is shared from the calendar. Harmless: the recipient's back link goes to that calendar day.
+
+### 6.19 Phone RSVP bar no longer covers the footer (Step 4.19, 2026-11-17)
+
+**Status:** ✅ Validated (2026-11-17) on phone and tablet widths, live on `/events/[id]`.
+
+**Files:** `src/components/events/RsvpCard.tsx` (one className change, spacer removed). No API change.
+
+#### Business & product purpose
+
+Below `lg` (1024px) the RSVP control is a bar at the bottom of the screen. It was `position: fixed`, so it stayed on screen **all the way to the end of the page**. The page reserved room for it with an empty `h-20` block, but that block sat at the end of the event content, *before* the footer. Result: at the very bottom, the bar covered the last ~5rem of the footer (links and copyright could not be read or tapped on a phone). Now the bar follows the reader while they read, then stops at the end of the event and the whole footer shows below it.
+
+#### Core concepts & engineering decisions
+
+- **`sticky` instead of `fixed`.** A sticky element sticks to its `bottom` offset **only while its containing block is on screen**. Its containing block is the event's grid in `<main>`, which ends before the footer. So while reading, the bar is pinned at the bottom (same look as before); once the end of the event scrolls into view, the bar settles at its normal place in the page, the footer scrolls in under it, and nothing is covered.
+- **Same offsets as before:** `bottom-[calc(4rem+1px+env(safe-area-inset-bottom))]` on phones (sits above the tab bar), `md:bottom-0` with safe-area padding on tablets (no tab bar). At `lg` the same element is still `sticky lg:top-20 lg:bottom-auto` in the side column: desktop is unchanged.
+- **Edge to edge with negative margins.** A `fixed` bar used `inset-x-0` to span the screen. A sticky bar lives inside the page's padding, so `-mx-4 sm:-mx-6` pulls it back to the screen edges and `px-4 sm:px-6` restores the inner padding; `lg:mx-0` removes it for the side card.
+- **No spacer.** A sticky element takes up its own space in the flow, so the content can never end hidden behind it. One fewer element, and no magic height to keep in sync with the bar.
+- **The trap to remember:** `sticky` silently stops working if **any ancestor** has `overflow: hidden | auto | scroll` (that ancestor becomes the scroll box). Checked: none in `layout.tsx`, `AppShell`, `globals.css` or the event page. Don't add one around the event page.
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| `sticky` bottom | Keep `fixed` + hide the bar when the footer is visible (`IntersectionObserver`) | Pure CSS, no JavaScript, no listener, no flash on hydration; the bar never disappears, it just stops |
+| `sticky` bottom | Keep `fixed` + spacer after the footer | The spacer would need to know the bar's height on every page; the bar would still hide content while reading other sections |
+| Negative margins for full width | Move the bar out of the padded container | Would split the phone and desktop layouts into two DOM nodes (two RSVP controls for screen readers, §6.8) |
+
+The `fixed` vs `sticky` choice is the opposite of the tab bar's (§3, `MobileTabBar`): the tab bar must be on screen **everywhere**, including over the footer, so it stays `fixed` with `MobileTabBarSpacer`. The RSVP bar belongs to the event, so it should stop where the event stops.
+
+#### Component contract
+
+Unchanged (§6.8): `event`, `hasEnded`, `onRsvpToggle`, `className`, `ref` → `<aside>`.
+
+#### Usage
+
+Unchanged; `EventPageShell` renders it in the grid's second column:
+
+```tsx
+<RsvpCard event={event} hasEnded={hasEnded} onRsvpToggle={handleRsvpToggle} />
+```
 
 ## 7. Phase 5 — Student Authentication (prep notes, 2026-11-06)
 
