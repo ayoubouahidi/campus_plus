@@ -111,3 +111,24 @@ export const CardSkeleton = React.forwardRef<HTMLDivElement, CardSkeletonProps>(
 
 CardSkeleton.displayName = 'CardSkeleton';
 
+
+/* ---------------------------- SkeletonRegion ---------------------------- */
+
+export interface SkeletonRegionProps extends React.HTMLAttributes<HTMLDivElement> {
+  // What screen readers hear while the skeleton shows, e.g. "Loading events". The shapes themselves are
+  // aria-hidden, so without this a screen-reader user would get silence.
+  label: string;
+}
+
+// Wraps a page or section skeleton: one polite "Loading …" announcement (role="status"), aria-busy while
+// it shows. Used by the route loading.tsx files (DOCS.md §6.21).
+export const SkeletonRegion = React.forwardRef<HTMLDivElement, SkeletonRegionProps>(
+  ({ label, children, className = '', ...props }, ref) => (
+    <div ref={ref} role="status" aria-busy="true" className={className} {...props}>
+      <span className="sr-only">{label}</span>
+      {children}
+    </div>
+  )
+);
+
+SkeletonRegion.displayName = 'SkeletonRegion';

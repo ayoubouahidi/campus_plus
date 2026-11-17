@@ -113,7 +113,7 @@ Every folder is a URL segment; special file names have special meaning (§11.2).
 | --- | --- | --- |
 | `layout.tsx` | (all) | **Root layout**: `<html>`, `<body>`, fonts, the campus background, `ToastProvider` → `SessionProvider` → `AppShell`. Wraps every page. Holds the mock session (`INITIAL_SESSION`) and `BACKGROUND_INTENSITY`. |
 | `globals.css` | (all) | Imports Tailwind; defines the drawer / fade-in animations. |
-| `page.tsx` | `/` | Discover feed. Server: upcoming events + formatted times → `<EventFeed>`. |
+| `(feed)/page.tsx` | `/` | Discover feed (in the `(feed)` route group, so its `loading.tsx` covers `/` only). Server: upcoming events + formatted times → `<EventFeed>`. |
 | `calendar/page.tsx` | `/calendar` | Server: today + events per day + times → `<EventCalendar>`. |
 | `clubs/page.tsx` | `/clubs` | Server: sorted clubs + upcoming counts → `<ClubDirectory>`. |
 | `clubs/[slug]/page.tsx` | `/clubs/leet-dev` | Club page: header + contact (server decides) + events. |
@@ -121,6 +121,9 @@ Every folder is a URL segment; special file names have special meaning (§11.2).
 | `events/[id]/page.tsx` | `/events/evt_…` | Event page: details (server) + RSVP/attendees (client). |
 | `events/[id]/not-found.tsx` | | "Event not found" 404. |
 | `not-found.tsx` | any unknown URL | Global 404. |
+| `(feed)/loading.tsx`, `calendar/loading.tsx`, `clubs/loading.tsx`, `clubs/[slug]/loading.tsx`, `events/[id]/loading.tsx` | | Skeleton shown instantly while that page renders (DOCS §6.21). |
+| `error.tsx` | any page that throws | "Something went wrong" + Try again, inside the shell (client error boundary, DOCS §6.20). |
+| `global-error.tsx` | root layout throws | Last resort: own `<html>`/`<body>`, no shell (DOCS §6.20). |
 | `test/page.tsx` | `/test` | Dev-only test bench (404 in production). `SessionSwitcher.tsx` = test tool. |
 
 ### 3.2 `src/components/ui/` — generic building blocks
@@ -137,8 +140,9 @@ Know nothing about events or clubs. Reused everywhere.
 | `Modal.tsx` | Dialog in a portal: scroll lock, Escape, focus trap, focus return, `ModalTitle` names it, `position` center/top. |
 | `Tabs.tsx` | Compound tabs with roving focus and arrow keys; controlled or uncontrolled. |
 | `Toast.tsx` | `ToastProvider` + `useToast().showToast(...)`; live region. |
-| `Skeleton.tsx` | Loading placeholders. |
+| `Skeleton.tsx` | Loading placeholders: `Skeleton`, `CardSkeleton`, `SkeletonRegion` (role="status" + "Loading …" for screen readers). |
 | `EmptyState.tsx`, `FilterChip.tsx` | "Nothing here" box; toggle chip. |
+| `ErrorState.tsx` | "Something went wrong" page body with error code and action slot (used by the error files). |
 
 ### 3.3 `src/components/ui/layout/` — the app shell
 
@@ -156,9 +160,9 @@ Know nothing about events or clubs. Reused everywhere.
 
 | Folder | Files | Used by |
 | --- | --- | --- |
-| `events/` | `EventFeed` (feed state: filters + RSVP), `FeedToolbar`, `CategoryFilter`, `EventGrid`, `EventCard`, `EventDetails` (server), `EventBackLink` (server), `EventPageShell` (event page state), `RsvpCard`, `AttendeesSection`, `eventStyles.ts` | `/`, `/events/[id]`, club pages |
-| `calendar/` | `EventCalendar` (state: selected day + view), `CalendarHeader`, `MonthGrid`, `WeekGrid`, `DayAgenda`, `dayStyles.ts` | `/calendar` |
-| `clubs/` | `ClubDirectory` (state: campus filter), `ClubCard`, `ClubHeader` (server), `ClubContactCard`, `ClubEvents` (state: RSVP) | `/clubs`, `/clubs/[slug]` |
+| `events/` | `EventFeed` (feed state: filters + RSVP), `FeedToolbar`, `CategoryFilter`, `EventGrid`, `EventCard`, `EventDetails` (server), `EventBackLink` (server), `EventPageShell` (event page state), `RsvpCard`, `AttendeesSection`, `EventSkeletons` (card, grid, feed, page placeholders), `eventStyles.ts` | `/`, `/events/[id]`, club pages |
+| `calendar/` | `EventCalendar` (state: selected day + view), `CalendarHeader`, `MonthGrid`, `WeekGrid`, `DayAgenda`, `CalendarSkeleton`, `dayStyles.ts` | `/calendar` |
+| `clubs/` | `ClubDirectory` (state: campus filter), `ClubCard`, `ClubHeader` (server), `ClubContactCard`, `ClubEvents` (state: RSVP), `ClubSkeletons` (card, directory, page placeholders) | `/clubs`, `/clubs/[slug]` |
 | `search/` | `SearchPalette` | AppShell (navbar + ⌘K) |
 | `filters/` | `CampusToggle` (All / 1337 / EMINES) | feed, clubs directory |
 | `providers/` | `SessionProvider` + `useSession()` | root layout; read by navbar, RSVP, attendees, contact card… |
@@ -470,9 +474,13 @@ Each concept: **what it is**, **where we use it**, **the trap to avoid**.
 | --- | --- |
 | `page.tsx` | Makes the folder a URL. |
 | `layout.tsx` | Wraps pages below it; **persists across navigation**. |
-| `not-found.tsx` | Shown by `notFound()` or for unknown URLs, inside the layout; HTTP 404. |
+| `not-found.tsx` | Shown by `notFound()` or for unknown URLs, inside the layout; HTTP 404 (200 + noindex when streamed under a `loading.tsx`). |
+| `error.tsx` | Client error boundary for the segment and everything below (not its own layout). Props `{ error, retry }`; **`retry()` re-fetches from the server** (Next 16.3+, replaces `reset`). |
+| `global-error.tsx` | Replaces the whole document when the root layout throws; needs its own `<html>`/`<body>`. |
 | `[id]` / `[slug]` folders | **Dynamic segments**: `params.id`. In Next.js 16 **`params` and `searchParams` are Promises**: `const { id } = await params`. |
 | `_folder` | Private, never a route. |
+| `(folder)` | **Route group**: organizes files without adding to the URL. `(feed)/page.tsx` is still `/`. |
+| `loading.tsx` | Instant fallback while the segment's page renders (Next wraps it in `<Suspense>`). Wraps **every route below it**, so don't put a page-specific one at the app root. Makes `notFound()` below it answer 200 + noindex (DOCS §6.21). |
 | `metadata` / `generateMetadata` | `<title>`, description, Open Graph per page. |
 
 ### 11.3 Rendering modes: SSR, CSR, static, dynamic, streaming
@@ -481,7 +489,7 @@ Each concept: **what it is**, **where we use it**, **the trap to avoid**.
 - **CSR (client-side rendering):** the browser renders/updates with JS. *Everything after hydration:* filtering the feed, switching calendar month, opening the palette.
 - **Static (prerendered at build):** HTML made once at `next build`. Only `/test` and the global 404 are static here.
 - **Dynamic:** rendered per request. **`await connection()`** opts a page in (it reads "now"). The build output shows `ƒ` for dynamic, `○` for static.
-- **Streaming:** the server sends HTML in chunks as parts finish. A `notFound()` in a dynamic page in dev arrives in the streamed payload (the status code is already 404).
+- **Streaming:** the server sends HTML in chunks as parts finish. With a `loading.tsx` above the page, the skeleton is sent first and the page streams in after; the status (200) is already sent, so a later `notFound()` can't change it to 404 (DOCS §6.21).
 
 ### 11.4 Hydration (and mismatches)
 
@@ -538,7 +546,7 @@ unmount  → component removed: effect cleanups run → DOM removed → its stat
 | API | What | Where |
 | --- | --- | --- |
 | `connection()` | Make the page dynamic (per request) | all main pages |
-| `notFound()` | Render the nearest `not-found.tsx` with 404 | event & club pages |
+| `notFound()` | Render the nearest `not-found.tsx` (404, or 200 + noindex under a `loading.tsx`) | event & club pages |
 | `generateMetadata` | Per-page title/description/OG | event & club pages |
 | `cache()` (React) | Dedupe a lookup within one request | `loadEvent`, `loadClub` |
 | `<Link>` | Client-side navigation + prefetch | everywhere |
@@ -612,7 +620,7 @@ Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, sc
 | --- | --- |
 | **Phase 5** login (Auth.js + 42, from Ayoub's dashboard), `/profile`, real server-side session for private data | DOCS §7 |
 | **Phase 6** real-time notifications (WebSockets `/ws/calendar/`) | roadmap |
-| **Phase 7** Django API instead of mocks, Arabic RTL + i18n, loading/error states, RSVP requests, `og:image` | roadmap |
+| **Phase 7** Django API instead of mocks, Arabic RTL + i18n, (loading and error pages done, DOCS §6.20–6.21), RSVP requests, `og:image` | roadmap |
 | ESLint findings in older code (mount guards, `Date.now` purity) | DOCS §1.5b |
 | RSVP state per page until the API | DOCS §6.10 |
 | **What we need from Ahmed (API), Ayoub (login/dashboard), Hamza (infra)**: RSVP endpoints, event/club fields, `/auth/sync`, nginx `/api/auth/` route, upload rules | [`TEAM_NEEDS.md`](./TEAM_NEEDS.md) |

@@ -2479,7 +2479,7 @@ The event page is the destination of every event link in the app, and the page s
 - **Server page, one client shell.** `page.tsx` awaits `params` (a Promise in Next.js 16), calls `await connection()` (per-request render: "has it ended?" uses the request time), looks the event up, and computes everything server-side: `hasEnded`, `getEventDateDetails`, the club, `getMockAttendees`. `EventDetails` is rendered on the server and passed as `children` through `EventPageShell` (client), which owns the shared RSVP state (`toggleRsvp` + `useRsvpToast`) and lays out content + `AttendeesSection` (left) and `RsvpCard` (right / bottom bar). Server-rendered children inside a client component stay server-rendered: no JS for the details.
 - **`loadEvent = cache(id => …)`**: `generateMetadata` and the page both need the event; React `cache` makes it one lookup per request (one API call in Phase 7).
 - **`generateMetadata`:** `"<title> | Campus Hub"`, description truncated to 160 chars, Open Graph `title`/`description`/`type: 'article'` for link previews. The flyer as `og:image` needs an absolute URL → `metadataBase` in Phase 7. Unknown id → `"Event not found | Campus Hub"`.
-- **`notFound()` + route-level `not-found.tsx`:** unknown ids return HTTP 404 (Next adds `noindex`) with event-specific copy ("doesn't exist or was removed by its organizer") and links to Discover and the calendar, inside the normal shell. In dev the 404 UI arrives in the streamed payload because the page is dynamic; the status code is already 404.
+- **`notFound()` + route-level `not-found.tsx`:** unknown ids return HTTP 404 (Next adds `noindex`; **since §6.21 HTTP 200 + `noindex`**, because the loading skeleton streams first) with event-specific copy ("doesn't exist or was removed by its organizer") and links to Discover and the calendar, inside the normal shell. In dev the 404 UI arrives in the streamed payload because the page is dynamic; the status code is already 404.
 - **Back link "All events"** → `/`, chevron flipped in RTL. A link (not `history.back()`): it works when the page was opened from a shared link.
 
 #### Verified (server HTML via nginx)
@@ -2786,7 +2786,7 @@ Leet Frame: "Upcoming events (1)" with the masterclass card (`h3`, no eager imag
 
 #### Core Concepts & Engineering Decisions
 
-- **Same shape as `/events/[id]` (§6.10):** `params` awaited, `await connection()` (upcoming vs past at request time), `loadClub = cache(slug => …)` shared by `generateMetadata` and the page, `notFound()` → route-level `not-found.tsx` ("Club not found", links to the directory and Discover, HTTP 404 + `noindex`), back link "All clubs" (chevron flipped in RTL).
+- **Same shape as `/events/[id]` (§6.10):** `params` awaited, `await connection()` (upcoming vs past at request time), `loadClub = cache(slug => …)` shared by `generateMetadata` and the page, `notFound()` → route-level `not-found.tsx` ("Club not found", links to the directory and Discover, HTTP 404 + `noindex`; since §6.21 HTTP 200 + `noindex`), back link "All clubs" (chevron flipped in RTL).
 - **Composition:** `ClubHeader` (server) with `contact`, then `ClubEvents` (client) with `getClubEvents` + `getEventSchedules` from the server.
 - **Contact decided on the server:** `contact={IS_SIGNED_IN ? getClubContact(club) : null}`. `IS_SIGNED_IN` is a `true` constant because mock auth is always signed in; **Phase 5 replaces it with the real server-side session** (§6.13).
 - **Metadata:** `"<club> | Campus Hub"`, the description, Open Graph `type: 'profile'`.
@@ -2988,6 +2988,147 @@ Unchanged; `EventPageShell` renders it in the grid's second column:
 ```tsx
 <RsvpCard event={event} hasEnded={hasEnded} onRsvpToggle={handleRsvpToggle} />
 ```
+
+### 6.20 Error pages: `ErrorState`, `error.tsx`, `global-error.tsx` (Step 4.20, 2026-11-17)
+
+**Status:** ✅ Validated (2026-11-17) on `/test` (browser crash, server error, retry, keyboard, phone, dark mode). Live on every route.
+
+**Files:** `src/components/ui/ErrorState.tsx` (new), `src/app/error.tsx` (new, `'use client'`), `src/app/global-error.tsx` (new, `'use client'`).
+
+#### Business & product purpose
+
+Until now a page that threw (a bug, bad data, and from Phase 7 the API being down or slow to answer) showed Next's bare built-in error screen: no navbar, no way back, nothing a student understands. Now it shows **"Error · Something went wrong"** inside the normal site (navbar, tab bar and footer stay), with **Try again** and **Discover events**, plus a short **error code** the student can send to the team. This matters most once real API calls exist: a failed request should cost one tap, not a lost tab.
+
+#### Core concepts & engineering decisions
+
+- **`error.tsx` = a React error boundary around a route segment.** Placed at `src/app/error.tsx`, it wraps every page (and nested layouts, `loading.tsx`, `not-found.tsx`) but **not** the root layout above it, which is why the shell survives. Any page can add its own `error.tsx` later for page-specific copy; the nearest one wins.
+- **Must be a Client Component** (`'use client'`): error boundaries catch errors while React renders in the browser, and the "Try again" button needs `onClick`.
+- **`retry()`, not `reset()`.** Next.js **16.3** made `retry` the standard prop: it **re-fetches the segment from the server** and re-renders it, so a temporary server/API failure can actually recover. The older `reset()` (still there) only re-renders what the browser already has, which can't fix a server error. Older tutorials use `reset`; in this codebase use `retry`.
+- **Server vs browser errors.** Thrown during the server render (e.g. a failed fetch in a page): the HTTP status is **500**, and in production the browser only receives a generic message plus `error.digest`, a hash that matches the server log. Thrown in the browser (a component crashing): no digest. So `ErrorState` shows **only the code**, never `error.message` (generic or technical either way).
+- **Focus management.** The error replaces the page without a navigation. `error.tsx` focuses the message container (`tabIndex={-1}`, `focus:outline-none`), so screen readers read it and the next Tab lands on "Try again" instead of on a control that no longer exists. Not `role="alert"`: focus already announces it, and an alert would be read twice.
+- **Logging:** `console.error(error)` in an effect. Phase 7: send it to a reporting service at the same spot.
+- **`global-error.tsx` = last resort for the root layout.** If `layout.tsx` itself throws (e.g. a future server-side session read fails), `error.tsx` can't help: it lives inside that layout. `global-error.tsx` **replaces the whole document**, so it renders its own `<html>`/`<body>`, imports `globals.css` itself, sets the title with React 19's `<title>` (metadata exports don't work in error files), and has no navbar/footer (they belong to the broken layout). Its home link is a plain `<a href="/">` (full page load), because the client router is part of what failed. Dark mode still works: Tailwind's `dark:` follows the OS setting here. Fonts fall back to the system font (the Geist variables come from the layout).
+- **`ErrorState` is server-safe and generic** (title, description, code, actions as children), so a future per-page `error.tsx` or a failed widget can reuse it. Same centered layout as the 404 pages, rose label instead of violet.
+- **In development** Next draws its own error overlay / "Issues" badge on top. Students never see it; close it to see our page.
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| One root `error.tsx` | One per route now | Same message fits every page today; add per-page files only when the copy must differ |
+| `retry()` | `reset()` | Re-fetches from the server, so API/server hiccups can recover |
+| Show only the digest | Show `error.message` | Production server messages are generic; client ones are technical and may leak details |
+| Focus the container | `role="alert"` live region | Announces once and fixes keyboard position too |
+| `global-error.tsx` with its own `<html>` | Rely on Next's default | Default is unbranded English text with no way home |
+| `ErrorState` in `ui/` (server-safe) | Markup inside `error.tsx` | Reusable by `global-error.tsx` and future per-page boundaries |
+
+#### Component contract
+
+```ts
+// components/ui/ErrorState.tsx — forwardRef<HTMLDivElement>, server-safe
+interface ErrorStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
+  title?: string;        // default 'Something went wrong'
+  description?: string;  // default 'This page couldn’t load. It’s probably temporary: try again in a moment.'
+  code?: string;         // error.digest; omitted → no code line
+  children?: ReactNode;  // actions, stacked on phones, in a row from sm
+}
+
+// app/error.tsx and app/global-error.tsx (Next.js file conventions)
+{ error: Error & { digest?: string }; retry: () => void }
+```
+
+#### Usage
+
+```tsx
+// A future page-specific boundary, e.g. app/events/[id]/error.tsx
+'use client';
+export default function EventError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
+  return (
+    <ErrorState title="This event couldn’t load" code={error.digest}>
+      <Button onClick={() => retry()} className="h-10">Try again</Button>
+    </ErrorState>
+  );
+}
+```
+
+#### Notes
+
+- **Testing again:** the 4.20 test bench was not committed. Recreate it in a minute: a client component that does `if (broken) throw new Error('test')` after a button click (browser error, no code), and `throw new Error('test')` at the top of a page for a server error (500 + code). Try again recovers the first, the second fails again on purpose.
+- **`global-error.tsx` was not seen in a browser** (triggering it needs the root layout to throw). Type-checked only; check it once when Phase 5 adds server-side work to the layout.
+- `notFound()` is **not** an error: it still shows the `not-found.tsx` pages (404), not this one.
+
+### 6.21 Loading skeletons: `loading.tsx` per route (Step 4.21, 2026-11-17)
+
+**Status:** ✅ Validated (2026-11-17) on `/test` (each skeleton next to its real page, phone/tablet/desktop, dark mode, a 3-second page). Live on `/`, `/calendar`, `/clubs`, `/clubs/[slug]`, `/events/[id]`.
+
+**Files:** `src/components/events/EventSkeletons.tsx` (new: `EventCardSkeleton`, `EventGridSkeleton`, `EventFeedSkeleton`, `EventPageSkeleton`), `src/components/calendar/CalendarSkeleton.tsx` (new), `src/components/clubs/ClubSkeletons.tsx` (new: `ClubCardSkeleton`, `ClubDirectorySkeleton`, `ClubPageSkeleton`), `src/components/ui/Skeleton.tsx` (+ `SkeletonRegion`), `src/app/(feed)/loading.tsx`, `src/app/calendar/loading.tsx`, `src/app/clubs/loading.tsx`, `src/app/clubs/[slug]/loading.tsx`, `src/app/events/[id]/loading.tsx` (new). **Moved:** `src/app/page.tsx` → `src/app/(feed)/page.tsx` (same URL `/`).
+
+#### Business & product purpose
+
+Every page renders on the server. Today, with mock data, that takes milliseconds; from Phase 7 each page waits for the Django API, and on campus Wi-Fi that can be a second or more. Without a loading state, a tap on an event card did **nothing visible** until the whole new page was ready: students tap again, or think the site is broken. Now the tap answers instantly with grey shapes in the exact layout of the coming page (banner, title, grid, side card), and the real content replaces them in place. The navbar, tab bar and footer never disappear.
+
+#### Core concepts & engineering decisions
+
+- **`loading.tsx` = an automatic `<Suspense>` boundary.** Next.js wraps the segment's `page.tsx` in `<Suspense fallback={<Loading />}>`. On a link tap the fallback is shown at once (it is prefetched with the link); on a direct visit it is sent in the first HTML chunk and the page **streams** in after it.
+- **Skeletons copy the real geometry.** Same container classes, paddings, grid columns, aspect ratios (16:9 flyers, 21:9 club banners), avatar sizes (logo 48px on cards, 64px on the club page) and button heights. When the content arrives nothing moves (no layout shift, good for Core Web Vitals CLS). The month grid is always 6 weeks (`lib/calendar.ts`), so the calendar skeleton's height is exact. **Rule:** change a real component's layout → change its skeleton (each skeleton file says which component it mirrors).
+- **Shared pieces:** `EventCardSkeleton` / `EventGridSkeleton` are used by the feed skeleton *and* the club page skeleton (its events grid); `EventGridSkeleton` copies `EventGrid`'s `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6`. Built on the existing `Skeleton` + `Card` / `CardFooter` primitives, so borders, radius and footer padding are the real ones.
+- **Accessibility: `SkeletonRegion`.** The shapes are `aria-hidden`; the wrapper is `role="status"` + `aria-busy="true"` with one sr-only label ("Loading events", "Loading calendar", "Loading event", "Loading clubs", "Loading club"). A screen-reader user hears one short message instead of silence or a list of boxes.
+- **Phone RSVP bar not in the event skeleton.** Below `lg` the real bar appears with the content; a placeholder bar would only flash. The `lg` side card is drawn (it's part of the layout).
+- **Route group `(feed)`.** A `loading.tsx` wraps **every route below its folder**. At `src/app/loading.tsx` the feed skeleton also wrapped `/calendar`, `/clubs`…: on a direct visit to `/calendar` the browser showed the *feed* skeleton, then the calendar one, then the page (verified in the streamed HTML). Moving the feed into `src/app/(feed)/` (parentheses = folder ignored in the URL) scopes its `page.tsx` + `loading.tsx` to `/` only. No root `loading.tsx` on purpose.
+- **Nested boundaries:** `/clubs/[slug]` sits under both `clubs/loading.tsx` and `clubs/[slug]/loading.tsx`. Going from `/clubs` to a club shows only the club skeleton (the directory segment is already there).
+- **After moving or adding route folders, restart the dev server** (`docker compose restart frontend`): Turbopack kept the old route list and `/` answered 404 until restarted.
+
+#### The trade-off: 404 → 200 for unknown events and clubs (decided 2026-11-17)
+
+Once the skeleton is sent, the HTTP status (200) has already gone out with it, so `notFound()` in the page can no longer turn it into a 404. Measured: `/events/nope` and `/clubs/nope` now answer **200**, still showing "Event/Club not found" and with `<meta name="robots" content="noindex">` (Next adds it), so search engines don't index them (Next's docs: treated as a "soft 404", not indexed). Unknown URLs (`/nope`) still answer **404** (no loading boundary above the global not-found). The team chose instant feedback for students over the exact status code for bots. If a real 404 is ever required (analytics, compliance), the documented fix is a check in `proxy.ts` that rewrites unknown ids to the not-found page before streaming starts (costs one quick lookup per request).
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| A skeleton per route | One generic spinner at the root | Spinner shifts everything when content lands and says nothing about what's coming; one root boundary also flashes on every route |
+| `loading.tsx` per route | Manual `<Suspense>` inside each page | Same mechanism with zero wiring; manual boundaries make sense later for one slow widget (e.g. attendees) while the rest shows |
+| Skeletons on detail pages (soft 404) | No skeleton on `/events/[id]`, `/clubs/[slug]` (real 404) | Detail pages are what students tap most; `noindex` keeps unknown ids out of search |
+| `(feed)` route group | Root `loading.tsx` | Root boundary flashed the feed skeleton on every other route |
+| Copies of real classes | Rendering the real components with empty data | Real components need data and client state; skeletons stay server-only, zero JavaScript |
+
+#### Component contract
+
+```ts
+// components/ui/Skeleton.tsx
+SkeletonRegion: forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { label: string }>  // role="status", aria-busy
+
+// components/events/EventSkeletons.tsx (server-safe, all forwardRef<HTMLDivElement>)
+EventCardSkeleton   // one card, aria-hidden
+EventGridSkeleton   // { count?: number = 6 }
+EventFeedSkeleton   // label "Loading events"
+EventPageSkeleton   // label "Loading event"
+
+// components/calendar/CalendarSkeleton.tsx
+CalendarSkeleton    // label "Loading calendar"
+
+// components/clubs/ClubSkeletons.tsx
+ClubCardSkeleton, ClubDirectorySkeleton ("Loading clubs"), ClubPageSkeleton ("Loading club")
+```
+
+#### Usage
+
+```tsx
+// src/app/<route>/loading.tsx: same container as the page
+export default function Loading() {
+  return (
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <CalendarSkeleton />
+    </div>
+  );
+}
+```
+
+#### Notes
+
+- **Seeing them today:** the mocks are instant, so skeletons only flash. To look at one, add `await new Promise((r) => setTimeout(r, 3000))` at the top of a page temporarily (that's how 4.21 was tested on `/test`).
+- **Reduced motion:** the `animate-pulse` animation still runs with "reduce motion" on (it's a slow fade, not movement). Add `motion-reduce:animate-none` to `Skeleton` if anyone asks.
+- The old Phase 1 `CardSkeleton` (with description lines) doesn't match `EventCard` and isn't used by these; kept for generic cards.
 
 ## 7. Phase 5 — Student Authentication (prep notes, 2026-11-06)
 
