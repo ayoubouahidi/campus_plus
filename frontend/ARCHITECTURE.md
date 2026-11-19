@@ -51,7 +51,7 @@ flowchart LR
 
 - Everything runs in **Docker Compose** (`docker-compose.yml` at the repo root): `nginx`, `frontend`, `web`, `db`, `redis`.
 - `nginx` terminates HTTPS (port 80 redirects to 443) and routes by path (`infrastructure/nginx/nginx.conf`).
-- **Today the frontend uses mock data** (`src/lib/mockData.ts`). It doesn't call Django yet; that's Phase 7. Login is mocked too (Phase 5).
+- **Today the frontend uses mock data** (`src/lib/mockData.ts`). It doesn't call Django yet; that's Phase 7. Login is real since Phase 5 (Auth.js + 42, `src/auth.ts`; DOCS §7.5–7.6), with a dev login button while the 42 keys and Django's `/auth/sync` are missing.
 
 **Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript (strict) · Tailwind CSS v4. No other runtime dependencies (no state library, no date library, no UI kit).
 
@@ -594,7 +594,7 @@ Format it **in the page (server)** with a helper from `lib/time.ts` / `lib/calen
 
 ### Make something only for signed-in students
 - Visual only: `const { session } = useSession()` in a client component.
-- **Private data:** decide on the server and don't send it to visitors (see `contact={IS_SIGNED_IN ? … : null}` in `clubs/[slug]/page.tsx`). Phase 5 replaces `IS_SIGNED_IN` with the real session.
+- **Private data:** decide on the server and don't send it to visitors (see `contact={isSignedIn ? … : null}` in `clubs/[slug]/page.tsx`, with `isSignedIn` from `getSessionState()` in `src/auth.ts`).
 
 ### Open something in a dialog
 Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, scroll lock). See `AttendeesSection`.

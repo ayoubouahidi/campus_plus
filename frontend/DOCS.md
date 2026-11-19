@@ -55,8 +55,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | `/clubs` | Clubs directory |
 | `/clubs/[slug]` | Individual club hub: banner, bio, contact, club events |
 | `/events/[id]` | Event detail: flyer, description, venue, RSVP |
-| `/auth/login` | Student login: email/password + 42 Intra OAuth |
-| `/auth/register` | Registration with campus email validation |
+| `/auth/login` | Student login: 42 Intra (Auth.js); the first login creates the account (§7.4–7.6) |
 | `/profile` (alias `/me`) | Student profile: attending events, avatar upload, logout |
 
 ### 1.4 Design Tokens
@@ -101,7 +100,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 2     | Global shell & layout                 | ✅ Done        |
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
 | 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
-| 5     | Student auth & route guards           | ⏳             |
+| 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6) |
 | 6     | Real-time WebSockets                  | ⏳             |
 | 7     | i18n (Arabic RTL) & live API          | ⏳             |
 
@@ -211,7 +210,7 @@ This contract is the single source of truth for them, so adding or renaming a pa
 
 ```ts
 type AppRoute = '/' | '/calendar' | '/clubs' | `/clubs/${string}` | `/events/${string}`
-  | '/auth/login' | '/auth/register' | '/profile' | '/me';
+  | '/auth/login' | '/profile' | '/me';   // '/auth/register' removed in Step 5.3 (§7.6)
 
 type NavIconName = 'discover' | 'calendar' | 'clubs' | 'profile';
 type NavMatchStrategy = 'exact' | 'prefix';
@@ -3132,7 +3131,7 @@ export default function Loading() {
 
 ## 7. Phase 5 — Student Authentication (prep notes, 2026-11-06)
 
-Not started. Ayoub's login (organizer dashboard, branch `Ayoub`, `dashboard_campus/`) will be handed over and adapted here. Read-only review of that branch:
+Started 2026-11-19 (§7.4). Ayoub's login (organizer dashboard, branch `Ayoub`, `dashboard_campus/`) will be handed over and adapted here. Read-only review of that branch:
 
 ### 7.1 What Ayoub's login does
 
@@ -3163,3 +3162,217 @@ Not started. Ayoub's login (organizer dashboard, branch `Ayoub`, `dashboard_camp
 4. **Server-side privacy (Phase 4 debts):** `/clubs/[slug]` replaces `IS_SIGNED_IN = true` with the real session (§6.13); decide attendee-name visibility (§6.9).
 5. **Guards:** `/profile` redirects signed-out visitors to `/auth/login?next=/profile`.
 6. **Logout** in the navbar session menu → `signOut()`.
+
+### 7.4 Login page: `LoginLayout`, `LoginPanel`, `FortyTwoButton`, `lib/login.ts` (Step 5.1, 2026-11-19)
+
+**Files:** `src/components/auth/LoginLayout.tsx`, `src/components/ui/layout/AppShell.tsx` + `src/lib/navigation.ts` (full-screen routes), `src/app/test/login/page.tsx` (bench), `src/components/auth/LoginPanel.tsx`, `src/components/auth/FortyTwoButton.tsx`, `src/lib/login.ts`, `public/UM6P_Campus.webp` (copied from Ayoub's branch)
+**Status:** ✅ Validated (2026-11-19). Live on `/auth/login` since Step 5.2 (§7.5); the `/test/login` mock bench was removed then.
+
+#### Business & product purpose
+
+Every "Log in" link (navbar, tab bar, RSVP card, club contact card) points to `/auth/login?next=<page>`, which was a 404. This is what that page will show: one clear way in (**Continue with 42 Intra**), what signing in gives the student (RSVP, attendees, club contacts), what data we receive, and a readable message when a sign-in fails. After login the student lands back on the page they came from.
+
+#### Core concepts & engineering decisions
+
+- **Same design as Ayoub's dashboard login (decided 2026-11-19).** The first version was a card inside the shell; the team chose to copy Ayoub's split layout so both apps look the same: campus photo left from `lg` (1024 px), form right (`max-w-[22rem]`, "Welcome back" at `1.75rem`, secondary 42 button full width, same "42" tile). Only the wording changes (Campus Hub, students). `LoginLayout` (photo + column) and `LoginPanel` (column content) are separate so the layout can also host a future register/EMINES form.
+- **Why not send students to Ayoub's page itself:** it's a different Next.js app. Logging in there creates the *dashboard's* session cookie and redirects to `/admin`; the student site wouldn't know the student is signed in. Sharing it would need one domain, one `AUTH_SECRET`, shared cookie settings and changes to his redirects. Copying the design gives the same look with none of that coupling.
+- **Full screen, no shell (decided 2026-11-19).** Like Ayoub's page, the login shows only the login: no navbar, tab bar or footer. `AppShell` checks `isFullScreenRoute(usePathname())` (`lib/navigation.ts`, `FULL_SCREEN_ROUTES = ['/auth', '/test/login']`) and renders only `<main id="main-content">` for those routes. `usePathname` is known during the server render, so the shell is never sent and then removed (no flash). The check runs **after all of AppShell's hooks** (rules of hooks: the hook count must not change between renders). The way out is the **"← Campus Hub"** link at the top of the form column (and browser Back). The split fills the screen (`min-h-dvh`); the form column has a solid background so the site-wide campus line art doesn't show behind the form.
+- **Bench:** `/test` holds the scenario controls; **`/test/login`** shows the page alone, full screen, with the same query (`?error=…&next=…`).
+- **The photo is decorative (`alt=""`),** `priority` (above the fold on desktop), `sizes="50vw"`. The original is 4996 px / 795 KB; Next's image service serves a resized copy (~72 KB at 1080 px).
+- **42 only, no email/password form (for now).** The backend has no password login (Ayoub's form is a stub that always says "use 42"), and showing a form that can't work is worse than not showing it. The first 42 sign-in creates the account, so `/auth/register` isn't needed as a separate page. **Open question:** EMINES students have no 42 Intra account; how they log in is still to be decided with Ayoub (TEAM_NEEDS §1b.1).
+- **`<form action={serverAction}>` + hidden `redirectTo`.** The panel never calls Auth.js itself; the page passes the action. Step 5.2 passes `signIn('42-school', { redirectTo })` (Auth.js v5 server-side sign-in); `/test` passes a mock that waits 1.5 s and redirects. A form posting to a server action works **before JavaScript loads and with it off** (progressive enhancement), unlike an `onClick` that calls `signIn()` from `next-auth/react`.
+- **`useFormStatus()` (React 19, `react-dom`)** in `FortyTwoButton` reads the pending state of the form it is inside: spinner + "Opening 42 Intra…" + disabled (no double submit), with no `useState`. It only works in a component rendered *inside* the `<form>`, which is why the button is its own client component (Next.js forms guide, `node_modules/next/dist/docs/01-app/02-guides/forms.md`).
+- **`LoginPanel` stays a Server Component;** only the button ships JavaScript.
+- **`safeNextPath(raw)` blocks open redirects.** `?next=` comes from the URL, so anyone can craft `/auth/login?next=https://evil.com` and send it to a student; after a real 42 login the site would forward them to a phishing page. Rules: must start with `/`, ≤ 512 chars, no control characters; parsed with `new URL(value, base)` and rejected if the origin changed (catches `//evil.com` and `/\evil.com`, which browsers read as `//evil.com`); `/auth/*` rejected (no login loop). Anything rejected → `/`. **The server action cleans it again**: the hidden field can be edited in DevTools.
+- **Error codes → three messages.** Auth.js returns to the login page with `?error=`: `AccessDenied` (our sign-in callback / Django `/auth/sync` said no) → "We couldn't sign you in"; `Configuration` (secret, 42 keys, backend down) → "temporarily unavailable"; anything else (e.g. `OAuthCallbackError` when the student cancels on 42) → "Sign-in didn't finish". The raw code is never shown. The box is `role="alert"` and sits above the button, so it's read first.
+- **Named `lib/login.ts`,** not `lib/auth.ts`, so it isn't confused with `src/auth.ts` (the Auth.js config, Step 5.2).
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Server action form | `onClick={() => signIn('42-school')}` (client) | Works without JS; no `next-auth/react` in the bundle; the redirect target is checked on the server |
+| `useFormStatus` in a child | `useState(isLoading)` + `onSubmit` | No state to keep in sync; React resets it when the action ends |
+| `action` passed as a prop | `LoginPanel` imports `signIn` | Testable on `/test` with a mock; the panel doesn't depend on Auth.js |
+| Whitelist-by-parsing (`new URL` + origin) | Regex on the string | Uses the same parser as the browser, so tricks like `/\evil.com` are caught |
+| 42 only | Email/password form like the dashboard's | No backend for it; a fake form misleads students |
+| Copy Ayoub's design into this app | Redirect to the dashboard's `/login` | No shared session/cookies/domain to set up; same look for users |
+| Pathname check in `AppShell` | Route groups with a second layout (move every page into `(site)/`) | One small check vs. moving every route and the root not-found/error pages; easy to add routes to the list |
+| Full screen + "← Campus Hub" link | Keep the navbar | Same as Ayoub's login, nothing to distract; the back link and browser Back still lead out |
+
+#### Component contract
+
+```ts
+LoginLayout: forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { children: ReactNode }>  // full screen, photo left from lg, "← Campus Hub" link
+
+// lib/navigation.ts
+FULL_SCREEN_ROUTES: readonly string[]          // ['/auth', '/test/login']: AppShell hides navbar, tab bar, footer
+isFullScreenRoute(pathname: string | null): boolean   // segment-aware ('/authors' is not full screen)
+LoginPanel: forwardRef<HTMLDivElement, Omit<HTMLAttributes<HTMLDivElement>, 'title'> & {
+  action: (formData: FormData) => void | Promise<void>; // gets `redirectTo`
+  next: string;                     // already cleaned with safeNextPath()
+  error?: LoginErrorKind | null;    // default null
+}>
+FortyTwoButton: forwardRef<HTMLButtonElement, Omit<ButtonProps, 'type' | 'isLoading' | 'leftIcon' | 'children'>>
+  // defaults: variant 'secondary', size 'md', full width; must be inside a <form>
+
+// lib/login.ts
+safeNextPath(raw: string | string[] | undefined | null): string   // '/' when unsafe
+loginHref(next: string): `/auth/login?next=${string}`
+getLoginErrorKind(code): 'access-denied' | 'unavailable' | 'generic' | null
+LOGIN_ERROR_MESSAGES: Record<LoginErrorKind, { title; description }>
+DEFAULT_AFTER_LOGIN = '/'
+```
+
+#### Usage
+
+```tsx
+// app/auth/login/page.tsx (Step 5.2)
+const params = await searchParams;
+<LoginLayout>
+  <LoginPanel
+    action={signInWith42}          // 'use server': signIn('42-school', { redirectTo: safeNextPath(formData.get('redirectTo')) })
+    next={safeNextPath(params.next)}
+    error={getLoginErrorKind(params.error)}
+  />
+</LoginLayout>
+```
+
+#### Verified
+
+`tsc --noEmit` and ESLint pass. `/test` 200 for every scenario; the hidden `redirectTo` is `/` for `//evil.com`, `/\evil.com`, `https://evil.com` and `/auth/login`, and keeps `/events/evt_hackathon_ai` and `/calendar?date=2026-11-21&view=week`. `safeNextPath` in Node 22: `javascript:…`, newline, > 512 chars → `/`; `/authors` kept (segment check, not prefix); `/%2F%2Fevil.com` kept (it's an encoded path on our own site, not another host). `/test/login?error=AccessDenied&next=/clubs/leet-dev` 200 with no `<nav>` and no `<footer>`, the alert, and `redirectTo=/clubs/leet-dev`; `/` and `/test` still have navbar and footer. The three error boxes render their titles; the page contains "Welcome back" and the campus photo (resized copy 200, ~72 KB). Clicking the button (spinner, redirect), keyboard, screen reader, JS off, phone and dark mode: manual checks.
+
+### 7.5 Real login: Auth.js + 42 on `/auth/login` (Step 5.2, 2026-11-19)
+
+**Files:** `src/auth.ts` (Auth.js config), `src/app/api/auth/[...nextauth]/route.ts`, `src/app/auth/login/page.tsx`, `src/components/auth/DevLoginForm.tsx`, `src/types/next-auth.d.ts`, `LoginPanel` (`children` slot), `/test` (real session box + sign out). Infra: `docker-compose.yml` (frontend `environment`), `infrastructure/nginx/nginx.conf` (`/api/auth/`), root `.env` (values, never committed). Dependency: `next-auth@5.0.0-beta.32` (exact, same as Ayoub's dashboard; peer range includes Next 16).
+**Status:** ✅ Built (2026-11-19); the whole site reads this session since Step 5.3 (§7.6).
+
+#### Business & product purpose
+
+The login page now really signs students in. "Continue with 42 Intra" starts the 42 OAuth flow; after 42, the student comes back to the page they were on, signed in. Until Ayoub provides the 42 keys and Django's `/auth/sync`, a **Dev login** button (developer machines only) signs in as the mock student so the team can build and test the signed-in pages (Step 5.3+).
+
+#### How a login flows
+
+1. `/auth/login` form → server action `signIn('42-school', { redirectTo })` → redirect to `api.intra.42.fr/oauth/authorize` (PKCE + state cookies set by Auth.js).
+2. The student approves on 42 → 42 redirects to **`https://<host>/api/auth/callback/42-school`** → nginx sends it to Next.js (not Django) → Auth.js exchanges the code and reads `/v2/me`.
+3. `signIn` callback → `syncWithBackend(profile)`: `POST ${BACKEND_URL}/auth/sync` with `x-internal-key` and `{ fortyTwoId, login, email, firstName, lastName, imageUrl, campus }` → expects `{ token, user: { id, role } }` (Ayoub's contract, TEAM_NEEDS §1b.1). Not OK / bad shape / Django down → login refused → `/auth/login?error=AccessDenied`.
+4. `jwt` callback stores `backendToken`, `userId`, `role`, `login` in the **encrypted session cookie** `__Secure-authjs.session-token` (30 days). `session` callback exposes `{ id, role, login, name, email, image }`.
+5. Redirect to `redirectTo` (cleaned by `safeNextPath`; Auth.js also refuses other origins: `callbackUrl=https://evil.com` → `/`).
+
+#### Core concepts & engineering decisions
+
+- **Same config as Ayoub's dashboard** (provider, `/auth/sync` body, dev fallback without `BACKEND_URL` → role STUDENT), so Django serves both apps with one endpoint. Differences: our `pages` point to `/auth/login`; the sync response is validated (`token`, `user.id`, a known role); the role is typed `UserRole`.
+- **The Django token is NOT in the session.** Ayoub's puts `backendToken` on the session, but the session is also served to the browser at `/api/auth/session`, where any injected script could read it. Ours keeps it only in the encrypted cookie; server code that calls Django will read it on the server (decided when Phase 7 needs it).
+- **Dev login (`AUTH_DEV_LOGIN=true`).** A Credentials provider with id `dev`, no password, returning `mockCurrentUser` as a STUDENT. Registered only when the flag is `true` **and** it's not a production build; the server action re-checks the flag. Important: our container runs `next dev` even with `make up`, so `NODE_ENV` alone is not a guard: **the flag must stay off on any shared or public deployment**. Dashed amber button so nobody mistakes it for a real option.
+- **Signed-in visitors skip the form:** `/auth/login` calls `await auth()` and redirects to `next`.
+- **`/api/auth/*` belongs to Next.js.** nginx sent all `/api/` to Django; a new `location /api/auth/` (longest prefix wins) sends Auth.js URLs to the frontend. Django has no `/api/auth/` routes (checked on `Ahmed`).
+- **`AUTH_URL` is required behind nginx.** Without it Auth.js built every URL with the container port (`https://localhost:3000/api/auth/callback/42-school`): the 42 redirect URI and post-login redirects were wrong. `X-Forwarded-Host` doesn't help for the route handlers (they use Next's request URL). One value per environment: `https://localhost` in dev, `https://campusplus.ma` in production.
+- **Session cookie typing:** in Auth.js v5 a `declare module 'next-auth/jwt'` extension doesn't reach the callbacks' `token`, so `src/auth.ts` checks each cookie field with `typeof` instead of trusting a type.
+
+#### Environment variables (root `.env` → `docker-compose.yml` → frontend container)
+
+| Variable | Dev value | Notes |
+| --- | --- | --- |
+| `AUTH_SECRET` | random (`openssl rand -base64 32`) | Encrypts the session cookie. Different per environment; changing it signs everyone out. |
+| `AUTH_URL` | `https://localhost` | Public address, no trailing slash |
+| `AUTH_TRUST_HOST` | `"true"` (set in compose) | Behind nginx |
+| `AUTH_42_SCHOOL_ID` / `AUTH_42_SCHOOL_SECRET` | empty until Ayoub shares them | Read automatically by the 42 provider. The 42 app's redirect URI must include `https://localhost/api/auth/callback/42-school` (and the production one). |
+| `BACKEND_URL` / `BACKEND_INTERNAL_KEY` | empty | Empty URL = dev fallback (no Django call, everyone is STUDENT). Later: `http://web:8000` + the shared key. |
+| `AUTH_DEV_LOGIN` | `true` | Dev login button. Compose default `false`. |
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Auth.js v5 beta (same as the dashboard) | Hand-written OAuth + cookies (Next's auth guide) | PKCE/state/CSRF/cookie encryption done and audited; same code as Ayoub's app |
+| JWT session (cookie) | Database sessions | No DB on the Next side; Django owns users |
+| Token only in the cookie | `session.backendToken` (Ayoub's) | Not readable from browser JavaScript |
+| Dev login provider behind a flag | Wait for 42 keys and `/auth/sync` | Steps 5.3+ (navbar, guards, logout) can be built and tested now |
+| `AUTH_URL` per environment | nginx `X-Forwarded-*` only | Route handlers ignore them in this setup; measured |
+| nginx `/api/auth/` → Next | Auth.js `basePath` outside `/api` | Keeps the standard callback path Ayoub's 42 app already uses |
+
+#### Contract
+
+```ts
+// src/auth.ts (server only)
+export const { handlers, auth, signIn, signOut }   // NextAuth(...)
+export const DEV_LOGIN_ENABLED: boolean           // AUTH_DEV_LOGIN === 'true' && not a production build
+auth(): Promise<Session | null>
+Session['user']: { id: string; role: UserRole; login: string | null; name?; email?; image? }
+
+// DevLoginForm: forwardRef<HTMLFormElement, { action: (fd: FormData) => void | Promise<void>; next: string }>
+// LoginPanel: + children?: ReactNode (rendered under the 42 button)
+```
+
+#### Verified (curl through nginx, 2026-11-19)
+
+`/api/auth/providers` answered by Next with `42-school` + `dev`, URLs on `https://localhost` (after `AUTH_URL`). Dev login (`POST /api/auth/callback/dev`) → 302 to `/test`; `/api/auth/session` = `{ name: "Mouad Najjar", role: "STUDENT", id: "usr_01", login: null }` (no token); `/test` box "signed in". `/auth/login?next=/calendar` while signed in → 307 to `/calendar`. Cookies `__Host-authjs.csrf-token`, `__Secure-authjs.callback-url`, `__Secure-authjs.session-token`. `callbackUrl=https://evil.com` → `/`. 42 sign-in → 302 to `api.intra.42.fr/oauth/authorize` with `redirect_uri=https://localhost/api/auth/callback/42-school` (`client_id` empty: no keys yet). Sign-out → 302 `/test`. `/api/auth/error?error=AccessDenied` → `/auth/login?error=AccessDenied`. `/api/health/` still Django (200). `tsc --noEmit` and ESLint on the changed files pass. **Not tested:** a real 42 round trip (no keys) and the form buttons in a browser.
+
+#### Notes / gotchas
+
+- **Editing `infrastructure/nginx/nginx.conf` needs `docker compose restart nginx`,** not `nginx -s reload`: the file is a single-file bind mount, and editors replace the file, so the container keeps the old one (reload then fails with "default.conf: No such file").
+- **New env variables need the container recreated** (`docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d frontend`), a restart is not enough.
+- `npm install` inside the container rewrote `package-lock.json` without the `libc` fields (different npm version); harmless.
+- `npm audit`: **Next 16.3.5 has critical advisories** (fixed in 16.4.6). Not part of this step; upgrade separately (the dashboard's 16.4.2 is affected too).
+- ~~The navbar's "Sign up" still links to `/auth/register` (404)~~ removed in Step 5.3 (§7.6).
+- Ayoub's dashboard and this app must not share cookie names on one host (both `authjs.*`): different hosts/subdomains, or set `cookies` names in one of them.
+
+### 7.6 The whole site uses the real session (Step 5.3, 2026-11-19)
+
+**Files:** `src/app/layout.tsx`, `src/auth.ts` (`getSessionState`), `src/lib/session.ts` (`toSessionState`), `src/components/providers/SessionProvider.tsx`, `src/app/clubs/[slug]/page.tsx`, `src/components/ui/layout/Navbar.tsx` + `MobileNav.tsx` (no "Sign up"), `src/types/navigation.ts` (`/auth/register` removed), `/test` + `SessionSwitcher`.
+**Status:** 🧪 Live on every page, waiting for validation.
+
+#### Business & product purpose
+
+Until now every visitor was shown as signed in (a mock). Now the navbar, phone tab bar, drawer, RSVP card, attendees list and club contact card follow the real login: a visitor sees **Log in**, a student who logged in sees their avatar and the bell, and **club presidents' contact details are only sent to signed-in students** (Phase 4 privacy debt §6.13 closed).
+
+#### Core concepts & engineering decisions
+
+- **Server reads, client displays.** The root layout (`async`) calls `getSessionState()` and passes the result to `SessionProvider`; every client component keeps calling `useSession()` unchanged. Because the first HTML already contains the right state, there's no "Log in" → avatar flash and no client-side session fetch (no `next-auth/react` `SessionProvider` in the bundle).
+- **`getSessionState` = `cache(auth → toSessionState)`.** React `cache` dedupes per request, so the layout and the club page share one cookie decode. It **never throws**: if Auth.js fails (e.g. `AUTH_SECRET` missing), the error is logged and the site shows signed out instead of the global error page.
+- **`toSessionState` (pure, `lib/session.ts`)** maps the Auth.js user to our `User` (`full_name` ← name ‖ 42 login ‖ "Student", `avatar_url` ← image, `club_id: null` until Django's `/api/me/`). The app keeps one user shape, the one the API will return.
+- **`SessionProvider` no longer copies the prop into state.** `useState(initialSession)` would freeze the first value; after a login/logout in a server action Next re-renders the layout with a new prop, and the UI must follow it. The provider now uses the prop directly, plus a test-only override (`setSession(state | null)`, `null` = back to real) used by `/test`'s `SessionSwitcher`.
+- **Club contact decided on the server:** `isSignedIn = (await getSessionState()).status === 'signed-in'`; signed out → `contact={null}` → the email/phone are not in the HTML or RSC payload (measured).
+- **No "Sign up".** With 42 the first login creates the account, so the navbar shows one primary **Log in** button and the drawer one full-width Log in; `/auth/register` is gone from `AppRoute`. If EMINES email sign-up arrives (TEAM_NEEDS §1b.1) it comes back as its own step.
+- **Every page renders per request** because the layout reads cookies. They already did (`connection()` in each page), so nothing got slower.
+
+#### Architectural tradeoffs
+
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Session read in the server layout, passed down | `next-auth/react` `SessionProvider` + `useSession()` (fetches `/api/auth/session` in the browser) | Correct first paint, no extra request, no extra JS; our consumers don't change |
+| Prop used directly + test override | `useState(initialSession)` | Follows login/logout without a full reload |
+| `cache()` wrapper | Call `auth()` in each place | One decode per request; one place that handles errors |
+| Fail to signed-out | Let the error bubble | A broken auth config shouldn't take the public site down |
+| One Log in button | Log in + Sign up to the same page | Two buttons for one action confuse; 42 makes them the same |
+
+#### Contract
+
+```ts
+// src/auth.ts (server only)
+getSessionState(): Promise<SessionState>   // cached per request, never throws
+// src/lib/session.ts
+toSessionState(session: Session | null): SessionState
+// SessionProvider
+useSession(): { session: SessionState; setSession(state: SessionState | null): void }  // setSession: /test only
+```
+
+#### Usage
+
+```tsx
+// A server page that hides private data from visitors
+const isSignedIn = (await getSessionState()).status === 'signed-in';
+<ClubHeader contact={isSignedIn ? getClubContact(club) : null} />
+
+// A client component (unchanged since Phase 2)
+const { session } = useSession();
+```
+
+#### Verified (curl through nginx, 2026-11-19)
+
+Signed out on `/`, `/clubs/leet-frame`, `/events/evt_hackathon_ai`, `/calendar`: "Log in" present, no "Sign up" / `/auth/register`, no profile avatar link; `leetframe@1337.ma` absent from the club page. After a dev login: avatar link "My Profile (Mouad Najjar)" on all four, no "Log in", the club email present. `/auth/login` signed in → 307. All routes 200, `/nope` 404. `tsc --noEmit` passes; ESLint on the changed files only reports the known `Date.now` purity rule in the club page (§1.5b). **Not tested in a browser:** the navbar updating after Dev login without a reload, and the phone tab bar/drawer.
+
+#### Notes
+
+- **No logout button in the UI yet** (only on `/test`). It comes with `/profile` in Step 5.4, together with the route guard.
+- Attendee names for signed-out visitors (§6.9) are still a team decision (TEAM_NEEDS §4); the attendees section already follows the session.
