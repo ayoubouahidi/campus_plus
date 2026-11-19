@@ -6,7 +6,7 @@ on:
     branches: ["Developer"]
 jobs:
   verify_code:
-    runs-on: self-hosted #ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
