@@ -11,15 +11,25 @@
 | # | Rule | Why |
 | --- | --- | --- |
 | 0.1 | **Push only to your own branch** and merge through a PR. Never push to someone else's branch. | `Mouad` received an infra commit (`7a0c578`) on 2026-11-06 that pointed Docker at a backend that isn't on that branch, so `web` couldn't start. It was reverted on 2026-11-08 (still safe on the `Hamza` branch). |
-| 0.2 | **Merge order to `master`:** infra + backend (Hamza + Ahmed + backend API teammate) → frontend (Mouad) → dashboard (Ayoub) | Each layer needs the one below it to run. |
+| 0.2 | **Merge order to `master`:** infra + backend (Hamza + Ahmed + Ayoub) → frontend (Mouad) → dashboard (Ayoub) | Each layer needs the one below it to run. |
 | 0.3 | One `.env.example` at the repo root listing **every** variable (never real secrets) | Today variables are spread across branches with different names (`SECRET_KEY` vs `DJANGO_SECRET_KEY`, `REDIS_HOST` vs `REDIS_URL`). |
 | 0.4 | Times in the API are **ISO 8601 UTC** (`2026-11-05T17:00:00Z`). The frontend converts to campus time (`Africa/Casablanca`). | Ahmed's settings already use `TIME_ZONE='UTC'`, `USE_TZ=True`. Keep it. |
 
 ---
 
-## 1. Backend API & data: new teammate (replaces DASH, from 2026-11-16)
+## 1. Backend API & data: split between Ahmed and Ayoub (from 2026-11-18)
 
-Owns `core_data` (models, serializers, views, permissions, filters, uploads). Starts from the `Ahmed` branch, which has the latest API. Onboarding README given separately (Mouad's Desktop: `README_BACKEND_TEAMMATE.md`).
+The new teammate announced on 2026-11-16 is **not joining**. DASH's role is split by what each one's code already does (full plan with tasks A0–A10 / B1–B9, endpoint owners, JSON shapes, milestones and production checklist: Mouad's Desktop `README_BACKEND_AHMED_AYOUB.md`; the older `README_BACKEND_TEAMMATE.md` is obsolete):
+
+| | Ahmed | Ayoub |
+| --- | --- | --- |
+| Django apps | `core_data` (events, clubs, departments, **RSVP**) + `realtime` | new `accounts` (`/auth/sync`, `/api/me/`, roles, permission classes) + new `dashboard` (announcements, join requests, audit log) |
+| Endpoints | public read API, filters, pagination, uploads, RSVP, `/api/realtime/token/`, `/api/health/` | `/auth/sync`, `/api/me/`, logout, `/api/board/*`, `/api/superadmin/*`, `/api/clubs/{slug}/join/` |
+| Why | wrote the models, serializers and the broadcasts (the broadcast payload *is* the event serializer) | his `auth.ts` already calls `/auth/sync`, his middleware defines the roles, his dashboard screens define the board/admin data |
+
+**Migrations rule:** only Ahmed migrates `core_data`, only Ayoub migrates `accounts` / `dashboard`. All `core_data` field changes (below) go into **one day-1 migration** agreed together.
+
+Sections 1.1–1.5 below are the student website's needs; owner: **Ahmed** (RSVP, events, clubs, pagination, uploads). Login (§1b.1) moves to **Ayoub** (`/auth/sync`, `/api/me/`); Ahmed issues the WebSocket JWT (`POST /api/realtime/token/`, the website's server sets the `ws_access` cookie).
 
 **Security, fix first:** `/api/clubs/` allows anonymous PUT/PATCH/DELETE (only `create` is protected), and `/api/departments/` has no permissions at all (DRF default `AllowAny`).
 
@@ -65,16 +75,16 @@ The frontend expects DRF pagination: `{count, next, previous, results}` (`ApiRes
 ### 1.5 Uploads (flyers, logos, avatars)
 
 - **Unique file name per upload** (UUID in `upload_to`). Replacing an image must give a **new URL**, otherwise caches keep showing the old one (ARCHITECTURE §7.5).
-- **Reject huge files** (> 10 MB or > 4000 px). A single 77 MB photo once timed out the image service.
+- **Reject huge files**: Ahmed's validators already cap at **2 MB** (JPEG/PNG/WebP, real-image check); add a pixel limit (≤ 4000 px). A single 77 MB photo once timed out the image service.
 - Return **absolute** URLs.
 
 ---
 
-## 1b. Ahmed: real-time + backend auth (branch `Ahmed`)
+## 1b. Login (Ayoub) + real-time (Ahmed)
 
-Owns `realtime` (Channels, Daphne, Redis, WebSocket JWT) and, with Ayoub, **authentication**.
+Ahmed owns `realtime` (Channels, Daphne, Redis, WebSocket JWT, `POST /api/realtime/token/`). Ayoub owns the Django side of **authentication** (§1b.1). Split details: §1.
 
-### 1b.1 Auth: Django side of login (Phase 5, with Ayoub)
+### 1b.1 Auth: Django side of login (Phase 5, owner Ayoub: `accounts` app)
 
 | Need | Detail |
 | --- | --- |
