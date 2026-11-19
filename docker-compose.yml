@@ -27,6 +27,16 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    # Login (Auth.js, frontend DOCS.md §7.5). Values live in the root .env (never committed).
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TRUST_HOST: "true" # behind nginx: trust X-Forwarded-Host/Proto for callback URLs
+      AUTH_URL: ${AUTH_URL:-https://localhost} # public site address; without it the URLs get the container port :3000
+      AUTH_42_SCHOOL_ID: ${AUTH_42_SCHOOL_ID:-}
+      AUTH_42_SCHOOL_SECRET: ${AUTH_42_SCHOOL_SECRET:-}
+      BACKEND_URL: ${BACKEND_URL:-}
+      BACKEND_INTERNAL_KEY: ${BACKEND_INTERNAL_KEY:-}
+      AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-false}
 
   nginx:
     image: nginx:alpine
