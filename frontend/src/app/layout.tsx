@@ -5,8 +5,7 @@ import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AppShell } from "@/components/ui/layout/AppShell";
 import { CampusBackground } from "@/components/ui/layout/CampusBackground";
 import { Footer, FooterBrand, FooterLegal, FooterNav } from "@/components/ui/layout/Footer";
-import { mockCurrentUser } from "@/lib/mockData";
-import { SessionState } from "@/types/session";
+import { getSessionState } from "@/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,14 +37,16 @@ export const viewport: Viewport = {
 // behind text-heavy pages. One number to tune (DOCS.md §3.11).
 const BACKGROUND_INTENSITY = 0.8;
 
-// Mock until Phase 5 reads the real session (cookie / auth API) here on the server
-const INITIAL_SESSION: SessionState = { status: "signed-in", user: mockCurrentUser };
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The real session (Auth.js cookie), read on the server for every request, so the first HTML already
+  // shows the right navbar ("Log in" or the avatar), with no flash. Reading cookies makes every page
+  // render per request (they already did: connection() in each page). DOCS.md §7.6.
+  const session = await getSessionState();
+
   return (
     // suppressHydrationWarning: browsers and extensions add attributes to <html> before React loads
     // (e.g. Chrome on Android adds __gcrremoteframetoken). It ignores attribute differences on this one
@@ -59,7 +60,7 @@ export default function RootLayout({
         {/* Fixed, behind everything (z-index -1), decorative. Rendered once: its SVG ids are global. */}
         <CampusBackground intensity={BACKGROUND_INTENSITY} />
         <ToastProvider>
-          <SessionProvider initialSession={INITIAL_SESSION}>
+          <SessionProvider initialSession={session}>
             {/* Footer is built here, on the server, and passed through the client shell as a slot */}
             <AppShell
               footer={

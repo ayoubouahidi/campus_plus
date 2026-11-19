@@ -8,7 +8,6 @@ export type AppRoute =
   | `/clubs/${string}`
   | `/events/${string}`
   | '/auth/login'
-  | '/auth/register'
   | '/profile'
   | '/me';
 

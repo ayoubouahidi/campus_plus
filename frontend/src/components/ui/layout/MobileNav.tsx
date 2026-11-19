@@ -346,22 +346,14 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
             )}
 
             {session.status === 'signed-out' && (
-              <div className="grid grid-cols-2 gap-2">
-                <Link
-                  href="/auth/login"
-                  onClick={close}
-                  className={`flex h-10 items-center justify-center rounded-lg text-sm font-semibold transition-colors duration-150 ${linkFocusRing} ${accountLinkStyles.outline}`}
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/auth/register"
-                  onClick={close}
-                  className={`flex h-10 items-center justify-center rounded-lg text-sm font-semibold transition-colors duration-150 ${linkFocusRing} ${accountLinkStyles.primary}`}
-                >
-                  Sign up
-                </Link>
-              </div>
+              // One button: the first 42 login creates the account (no separate sign-up, DOCS.md §7.6)
+              <Link
+                href="/auth/login"
+                onClick={close}
+                className={`flex h-10 items-center justify-center rounded-lg text-sm font-semibold transition-colors duration-150 ${linkFocusRing} ${accountLinkStyles.primary}`}
+              >
+                Log in
+              </Link>
             )}
 
             {session.status === 'signed-in' && (

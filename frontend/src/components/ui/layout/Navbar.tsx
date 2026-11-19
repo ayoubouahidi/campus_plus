@@ -240,15 +240,9 @@ export const NavbarSession = React.forwardRef<HTMLDivElement, NavbarSessionProps
 
         {session.status === 'signed-out' && (
           <>
-            <Link href="/auth/login" className={`inline-flex ${authLinkBase} ${authLinkStyles.ghost}`}>
+            {/* One button: with 42 Intra the first login creates the account, so there's no separate sign-up */}
+            <Link href="/auth/login" className={`inline-flex ${authLinkBase} ${authLinkStyles.primary}`}>
               Log in
-            </Link>
-            {/* Below sm there's only room for one; the login page links to registration */}
-            <Link
-              href="/auth/register"
-              className={`hidden sm:inline-flex ${authLinkBase} ${authLinkStyles.primary}`}
-            >
-              Sign up
             </Link>
           </>
         )}

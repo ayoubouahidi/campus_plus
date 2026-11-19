@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
+import { getSessionState } from '@/auth';
 import { ClubEvents } from '@/components/clubs/ClubEvents';
 import { ClubHeader } from '@/components/clubs/ClubHeader';
 import { IconBase } from '@/components/ui/layout/navIcons';
@@ -16,10 +17,6 @@ interface ClubPageProps {
 
 // One lookup per request, shared by generateMetadata and the page. Phase 7: GET /api/clubs/:slug here.
 const loadClub = cache((slug: string) => getClubBySlug(mockClubs, slug));
-
-// Mock auth: the session is always signed in (src/app/layout.tsx). Phase 5: read the real session here, on the
-// server, so visitors never receive the president's contact details (DOCS.md §6.13).
-const IS_SIGNED_IN = true;
 
 export async function generateMetadata({ params }: ClubPageProps): Promise<Metadata> {
   const club = loadClub((await params).slug);
@@ -44,6 +41,10 @@ export default async function ClubPage({ params }: ClubPageProps) {
   // Phase 7: the club's events from the API instead of filtering mockEvents.
   const { upcoming, past } = getClubEvents(mockEvents, club.id, Date.now());
 
+  // Decided on the server: signed-out visitors never receive the president's contact details, not even in the
+  // page data (DOCS.md §6.13). Same cached session read as the root layout (one cookie decode per request).
+  const isSignedIn = (await getSessionState()).status === 'signed-in';
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <Link
@@ -60,7 +61,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
       <ClubHeader
         club={club}
         since={formatClubSince(club.created_at)}
-        contact={IS_SIGNED_IN ? getClubContact(club) : null}
+        contact={isSignedIn ? getClubContact(club) : null}
       />
 
       <ClubEvents
