@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   Navbar,
   NavbarActions,
@@ -24,7 +25,7 @@ import {
 import { FooterLegal, FooterNav } from '@/components/ui/layout/Footer';
 import { useSession } from '@/components/providers/SessionProvider';
 import { SearchPalette } from '@/components/search/SearchPalette';
-import { FOOTER_GROUPS } from '@/lib/navigation';
+import { FOOTER_GROUPS, isFullScreenRoute } from '@/lib/navigation';
 import { mockNotifications } from '@/lib/mockData';
 import { AppNotification } from '@/types/notification';
 
@@ -59,6 +60,17 @@ export const AppShell = ({ children, footer }: AppShellProps) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const openSearch = useCallback(() => setIsSearchOpen(true), []);
   const closeSearch = useCallback(() => setIsSearchOpen(false), []);
+
+  // Login pages (Step 5.1): no navbar, tab bar or footer, the page fills the screen. After all hooks (rules of
+  // hooks). usePathname is known on the server too, so the shell is never sent and then removed (no flash).
+  const pathname = usePathname();
+  if (isFullScreenRoute(pathname)) {
+    return (
+      <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
+        {children}
+      </main>
+    );
+  }
 
   return (
     <MobileNav>

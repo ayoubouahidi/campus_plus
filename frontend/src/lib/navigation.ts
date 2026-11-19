@@ -62,3 +62,10 @@ export const isNavItemActive = (item: NavItem, pathname: string | null): boolean
 
   return (item.aliases ?? []).some((alias) => matchesPrefix(current, normalizePath(alias)));
 };
+
+// Routes shown full screen, without the shell (navbar, tab bar, footer): the login pages, like the
+// organizer dashboard's login.
+export const FULL_SCREEN_ROUTES: readonly string[] = ['/auth'];
+
+export const isFullScreenRoute = (pathname: string | null): boolean =>
+  !!pathname && FULL_SCREEN_ROUTES.some((prefix) => matchesPrefix(normalizePath(pathname), prefix));
