@@ -1,0 +1,9 @@
+# Nginx SSL certs & keys
+*.pem
+infrastructure/nginx/certs/*.key
+
+# Environment secrets
+.env
+
+# Django media
+media/
