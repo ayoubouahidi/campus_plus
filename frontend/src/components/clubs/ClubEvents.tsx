@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import type { EventItem } from '@/types/api';
 import { EventGrid } from '@/components/events/EventGrid';
+import { PastEventList } from '@/components/events/PastEventList';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { useRsvpToast } from '@/hooks/useRsvpToast';
@@ -64,28 +64,7 @@ export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
               Past events{' '}
               <span className="font-normal text-slate-500 dark:text-slate-400">({past.length})</span>
             </h2>
-            <ul className="divide-y divide-slate-200/80 overflow-hidden rounded-xl border border-slate-200/80 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-              {past.map((event) => (
-                <li key={event.id} className="relative flex items-baseline gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                  <time
-                    dateTime={event.start_time}
-                    className="w-24 shrink-0 text-sm text-slate-500 dark:text-slate-400"
-                  >
-                    {schedules[event.id]?.day}
-                  </time>
-                  <div className="min-w-0">
-                    {/* Stretched link: the whole row opens the event page (its "ended" view). */}
-                    <Link
-                      href={`/events/${event.id}`}
-                      className="block truncate text-sm font-medium text-slate-900 after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-violet-500 dark:text-slate-100"
-                    >
-                      {event.title}
-                    </Link>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{event.location}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <PastEventList events={past} schedules={schedules} />
           </section>
         )}
       </div>

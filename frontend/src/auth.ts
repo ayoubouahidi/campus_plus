@@ -88,6 +88,7 @@ if (DEV_LOGIN_ENABLED) {
         image: mockCurrentUser.avatar_url,
         role: 'STUDENT',
         login: null,
+        campus: 'Benguerir',
         backendToken: 'dev-token',
         backendUserId: mockCurrentUser.id,
       }),
@@ -115,6 +116,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       user.backendUserId = data.user.id;
       user.role = data.user.role;
       user.login = fortyTwo.login;
+      user.campus = fortyTwo.campus?.[0]?.name ?? null;
       return true;
     },
 
@@ -125,6 +127,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.userId = user.backendUserId ?? user.id;
         token.role = user.role ?? 'STUDENT';
         token.login = user.login ?? null;
+        token.campus = user.campus ?? null;
       }
       return token;
     },
@@ -136,6 +139,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = typeof token.userId === 'string' ? token.userId : '';
       session.user.role = isRole(token.role) ? token.role : 'STUDENT';
       session.user.login = typeof token.login === 'string' ? token.login : null;
+      session.user.campus = typeof token.campus === 'string' ? token.campus : null;
       return session;
     },
   },

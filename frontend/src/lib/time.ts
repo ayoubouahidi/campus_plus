@@ -59,3 +59,20 @@ export const formatEventSchedule = (iso: string): EventSchedule => {
 // instead of formatting, so their output never depends on the browser's time-zone data.
 export const getEventSchedules = (events: { id: string; start_time: string }[]): Record<string, EventSchedule> =>
   Object.fromEntries(events.map((event) => [event.id, formatEventSchedule(event.start_time)]));
+
+// Calendar-style date tile ("NOV" over "14") for event rows (/profile, Step 5.4). Server only (campus time zone).
+export interface DateTile {
+  month: string; // "NOV"
+  day: string; // "14" (2 digits)
+}
+
+const tileMonthFormatter = new Intl.DateTimeFormat('en', { month: 'short', timeZone: CAMPUS_TIME_ZONE });
+const tileDayFormatter = new Intl.DateTimeFormat('en', { day: '2-digit', timeZone: CAMPUS_TIME_ZONE });
+
+export const formatDateTile = (iso: string): DateTile => {
+  const date = new Date(iso);
+  return { month: tileMonthFormatter.format(date).toUpperCase(), day: tileDayFormatter.format(date) };
+};
+
+export const getDateTiles = (events: { id: string; start_time: string }[]): Record<string, DateTile> =>
+  Object.fromEntries(events.map((event) => [event.id, formatDateTile(event.start_time)]));

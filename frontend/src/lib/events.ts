@@ -84,6 +84,20 @@ export const getUpcomingEvents = (events: EventItem[], now: number): EventItem[]
 
 // Optimistic RSVP: flips the flag and keeps the count in step, so the card updates on click.
 // Phase 7 sends the request alongside and rolls back with the previous object if it fails.
+// Splits events at `now`: upcoming (not yet ended, soonest first) and past (most recent first).
+// Server side: it depends on the request time. Used by club pages and /profile.
+export const splitEventsByTime = (events: EventItem[], now: number): { upcoming: EventItem[]; past: EventItem[] } => {
+  const byStart = (a: EventItem, b: EventItem) => Date.parse(a.start_time) - Date.parse(b.start_time);
+  return {
+    upcoming: events.filter((event) => Date.parse(event.end_time) > now).sort(byStart),
+    past: events.filter((event) => Date.parse(event.end_time) <= now).sort((a, b) => byStart(b, a)),
+  };
+};
+
+// The events the signed-in student RSVP'd to, split at `now` (/profile). Phase 7: GET /api/me/rsvps/ instead.
+export const getMyEvents = (events: EventItem[], now: number) =>
+  splitEventsByTime(events.filter((event) => event.has_user_rsvpd), now);
+
 export const toggleRsvp = (event: EventItem): EventItem => ({
   ...event,
   has_user_rsvpd: !event.has_user_rsvpd,

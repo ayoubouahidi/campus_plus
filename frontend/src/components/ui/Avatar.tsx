@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 
-export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 export type AvatarStatus = 'online' | 'offline' | 'busy' | 'away';
 
 export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -19,6 +19,7 @@ const sizeStyles: Record<AvatarSize, string> = {
   md: 'h-10 w-10 text-sm',
   lg: 'h-12 w-12 text-base',
   xl: 'h-16 w-16 text-lg',
+  '2xl': 'h-[104px] w-[104px] text-[2.125rem]', // profile hero (Step 5.4, Figma)
 };
 
 const statusStyles: Record<AvatarStatus, string> = {
@@ -34,6 +35,7 @@ const statusSizeStyles: Record<AvatarSize, string> = {
   md: 'h-2.5 w-2.5 ring-2',
   lg: 'h-3 w-3 ring-2',
   xl: 'h-3.5 w-3.5 ring-2',
+  '2xl': 'h-5 w-5 ring-4',
 };
 
 function getInitials(name?: string): string {

@@ -1,5 +1,5 @@
 import type { Club, EventItem } from '@/types/api';
-import { matchesCampus, type CampusFilter } from '@/lib/events';
+import { matchesCampus, splitEventsByTime, type CampusFilter } from '@/lib/events';
 import { CAMPUS_TIME_ZONE } from '@/lib/time';
 
 // The president's contact details. Only for signed-in students: the page passes `null` to signed-out
@@ -56,17 +56,6 @@ export const formatPhone = (phone: string): string => {
   return match ? `+212 ${match.slice(1).join(' ')}` : phone;
 };
 
-// A club's events split at `now`: upcoming (not yet ended, soonest first) and past (most recent first).
-// Server side: it depends on the request time.
-export const getClubEvents = (
-  events: EventItem[],
-  clubId: string,
-  now: number
-): { upcoming: EventItem[]; past: EventItem[] } => {
-  const own = events.filter((event) => event.club_id === clubId);
-  const byStart = (a: EventItem, b: EventItem) => Date.parse(a.start_time) - Date.parse(b.start_time);
-  return {
-    upcoming: own.filter((event) => Date.parse(event.end_time) > now).sort(byStart),
-    past: own.filter((event) => Date.parse(event.end_time) <= now).sort((a, b) => byStart(b, a)),
-  };
-};
+// A club's events split at `now`: upcoming (soonest first) and past (most recent first). Server side.
+export const getClubEvents = (events: EventItem[], clubId: string, now: number) =>
+  splitEventsByTime(events.filter((event) => event.club_id === clubId), now);

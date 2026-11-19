@@ -191,8 +191,8 @@ export const mockEvents: EventItem[] = [
     category: 'Sports',
     start_time: '2026-11-21T16:00:00Z',
     end_time: '2026-11-21T18:00:00Z',
-    rsvps_count: 1,
-    has_user_rsvpd: false,
+    rsvps_count: 2,
+    has_user_rsvpd: true, // Step 5.4: an upcoming RSVP for /profile's "Going"
     attendees_preview: [ATTENDEES.hamza],
   },
   {

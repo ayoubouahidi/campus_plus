@@ -10,6 +10,7 @@ declare module 'next-auth' {
       id: string;
       role: UserRole;
       login: string | null; // 42 login (e.g. "mnajjar"); null for the dev login
+      campus: string | null; // 42 campus name (e.g. "Benguerir"), shown on /profile
     } & DefaultSession['user']; // name, email, image
   }
 
@@ -19,9 +20,10 @@ declare module 'next-auth' {
     backendUserId?: string;
     role?: UserRole;
     login?: string | null;
+    campus?: string | null;
   }
 }
 
-// The encrypted cookie (JWT) carries backendToken, userId, role, login (set in src/auth.ts jwt callback).
+// The encrypted cookie (JWT) carries backendToken, userId, role, login, campus (set in src/auth.ts jwt callback).
 // Not declared here: in Auth.js v5 a `next-auth/jwt` extension doesn't reach the callbacks' `token`
 // type, so src/auth.ts checks those fields at runtime instead.
