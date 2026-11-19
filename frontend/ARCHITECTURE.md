@@ -618,7 +618,7 @@ Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, sc
 
 | Item | Where tracked |
 | --- | --- |
-| **Phase 5** login (Auth.js + 42, from Ayoub's dashboard), `/profile`, real server-side session for private data | DOCS §7 |
+| **Phase 5** ✅ login (Auth.js + 42), real session, `/profile` (DOCS §7.4–7.8). Left: real 42 keys + Django `/auth/sync` (Ayoub), EMINES login, attendee-name visibility | DOCS §7, TEAM_NEEDS |
 | **Phase 6** real-time notifications (WebSockets `/ws/calendar/`) | roadmap |
 | **Phase 7** Django API instead of mocks, Arabic RTL + i18n, (loading and error pages done, DOCS §6.20–6.21), RSVP requests, `og:image` | roadmap |
 | ESLint findings in older code (mount guards, `Date.now` purity) | DOCS §1.5b |

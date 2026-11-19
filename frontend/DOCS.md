@@ -56,7 +56,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | `/clubs/[slug]` | Individual club hub: banner, bio, contact, club events |
 | `/events/[id]` | Event detail: flyer, description, venue, RSVP |
 | `/auth/login` | Student login: 42 Intra (Auth.js); the first login creates the account (§7.4–7.6) |
-| `/profile` (alias `/me`) | Student profile: attending events, avatar upload, logout |
+| `/profile` (alias `/me`) | Student profile (Figma design): identity, stats, going / went to, logout. Signed-in only (§7.7–7.8). Avatar upload later |
 
 ### 1.4 Design Tokens
 
@@ -100,7 +100,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 2     | Global shell & layout                 | ✅ Done        |
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
 | 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
-| 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6) |
+| 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6), 5.4 `/profile` + guard + logout (§7.7–7.8) |
 | 6     | Real-time WebSockets                  | ⏳             |
 | 7     | i18n (Arabic RTL) & live API          | ⏳             |
 
@@ -3376,3 +3376,69 @@ Signed out on `/`, `/clubs/leet-frame`, `/events/evt_hackathon_ai`, `/calendar`:
 
 - **No logout button in the UI yet** (only on `/test`). It comes with `/profile` in Step 5.4, together with the route guard.
 - Attendee names for signed-out visitors (§6.9) are still a team decision (TEAM_NEEDS §4); the attendees section already follows the session.
+
+### 7.7 Profile page from the Figma design (Step 5.4, 2026-11-19)
+
+**Design:** Figma `ft_transcendence-ui` › frames "My Profile · Desktop · Light / Dark / Phone · Light / Phone · Empty / Desktop · Loading" (node `155:3` "Profile ui"). Generated from our design-system prompt, then implemented here with our components.
+**Files:** `src/components/profile/` (`ProfileView`, `ProfileHero`, `ProfileActivity`, `AttendedEventList`, `ProfileSkeleton`, `profileIcons.tsx`, `profileStyles.ts`), `src/components/auth/LogoutForm.tsx`, `Avatar` (`2xl` = 104px), `lib/time.ts` (`formatDateTile` / `getDateTiles`), `lib/events.ts` (`splitEventsByTime`, `getMyEvents`; `getClubEvents` uses the split), `PastEventList` (extracted from `ClubEvents`, still used there), session `campus` (`src/auth.ts`, `types/next-auth.d.ts`), `mockData` (basketball final RSVP'd).
+**Status:** ✅ Validated (2026-11-19). Live on **`/profile`** (alias `/me`) since Step 5.4b (§7.8). First version (a plain card) was replaced the same day after review ("layout super simple" + a bug, below).
+
+#### Business & product purpose
+
+The navbar avatar links to `/profile`, which didn't exist (404). A student needs one place to see **who they're signed in as**, **what they're going to and went to**, quick numbers, and **Log out** (until now only on `/test`).
+
+#### Layout (matches the Figma frames)
+
+1. **Heading row:** "My profile" (muted) + **Log out** (44px secondary, out-arrow icon).
+2. **`ProfileHero`:** violet gradient banner (104px; "CAMPUS HUB / Your campus. Your community." on desktop, "1337 × EMINES" on phones), 104px avatar overlapping it (absolute from `sm`, pulled up in the flow on phones), name = the page's only `h1`, `@login` (mono) + role chip (violet Student / emerald Club board / neutral Admin) + campus chip, email, "Member since" (hidden until Django sends it), disabled **"Edit profile · Soon"** and **"Change photo · Soon"**.
+3. **Stats** (in `ProfileActivity`): Upcoming RSVPs · Events attended · Clubs followed ("—" + "Coming soon"). Desktop: icon tile + value + label; phones: centered value over a short label.
+4. **"Your events"** + segmented tabs **Going (n) / Went to (n)** (our `Tabs` primitive: roving focus, arrow keys; active tab violet via `aria-selected:` classes). Going = our `EventGrid`/`EventCard` (RSVP cancellable); Went to = `AttendedEventList`.
+5. **"Recently attended":** latest 3 past events + "Latest 3 of N events" ("3 of N" on phones).
+6. **Empty states:** Going → card with calendar tile, "No upcoming events yet", "Find your next workshop, match, or campus night out.", primary "→ Discover events"; past → "No past events yet / The events you attend will appear here."
+7. **`ProfileSkeleton`:** the loading frame, same boxes as the page.
+
+#### Core concepts & engineering decisions
+
+- **Reuse over Figma markup.** The Figma code is a reference: event cards are our real `EventCard` (the design's card was drawn from it), tabs are our `Tabs`, avatar is `Avatar` (new `2xl` size). Figma's absolute positions became flex/grid; 1440px frame padding became our `max-w-7xl` container.
+- **Icons:** the design's six SVGs (`out`, `chevron`, stat `calendar` / `check` / `club`) are reproduced in `profileIcons.tsx` with the **same paths, viewBoxes and stroke widths**, but `stroke="currentColor"` instead of the baked hex, because the dark frame uses lighter tints. Event-card icons stay those of `EventCard`.
+- **`ProfileActivity` is one client component** (stats + tabs + recently attended) so the counts follow RSVP changes on the cards. A cancelled card stays until reload (undo on the spot).
+- **Bug fixed: "schedule is undefined".** The first version kept its RSVP list in `useState(upcoming)`; when the server sent a new list (switching scenarios, later a refresh), the old cards were rendered with the new `schedules` map. Now the component resets its list when the `upcoming` prop changes (React's "adjust state when a prop changes" pattern, during render).
+- **Date tiles ("NOV / 14")** are formatted on the server in campus time (`getDateTiles`), like every date in the app (§5.2).
+- **`ProfileView`** (Server Component) composes the page and formats dates; used by the `/test` bench and (next) `app/profile/page.tsx`, so both render the same thing.
+- **`LogoutForm`**: server-action form (`signOut({ redirectTo })` passed as a prop), `useFormStatus` spinner + "Logging out…", works without JavaScript.
+- **Chips** (`profileStyles.ts`): the design's violet role tint isn't in the `Badge` primitive's palettes, so a small `Record<tone, classes>` map is used for the profile only.
+- **Campus in the session** (42 `campus[0].name`, dev login "Benguerir"); sessions created before 5.4 don't have it: log out and in again.
+- **Mock data:** the two events the mock student had RSVP'd to have ended (today 2026-11-19), so the basketball final (Nov 21) is now RSVP'd (`rsvps_count` 1 → 2). All mock events are past after Nov 27.
+
+#### Not in the design data yet (shown as placeholders or hidden)
+
+"Member since" (needs `/api/me/`), "Clubs followed" (needs the join/follow API), photo change and profile edit ("· Soon"), real RSVP list (`GET /api/me/rsvps/`, Phase 7).
+
+#### Component contract
+
+```ts
+ProfileView: { user: User; login: string | null; campus: string | null; upcoming: EventItem[]; past: EventItem[]; logoutAction: () => void | Promise<void> }
+ProfileHero: { user; login; campus; memberSince?: string | null }
+ProfileActivity: { upcoming; past; schedules: Record<string, EventSchedule>; dateTiles: Record<string, DateTile> }   // 'use client'
+AttendedEventList: { events: EventItem[]; dateTiles: Record<string, DateTile> }
+LogoutForm: { action: () => void | Promise<void> }   // 'use client'
+ProfileSkeleton: HTMLAttributes<HTMLDivElement>       // "Loading profile"
+getMyEvents(events, now) / splitEventsByTime(events, now): { upcoming; past }
+getDateTiles(events): Record<id, { month: 'NOV'; day: '14' }>
+```
+
+#### Verified (curl, 2026-11-19)
+
+Signed in (dev login): h1 "Mouad Najjar"; "My profile", "Log out", both banner texts, both "· Soon" buttons, the three stat labels + "Coming soon", two tabs, the basketball card, "Recently attended" with "Latest 2 of 2", "Attended" chips, date tiles 18 / 05 (NOV). `?scenario=no-events`: "No upcoming events yet" + "No past events yet". No server errors. `tsc --noEmit` and ESLint pass (only the known `<img>` warning in `Avatar`). **Not done:** screenshot comparison with Figma (the headless browser download didn't finish); visual check, keyboard, dark mode and phone are the user's browser checks.
+
+### 7.8 `/profile` route, guard, `/me` alias (Step 5.4b, 2026-11-19)
+
+**Files:** `src/app/profile/layout.tsx` (guard), `page.tsx`, `loading.tsx`; `next.config.ts` (`/me` redirect); `/test` reset to "nothing under test" (keeps a real-session box + `SessionSwitcher`).
+**Status:** ✅ Live.
+
+- **Guard in `profile/layout.tsx`, not the page.** `loading.tsx` streams the skeleton as soon as the page starts rendering, and after that the HTTP status is already sent (§6.21), so a `redirect()` in the page would become a client-side redirect behind a 200. The segment's layout runs **before** the loading boundary, so a signed-out visitor gets a real **307 → `/auth/login?next=%2Fprofile`** and comes back to `/profile` after login. Uses the cached `getSessionState()` (no second cookie decode).
+- **`page.tsx`**: `connection()` (request time), session (+ `auth()` for 42 login/campus), `getMyEvents(mockEvents, now)`, `ProfileView`. Logout = `signOut({ redirectTo: '/' })` (a signed-out visitor can't stay on `/profile`). `noindex, nofollow` (personal page). Title "My profile | Campus Hub".
+- **`/me`** → `/profile` via `next.config.ts` `redirects()` (307, not permanent, in case `/me` becomes its own page). Changing `next.config.ts` needs `docker compose restart frontend`.
+- The navbar avatar (and the phone tab "Profile") now land on a real page and show as active there (`aria-current="page"`, `PROFILE_NAV_ITEM` with the `/me` alias).
+
+**Verified (curl, 2026-11-19):** signed out `/profile` → 307 `/auth/login?next=%2Fprofile`; `/me` → 307 `/profile`. Dev login → `/profile` 200, title "My profile | Campus Hub", h1 "Mouad Najjar", basketball card, "Recently attended", `noindex`; avatar link `aria-current="page"`. `/`, `/calendar`, `/clubs`, a club, an event, `/test` 200; `/auth/login` signed in → 307. No server errors. `tsc` and ESLint pass.
