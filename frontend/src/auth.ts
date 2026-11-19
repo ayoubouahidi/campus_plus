@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { unstable_rethrow } from 'next/navigation';
 import NextAuth from 'next-auth';
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
@@ -152,6 +153,9 @@ export const getSessionState = cache(async (): Promise<SessionState> => {
   try {
     return toSessionState(await auth());
   } catch (error) {
+    // Let Next.js's own control-flow errors through (e.g. the "this page reads cookies, render it per request"
+    // signal during the build). Swallowing them could cache a page as signed out for everyone.
+    unstable_rethrow(error);
     console.error('[auth] could not read the session, treating the visitor as signed out', error);
     return { status: 'signed-out' };
   }

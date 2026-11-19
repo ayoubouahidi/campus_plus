@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 0.1 | **Push only to your own branch** and merge through a PR. Never push to someone else's branch. | `Mouad` received an infra commit (`7a0c578`) on 2026-11-06 that pointed Docker at a backend that isn't on that branch, so `web` couldn't start. It was reverted on 2026-11-08 (still safe on the `Hamza` branch). |
 | 0.2 | **Merge order to `master`:** infra + backend (Hamza + Ahmed + Ayoub) → frontend (Mouad) → dashboard (Ayoub) | Each layer needs the one below it to run. |
-| 0.3 | One `.env.example` at the repo root listing **every** variable (never real secrets) | Today variables are spread across branches with different names (`SECRET_KEY` vs `DJANGO_SECRET_KEY`, `REDIS_HOST` vs `REDIS_URL`). |
+| 0.3 | One `.env.example` at the repo root listing **every** variable (never real secrets). **Started on `Mouad` (2026-11-19)**: DB, Django and login variables; add yours to it. | Today variables are spread across branches with different names (`SECRET_KEY` vs `DJANGO_SECRET_KEY`, `REDIS_HOST` vs `REDIS_URL`). |
 | 0.4 | Times in the API are **ISO 8601 UTC** (`2026-11-05T17:00:00Z`). The frontend converts to campus time (`Africa/Casablanca`). | Ahmed's settings already use `TIME_ZONE='UTC'`, `USE_TZ=True`. Keep it. |
 
 ---
@@ -109,7 +109,7 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 | 2.1 | The login files (`auth.ts`, `app/api/auth/[...nextauth]/route.ts`, `types/next-auth.d.ts`, the login page) | Phase 5 integrates them into the student site (DOCS §7). |
 | 2.2 | **Which 42 app** (client id) you use, and add the redirect URI `https://<host>/api/auth/callback/42-school` for the student site | 42 refuses logins whose redirect URI isn't registered. |
 | 2.3 | Where the dashboard will live: **same domain** (`/dashboard`) or a **subdomain** (`admin.<host>`)? | Two Auth.js apps on one domain share cookie names and log each other out. `/admin` is already Django's admin in nginx, so your `callbackUrl: '/admin'` can't work as is. |
-| 2.4 | Align versions: you're on Next **16.4.2**, the student site on **16.3.5** | The frontend will upgrade to 16.4.2 during Phase 5. |
+| 2.4 | **Upgrade the dashboard to Next 16.4.6** (the student site is on 16.4.6 since 2026-11-19) | 16.0–16.4.4 have critical advisories (RCE in image optimization and `use cache`, cache poisoning). `npm install next@16.4.6 eslint-config-next@16.4.6` works with React 19.2/19.3. |
 | 2.5 | Use the same `types/api.ts` shapes and role names (`STUDENT`, `BOARD_MEMBER`, `SUPERADMIN`) | One contract with Ahmed instead of two |
 | 2.6 | When board members create events in the dashboard, require **category**, start/end and a flyer within the size limit | The student site needs them (§1.2, §1.6). |
 | 2.7 | Rename "CampusPulse" to **Campus Hub** in the shared login | One product name |

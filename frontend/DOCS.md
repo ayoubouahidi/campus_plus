@@ -3313,7 +3313,7 @@ Session['user']: { id: string; role: UserRole; login: string | null; name?; emai
 - **Editing `infrastructure/nginx/nginx.conf` needs `docker compose restart nginx`,** not `nginx -s reload`: the file is a single-file bind mount, and editors replace the file, so the container keeps the old one (reload then fails with "default.conf: No such file").
 - **New env variables need the container recreated** (`docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d frontend`), a restart is not enough.
 - `npm install` inside the container rewrote `package-lock.json` without the `libc` fields (different npm version); harmless.
-- `npm audit`: **Next 16.3.5 has critical advisories** (fixed in 16.4.6). Not part of this step; upgrade separately (the dashboard's 16.4.2 is affected too).
+- ~~`npm audit`: Next 16.3.5 has critical advisories~~ upgraded to 16.4.6 (§7.9).
 - ~~The navbar's "Sign up" still links to `/auth/register` (404)~~ removed in Step 5.3 (§7.6).
 - Ayoub's dashboard and this app must not share cookie names on one host (both `authjs.*`): different hosts/subdomains, or set `cookies` names in one of them.
 
@@ -3442,3 +3442,13 @@ Signed in (dev login): h1 "Mouad Najjar"; "My profile", "Log out", both banner t
 - The navbar avatar (and the phone tab "Profile") now land on a real page and show as active there (`aria-current="page"`, `PROFILE_NAV_ITEM` with the `/me` alias).
 
 **Verified (curl, 2026-11-19):** signed out `/profile` → 307 `/auth/login?next=%2Fprofile`; `/me` → 307 `/profile`. Dev login → `/profile` 200, title "My profile | Campus Hub", h1 "Mouad Najjar", basketball card, "Recently attended", `noindex`; avatar link `aria-current="page"`. `/`, `/calendar`, `/clubs`, a club, an event, `/test` 200; `/auth/login` signed in → 307. No server errors. `tsc` and ESLint pass.
+
+### 7.9 Next.js 16.4.6 security upgrade, session error fix, housekeeping (2026-11-19)
+
+- **`next` and `eslint-config-next` 16.3.5 → 16.4.6** (exact). `npm audit` reported **critical** advisories for 16.0–16.4.4 (RCE in the image optimizer with SVG, RCE and cache leaks in `use cache`, cache poisoning, SSRF in image optimization, DoS via Server Actions). React stays 19.2.8 (peer range `^19`). `npm audit fix` also updated `source-map-js` (high). Result: **0 vulnerabilities**. Upgrade guide checked (`node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md`): the only 16.4 change is the removal of `experimental.appNewScrollHandler`, which we don't use. The dashboard (Next 16.4.2) is still affected → TEAM_NEEDS §2.4.
+- **Bug fixed in `getSessionState()` (§7.6):** its `try/catch` swallowed Next.js's internal "dynamic server usage" signal (thrown when a page reads cookies during the build's static attempt). The production build logged it as "[auth] could not read the session", and in the worst case a page could be cached as signed out for everyone. Now `unstable_rethrow(error)` (from `next/navigation`) lets Next's control-flow errors through before logging real ones. Rule: **any `try/catch` around code that can call `cookies()`, `headers()`, `redirect()` or `notFound()` must call `unstable_rethrow` first.**
+- **Production build check:** `next build` in a throwaway copy inside the container (`/tmp/bc`, `node_modules` **copied**, not symlinked: Turbopack refuses files outside the project root). All routes dynamic (ƒ), no errors.
+- **`tsconfig.tsbuildinfo` untracked** (`*.tsbuildinfo` in `frontend/.gitignore`): `tsc --noEmit` rewrote it on every run, leaving the tree dirty.
+- **Root `.env.example`** (TEAM_NEEDS 0.3): DB, Django and every login variable with comments; `AUTH_DEV_LOGIN=false` by default.
+
+**Verified (2026-11-19):** served version 16.4.6; signed out `/`, `/calendar`, `/clubs`, a club, an event, `/auth/login`, `/test` 200, `/profile` 307, `/nope` 404; dev login → `/profile` 200, `/me` 307, `/auth/login` 307, club email shown, session role STUDENT. `tsc` passes; ESLint shows only the known older errors (§1.5b, next on the list). No server errors.

@@ -7,6 +7,9 @@ node_modules/
 out/
 build/
 
+# TypeScript incremental cache (rewritten by every `tsc --noEmit`)
+*.tsbuildinfo
+
 # Logs & Environment
 npm-debug.log*
 yarn-debug.log*
