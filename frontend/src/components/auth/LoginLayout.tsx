@@ -1,6 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Logo } from '@/components/ui/Logo';
 
 export interface LoginLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode; // the form column, usually <LoginPanel>
@@ -24,7 +25,8 @@ export const LoginLayout = React.forwardRef<HTMLDivElement, LoginLayoutProps>(
           className="inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-semibold text-slate-700 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-slate-300 dark:hover:text-violet-400"
         >
           <span aria-hidden="true">←</span>
-          Campus Hub
+          <Logo decorative className="h-8" />
+          <span className="sr-only">Back to Campus Hub</span>
         </Link>
 
         {/* Centered in the space left under the back link */}

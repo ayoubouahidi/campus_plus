@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Logo, LogoMark } from '@/components/ui/Logo';
 import { usePathname } from 'next/navigation';
 import { PUBLIC_NAV, PROFILE_NAV_ITEM, isNavItemActive } from '@/lib/navigation';
 import { NAV_ICONS, SearchIcon } from '@/components/ui/layout/navIcons';
@@ -57,17 +58,10 @@ export const NavbarBrand = React.forwardRef<HTMLAnchorElement, NavbarBrandProps>
       className={`flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 ${className}`}
       {...props}
     >
-      <span
-        className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-sm font-bold text-white shadow-sm"
-        aria-hidden="true"
-      >
-        CH
-      </span>
-      {/* Below 360px (small Androids, iPhone SE 1st gen) only the CH mark fits next to the actions */}
-      <span className="hidden flex-col leading-tight min-[360px]:flex" aria-hidden="true">
-        <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Campus Hub</span>
-        <span className="hidden text-xs text-slate-500 sm:block dark:text-slate-400">1337 · EMINES</span>
-      </span>
+      {/* The link's aria-label names it, so both logos are decorative. Below 360px (small Androids, iPhone SE
+          1st gen) only the hub square fits next to the actions. */}
+      <LogoMark decorative className="min-[360px]:hidden" />
+      <Logo decorative className="hidden h-10 min-[360px]:block" />
     </Link>
   )
 );

@@ -143,6 +143,7 @@ Know nothing about events or clubs. Reused everywhere.
 | `Skeleton.tsx` | Loading placeholders: `Skeleton`, `CardSkeleton`, `SkeletonRegion` (role="status" + "Loading …" for screen readers). |
 | `EmptyState.tsx`, `FilterChip.tsx` | "Nothing here" box; toggle chip. |
 | `ErrorState.tsx` | "Something went wrong" page body with error code and action slot (used by the error files). |
+| `Logo.tsx` | `Logo` (cap + "campus hub" lettering) + `LogoMark` (hub square, tab icon and phones < 360 px): inline SVG, light/dark via Tailwind classes, lettering as paths (DOCS §10). Tab icons: `app/icon.svg`, `app/favicon.ico`. |
 
 ### 3.3 `src/components/ui/layout/` — the app shell
 
@@ -259,6 +260,7 @@ The **layout never re-renders when you navigate** between pages: only the `{chil
 | `/clubs` | sort, upcoming counts | `ClubDirectory`: campus filter | §6.11–6.12 |
 | `/clubs/[slug]` | lookup, `notFound`, metadata, `ClubHeader`, contact decision, events split | `ClubContactCard` (session), `ClubEvents` (RSVP) | §6.13–6.15 |
 | ⌘K | — | `SearchPalette` in `AppShell` | §6.16–6.17 |
+| `/privacy`, `/terms` | `LegalPage` + `legalContent.tsx` (no data) | — (no client part) | §9 |
 
 ---
 

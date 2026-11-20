@@ -57,6 +57,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | `/events/[id]` | Event detail: flyer, description, venue, RSVP |
 | `/auth/login` | Student login: 42 Intra (Auth.js); the first login creates the account (§7.4–7.6) |
 | `/profile` (alias `/me`) | Student profile (Figma design): identity, stats, going / went to, logout. Signed-in only (§7.7–7.8). Avatar upload later |
+| `/privacy`, `/terms` | Privacy Policy and Terms of Service (mandatory, subject v21.2), linked from the footer on every page (§9) |
 
 ### 1.4 Design Tokens
 
@@ -90,6 +91,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 - **ESLint config** didn't exist before (installed but never configured), so `eslint` always failed. First run: 10 errors + 1 warning, all in existing code, none breaking the build: `react-hooks/purity` for `Date.now()` in the per-request server pages (intentional after `connection()`) and in `useCampusSearch` (real: read during render); `react-hooks/set-state-in-effect` for the `setMounted(true)` mount guards in `Modal`, `MobileNav`, `NotificationPopover` (the pattern CLAUDE.md rule 5 prescribes; modern replacement: `useSyncExternalStore`) and the popover's clock; `no-img-element` in `Avatar`. **Follow-up:** a dedicated lint cleanup (and updating CLAUDE.md rule 5) before making lint a required check. **In progress: §8 (2026-11-20).**
 - **`frontend/.dockerignore`** keeps `node_modules`, `.next` and build output out of the image context.
 - Run `npm install` for new dependencies inside the container (`docker compose exec frontend npm install <pkg>`), then `make dev` rebuilds the image so the anonymous `node_modules` volume matches.
+- **New folder not found (`Module not found: Can't resolve '@/components/<new folder>/…'`) although `tsc` passes?** The dev server's file watcher can miss a folder created on the Mac side of the bind mount. `docker compose restart frontend` fixes it (2026-11-20, `components/legal/`).
 - **Replaced an image in `public/` but still see the old one?** Next caches resized images by URL, not content. Rename the file, or run `make clear-images` and hard-refresh (ARCHITECTURE §7.5). Keep source images ≤ ~2000 px: the 77 MB `basketball.png` (8256 px) timed out the optimizer until it was resized to 1600 px (2026-11-06).
 
 ### 1.6 Roadmap Status
@@ -3502,4 +3504,122 @@ export default async function Page() {
 
 #### Verified (2026-11-20)
 `tsc --noEmit` passes. ESLint 11 → 6 findings (all 6 server-page purity errors gone; left: L.2–L.4). `/`, `/calendar`, `/clubs`, `/clubs/1337`, `/events/1`, `/test` 200; `/profile` and `/me` 307 signed out (unchanged). No server errors. Nothing to try on `/test`: no visible change.
+
+---
+
+## 9. Privacy Policy & Terms of Service (mandatory, subject v21.2)
+
+The subject rejects the project if these pages are missing, empty or placeholders, or not easy to reach (e.g. footer links) (TEAM_NEEDS §5.1).
+
+| Step | Deliverable | Status |
+| --- | --- | --- |
+| 9.1 | `LegalPage` layout + the text of both documents | ✅ Built (previewed on `/test`, then moved to the routes in 9.2) |
+| 9.2 | Routes `/privacy` and `/terms`, metadata, footer "Legal" links (page footer + phone drawer) | ✅ Live (§9.2), waiting for the user's browser check |
+| 9.3 | Event page: attendee names and faces for signed-in students only, signed-out visitors see the count (matches the policy) | ⏳ |
+
+### 9.1 `LegalPage`, `legalContent`, `lib/legal.ts` (Step 9.1, 2026-11-20)
+
+**Files:** `src/components/legal/LegalPage.tsx` (layout + `LegalList`, `LegalTerm`, `LegalTable`, `legalLinkStyles`), `src/components/legal/legalContent.tsx` (`PRIVACY_POLICY`, `TERMS_OF_SERVICE`), `src/lib/legal.ts` (contact email, last-updated date, session lifetime), `types/navigation.ts` (`AppRoute` + `/privacy`, `/terms`), `/test` (`?doc=privacy|terms`).
+**Status:** ✅ Live on `/privacy` and `/terms` (§9.2).
+
+#### Business & Product Purpose
+Students must know what Campus Hub collects (42 profile, email sign-up, RSVPs, memberships, roles, uploads), who sees it, which cookies we set and how to get their data deleted; and the rules for RSVPs, clubs and acceptable use. Mandatory for the evaluation.
+
+#### Core Concepts & Engineering Decisions
+- **Text written from the code, not a template:** the 42 fields come from `auth.ts` (`syncWithBackend`), the cookies are Auth.js's (`authjs.session-token` 30 days default, `csrf-token`, `callback-url`) plus Ahmed's `ws_access` (5 min). No `localStorage`, no analytics, so no cookie banner. Email + password sign-up is described already (mandatory, being built with Ayoub).
+- **Moroccan law:** rights under Law No. 09-08, complaints to the CNDP; governing law Moroccan.
+- **Content as data:** each document is `{ title, summary, sections: { id, title, body }[], related }`. The same list draws the table of contents and the sections, so they never disagree. Section `id`s are anchors (`/privacy#cookies`).
+- **Server Component, zero JS:** no hooks; the table of contents is plain `#anchor` links. `scroll-mt-24` keeps a jumped-to heading below the sticky navbar; on `lg` the contents column is `sticky`.
+- **Accessibility:** one `h1`; `nav` labelled by its "On this page" heading; each `section` labelled by its `h2`; the cookie table has a `caption` (sr-only) and `th scope="col"`; external links say "(opens in a new tab)" to screen readers; `ps-5` (logical) so lists mirror in Arabic.
+- **One place for shared facts:** `lib/legal.ts` (contact email, "last updated" as a fixed string, not a `Date`: same label on server and browser).
+
+#### Architectural Tradeoffs
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Typed section data with JSX bodies | Markdown/MDX files | No new dependency or build step; bodies still use our link/list components and constants (contact email) |
+| Same | One big JSX page per document | TOC would be written twice and drift |
+| Plain `<a href="#…">` contents | Client scroll-spy highlighting | Zero JS; scroll-spy is decoration for a page read once |
+| Fixed date string | `new Date().toLocale…` | No hydration/time-zone differences; the date is a legal fact, not "now" |
+
+#### Component Contract
+```ts
+LegalPage: { document: LegalDocument; lastUpdated: { iso: string; label: string } } & HTMLAttributes<HTMLElement>  // forwardRef → <article>
+LegalDocument: { title: string; summary: ReactNode; sections: readonly LegalSection[]; related: { label: string; href: AppRoute } }
+LegalSection: { id: string; title: string; body: ReactNode }
+LegalTable: { caption: string; columns: readonly string[]; rows: readonly (readonly ReactNode[])[] }
+LegalList / LegalTerm: { children: ReactNode }
+LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, SESSION_LIFETIME_DAYS   // lib/legal.ts
+```
+
+#### Usage Example
+```tsx
+<LegalPage document={PRIVACY_POLICY} lastUpdated={LEGAL_LAST_UPDATED} />
+```
+
+#### To confirm with the team
+- ✅ **Contact:** `campushub.1337.team@gmail.com`, the team's shared Gmail (2026-11-20). Every member can read it; someone must answer within 30 days (the policy promises it).
+- ✅ **Attendee names: signed-in students only** (team decision, 2026-11-20, TEAM_NEEDS §4). Signed-out visitors see the count. ⚠️ The event page still shows names to everyone (§6.9): to fix (Step 9.3), and Ahmed's API must enforce it (TEAM_NEEDS §1.1).
+- When a feature changes data or cookies (uploads, avatars, live updates), update `legalContent.tsx` and `LEGAL_LAST_UPDATED` in the same change.
+
+#### Verified (2026-11-20)
+`tsc` passes; ESLint: no new findings (6 known, §8). `/test` 200 with h1 "Privacy Policy" and 10 sections; `?doc=terms` 200 with h1 "Terms of Service" and 11 sections; `/`, `/calendar`, `/clubs` 200; no server errors after the restart. Browser checks (keyboard, phone, dark mode, reading the text) are the user's, listed on `/test`.
+
+### 9.2 `/privacy`, `/terms` and the footer's "Legal" links (Step 9.2, 2026-11-20)
+
+**Files:** `src/app/privacy/page.tsx`, `src/app/terms/page.tsx` (metadata title + description, `LegalPage` with the document), `lib/navigation.ts` (`LEGAL_LINKS`), `components/ui/layout/Footer.tsx` (`FooterLegal` renders them), `/test` reset to "nothing under test".
+**Status:** ✅ Live.
+
+- **Where the links are:** `FooterLegal`'s bottom row, so they are on **every page** (page footer, `full`) and in the **phone drawer** (`compact`, under the campus links). Links are in a `<nav aria-label="Legal">` landmark. The drawer closes by itself on navigation (it already watches the pathname).
+- **Not a third footer column:** the bottom row next to the copyright is where people look for legal links, and the two columns (Explore, Campuses) stay as they are on phones.
+- **Rendering:** the pages read nothing themselves, but they render per request anyway because the root layout reads the session cookie (§7.6). Cheap: no data, no JS.
+- **Gotcha hit twice today:** new route folders were 404 / "Module not found" until `docker compose restart frontend` (§1.5b).
+
+**Verified (2026-11-20):** `/privacy` 200 "Privacy Policy | Campus Hub", `/terms` 200 "Terms of Service | Campus Hub"; the footer of `/calendar` links to `/privacy` and `/terms`; `/terms` links back to `/privacy`; `/`, `/calendar`, `/clubs`, `/test` 200; `tsc` passes; ESLint no new findings; no server errors.
+
+---
+
+## 10. Logo (2026-11-20)
+
+### 10.1 `Logo`, `LogoMark`, tab icons
+
+**Files:** `src/components/ui/Logo.tsx` (new), `src/app/icon.svg` + `src/app/favicon.ico` (replace Next's default favicon), `Navbar.tsx` (`NavbarBrand`), `Footer.tsx` (`FooterBrand`), `auth/LoginLayout.tsx` (back link).
+**Source:** the designer's exports `Primary logo, light-html.zip` and `Primary logo, dark-html.zip` (Mouad's Downloads, 2026-11-20): an 880×560 SVG artboard; the zips' `support.js` / React files are only the design tool's viewer and were not used.
+**Status:** ✅ Live.
+
+#### Business & Product Purpose
+The site now carries the real Campus Hub brand instead of the "CH" placeholder square, in the navbar, footer, login page and browser tab.
+
+#### Core Concepts & Engineering Decisions
+- **Inline SVG component, one file for both themes.** The light and dark exports differ only in colors, so each shape gets Tailwind `fill-`/`stroke-` classes with `dark:` variants (site dark mode = the system setting): "campus" `slate-900`/`slate-50`, "hub" `violet-600`/`violet-400`, cap `violet-600`, tassel `amber-500`, the cap's cut line the page color (`slate-50`/`slate-950`). Colors = the design's hex values (`#0f172a`, `#7c3aed`, `#a78bfa`, `#f59e0b`, `#f8fafc`, `#020617`).
+- **Lettering converted to shapes.** The design writes "campus"/"hub" with the Fredoka Bold web font. They were turned into SVG paths with the real font (google/fonts `ofl/fredoka`, SIL OFL: outlines allowed), shaped with HarfBuzz (kerning) at weight 700, the design's sizes (132 / 148), positions and `letter-spacing: -2`. No font download, no flash of a fallback font, identical in every browser.
+- **Cropped viewBox:** `184 139 498 268` = the drawing's measured bounds + 8 px, in the artboard's own coordinates (the design's outer `translate(16 0)` is baked in). Height is set with a class (`h-10` default), width follows (`w-auto`).
+- **Accessible name:** `role="img"` + `aria-label="Campus Hub"`, or `decorative` → `aria-hidden` when a parent already names it (navbar link "Campus Hub home"; login link with sr-only "Back to Campus Hub"). The footer logo is the named one.
+- **Hub square removed from the full logo** (Mouad, 2026-11-20: "too much detail" next to "hub"). The viewBox didn't change: "campus" sets the right edge and "hub" the bottom.
+- **`LogoMark`** = the design's hub square alone (no longer in `Logo`): the navbar under 360 px (where "CH" used to be) and the tab icons. `app/icon.svg` (modern browsers) and `app/favicon.ico` (16/32/48 px, for browsers that ask for `/favicon.ico`: a 404 there could show in the console, which the subject forbids). Next.js adds both `<link rel="icon">` tags from the file names.
+- The navbar's "1337 · EMINES" subtitle is gone: the logo names the product, the footer names the campuses.
+
+#### Architectural Tradeoffs
+| Chosen | Alternative | Why |
+| --- | --- | --- |
+| Inline SVG component | `<Image src="/logo-light.svg">` + a dark copy | Two files and a theme switch (or two images, one hidden); an `<img>` SVG can't use our Tailwind colors |
+| Text as paths | `<text>` + `next/font` Fredoka | A 2nd web font (~20 kB) for 9 letters; text in SVG can render differently per browser |
+| Same | Keep the HTML export | It loads React + a 55 kB runtime from the zip just to draw one SVG |
+
+#### Component Contract
+```ts
+Logo:     React.SVGAttributes<SVGSVGElement> & { decorative?: boolean }   // forwardRef<SVGSVGElement>; default class h-10 w-auto
+LogoMark: same props                                                       // default class h-9 w-9
+```
+
+#### Usage Example
+```tsx
+<Logo className="h-12" />                                  // named "Campus Hub"
+<Link href="/" aria-label="Campus Hub home"><Logo decorative /></Link>
+```
+
+#### Changing the logo later
+Colors: edit the classes in `Logo.tsx`. New artwork: export the SVG again; if the lettering changes, re-run the conversion (fontTools `instancer` at `wght=700` + `uharfbuzz` shaping + `SVGPathPen`, then measure bounds for the viewBox) and replace the two `d` attributes. Update `icon.svg` and `favicon.ico` if the hub square changes.
+
+#### Verified (2026-11-20)
+Rendered previews of the converted logo (light and dark) match the design; re-checked without the hub square. `/` shows 2 full logos (navbar, footer) + 1 `LogoMark` (navbar < 360 px); `/auth/login` back link "Back to Campus Hub"; `/icon.svg` 200 `image/svg+xml`, `/favicon.ico` 200 `image/x-icon`, both `<link rel="icon">` in the page head. `tsc` passes; ESLint no new findings; no server errors (after `docker compose restart frontend`, §1.5b).
 

@@ -32,6 +32,8 @@ All 10 foundational atomic primitives are built, verified, and located in `src/c
 9. `Toast.tsx` (`ToastProvider`, `useToast` imperative dispatcher, auto-dismiss, live region)
 10. `Skeleton.tsx` (`Skeleton` base + 1:1 geometry `CardSkeleton` for zero-CLS loading)
 
+Added later: `Logo.tsx` (`Logo` + `LogoMark`, the real brand as inline SVG for light and dark, `DOCS.md` §10).
+
 ---
 
 ## 2. Strict Engineering & Code Quality Rules

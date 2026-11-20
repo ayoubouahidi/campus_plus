@@ -1,7 +1,8 @@
 import React from 'react';
 import Link from 'next/link';
-import { FOOTER_GROUPS } from '@/lib/navigation';
+import { FOOTER_GROUPS, LEGAL_LINKS } from '@/lib/navigation';
 import { ExternalIcon } from '@/components/ui/layout/navIcons';
+import { Logo } from '@/components/ui/Logo';
 import { FooterLink, FooterLinkGroup } from '@/types/navigation';
 
 // No hooks, no browser APIs: a Server Component by default, so it ships no JavaScript.
@@ -55,15 +56,7 @@ export type FooterBrandProps = React.HTMLAttributes<HTMLDivElement>;
 export const FooterBrand = React.forwardRef<HTMLDivElement, FooterBrandProps>(
   ({ className = '', ...props }, ref) => (
     <div ref={ref} className={`max-w-sm space-y-3 ${className}`} {...props}>
-      <div className="flex items-center gap-2.5">
-        <span
-          aria-hidden="true"
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-sm font-bold text-white shadow-sm"
-        >
-          CH
-        </span>
-        <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Campus Hub</span>
-      </div>
+      <Logo className="h-12" />
       <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
         Events, clubs and RSVPs for students of 1337 Coding School and EMINES (UM6P), all in one place.
       </p>
@@ -138,6 +131,15 @@ const footerLegalStyles: Record<FooterVariant, string> = {
   compact: '',
 };
 
+const footerLegalNavStyles: Record<FooterVariant, string> = {
+  full: '',
+  compact: 'mt-2',
+};
+
+// Same look as the column links, one size smaller to match the copyright line.
+const footerLegalLinkStyles =
+  'rounded text-xs text-slate-600 underline-offset-2 transition-colors duration-150 hover:text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-slate-400 dark:hover:text-violet-400';
+
 export interface FooterLegalProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: FooterVariant;
 }
@@ -152,7 +154,20 @@ export const FooterLegal = React.forwardRef<HTMLDivElement, FooterLegalProps>(
       <p>
         © {new Date().getFullYear()} Campus Hub. Made by students, for students.
       </p>
-      {variant === 'full' && <p>1337 Coding School × EMINES · UM6P</p>}
+      {/* Its own landmark, so screen-reader users find "Legal" in the landmarks list on every page. */}
+      <nav aria-label="Legal" className={footerLegalNavStyles[variant]}>
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {LEGAL_LINKS.map((link) => (
+            <li key={link.href}>
+              <Link href={link.href} className={footerLegalLinkStyles}>
+                {link.label}
+              </Link>
+            </li>
+          ))}
+          {variant === 'full' && <li aria-hidden="true">·</li>}
+          {variant === 'full' && <li>1337 Coding School × EMINES · UM6P</li>}
+        </ul>
+      </nav>
     </div>
   )
 );
