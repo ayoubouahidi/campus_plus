@@ -35,6 +35,28 @@ Sections 1.1–1.5 below are the student website's needs; owner: **Ahmed** (RSVP
 
 What exists today (on `Ahmed`): `/api/clubs/`, `/api/club-events/`, `/api/departments/`, `/api/members/`, `/api/signup/` (DRF token), Swagger at `/api/docs/`, WebSocket `/ws/calendar/` with JWT.
 
+### 1.0 Ahmed's push of 2026-11-20 (`cb0057f`, checked by Mouad)
+
+Spec: `API_SPEC.md` on `Ahmed` (Swagger `/api/docs/`). Blocked part: `AYOUB_DEPENDENCIES.md` (AY-01…AY-06).
+
+| Our ask | Status |
+| --- | --- |
+| Security: anonymous club/department writes | ✅ Club + Department writes return 405; `/api/members/` needs auth (writes: admin) |
+| §1.2 event fields: `title`, `start_time`/`end_time`, `flyer_url` (absolute, `''`), `category` (our 7), `club_name` + `club_slug`, `department_name` + `department_slug`, `status` | ✅ all (old names kept as aliases); also `capacity` |
+| §1.2 query params `from`, `to`, `upcoming`, `club`, `department`, `category`, `search` | ✅ (+ `status`, `page`, `page_size` ≤ 200, 400 on bad values). Ordering fixed to `starts_at` (no `ordering` param) |
+| §1.3 club `slug` + `GET /api/clubs/{slug}/`, `logo_url`, `banner_url`, `department_name`, `president_name`, counts, meeting fields | ✅ (slug still nullable until migration A0) |
+| §1.3 president email/phone only for signed-in users | ⚠️ Never returned now (safe). Needs Ayoub's auth to return them to signed-in users |
+| §1.4 pagination | ✅ events (`{count,next,previous,results}`); ❌ clubs and departments are bare arrays |
+| §1.5 uploads: UUID file names, 2 MB, real-image check, absolute URLs | ✅; pixel limit not seen |
+| §1.1 RSVP | ⚠️ `Rsvp` model exists (unique user+event); **no endpoints, no `rsvps_count` / `has_user_rsvpd` / `attendees_preview`**: blocked on Ayoub's `accounts.User` (AY-01, AY-04) |
+| Health | ✅ `/api/health/` (JSON) + `/api/health/live` (text) |
+
+**Ahmed's questions to the frontend (API_SPEC "Unresolved compatibility questions"), Mouad's answers:**
+1. *Clubs are a bare array, frontend types say paginated.* → **OK for now** (few clubs, the frontend can take an array). Paginate later only if the "advanced search" module needs it.
+2. *Frontend `Club` type requires president email/phone, API hides them when anonymous.* → **Done on `Mouad` (2026-11-20):** `president_email?` / `president_phone?` are optional in `types/api.ts`, and `ClubContactCard` shows each line only when present (it was already signed-in only). Ahmed returns them when the request has a valid token (after AY-04).
+3. *Health route for Hamza's probes* → Hamza: use `/api/health/live`.
+4. IDs are numbers in the API, strings in our types → frontend converts in its mapping layer (Phase 7); no change needed.
+
 ### 1.1 RSVP: missing entirely (blocks the main feature)
 
 | Need | Detail |
@@ -135,7 +157,57 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 | Question | Options | Frontend's suggestion |
 | --- | --- | --- |
 | Who can see who's going to an event? | Everyone / signed-in students / nobody but the count | Signed-in students |
-| EMINES students without a 42 account | Email sign-up / campus SSO / 42 only | Email sign-up via `api/signup/` |
+| EMINES students without a 42 account | ~~Email sign-up / campus SSO / 42 only~~ | **Decided by the subject (§5): email + password sign-up and login are mandatory for everyone.** 42 stays as the OAuth module |
 | Dashboard location | `/dashboard` on the same domain / `admin.` subdomain | Subdomain (no cookie clash, clean nginx) |
 | Event categories | The 7 above / editable list in the DB | Fixed list for now |
-| Languages | English + Arabic (RTL) / + French | English + Arabic, French later |
+| Languages | English + Arabic (RTL) / + French | English + Arabic + **French**: the "multiple languages" module needs 3 (§5) |
+
+---
+
+## 5. Subject check (ft_transcendence v21.2, read 2026-11-20)
+
+Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any mandatory item missing = project rejected, whatever the module points.** We need **14 points** of modules; extra validated modules count as bonus (max +5).
+
+### 5.1 Mandatory part
+
+| Requirement | Status | Owner |
+| --- | --- | --- |
+| Frontend + backend + database | ⚠️ All exist, but on separate branches; `master` has only a README; the student site and the dashboard still use mock data | all (merge, Phase 7) |
+| **Email + password sign-up and login, hashed + salted passwords** | ❌ **Student site is 42-only.** Django `POST /api/signup/` exists (Django hashes passwords); no login form, no register page | Ayoub (`accounts`) + Mouad (`/auth/register`, email form on `/auth/login`) |
+| **Privacy Policy + Terms of Service pages**, real content, linked from the footer | ❌ **Missing: rejection if absent** | Mouad (`/privacy`, `/terms`) + team for the content |
+| Forms validated in frontend **and** backend | ⚠️ Not yet (sign-up, login, RSVP, dashboard event forms) | everyone on their forms |
+| Multi-user: many users at once, no conflicts, real-time across users | ❌ Not demonstrable while data is mocked and RSVP has no API | Ahmed (RSVP, Rsvp model exists), Mouad (Phase 6–7) |
+| HTTPS for every browser/API connection | ✅ nginx 443 (self-signed), HTTP 301 → HTTPS | Hamza |
+| One-command start with Docker | ✅ `make up` (per branch); must still work after the merge | Hamza |
+| `.env` git-ignored + `.env.example` | ✅ (root, `Mouad` and `Ahmed` branches: merge into one) | all |
+| Clear DB schema with relations | ⚠️ Models exist (`Department`, `Club`, `ClubEvent`, `UserMember`, `Rsvp`); `accounts.User` not built; schema must be in the README | Ahmed + Ayoub |
+| Tailwind / styling, responsive, accessible | ✅ | Mouad, Ayoub |
+| No JS warnings/errors in the Chrome console | ⚠️ Not checked yet on every page | everyone |
+| Git: commits from **all** members, clear messages, fair split | ⚠️ Ayoub has 4 commits; Mouad's commits use 5 identities (38 as "MAcbook Air M4"): set `git config user.name/email` and add a `.mailmap` | all |
+| Roles PO / PM / Tech Lead / Developers, documented in README | ❌ Not assigned on paper | team |
+| Root README: italic first line with logins, Description, Instructions, Resources + AI use, Team, Project Management, Tech Stack, DB Schema, Features (who did what), Modules (points + who), Individual Contributions | ❌ Root README is the backend's README | team (each writes their part) |
+
+### 5.2 Modules (project type: "Event Management Platform", subject §V.3)
+
+| Module | Pts | Status |
+| --- | --- | --- |
+| Web Major: frameworks front + back (Next.js + Django) | 2 | ✅ (once the site talks to Django) |
+| Web Minor: ORM (Django ORM) | 1 | ✅ |
+| Web Minor: SSR (Next.js Server Components) | 1 | ✅ |
+| Web Minor: custom design system (≥10 components, palette, typography, icons) | 1 | ✅ 13 `ui/` components + tokens + `navIcons` (needs a showcase page) |
+| User Mgmt Minor: OAuth 2.0 (42) | 1 | ⚠️ frontend done; 42 keys + `/auth/sync` missing |
+| Web Major: real-time WebSockets | 2 | ⚠️ backend done (Ahmed); frontend Phase 6 |
+| Web Minor: notification system (all create/update/delete) | 1 | ⚠️ popover UI done; needs WebSockets + backend |
+| Web Minor: advanced search (filters, sorting, **pagination**) | 1 | ⚠️ filters + ⌘K on mocks; sorting/pagination missing |
+| User Mgmt Major: advanced permissions (user CRUD, roles, views per role) | 2 | ⚠️ Ayoub: roles defined, superadmin user CRUD needed |
+| User Mgmt Major: organization system (clubs: create/edit/delete, add/remove members) | 2 | ⚠️ Ayoub dashboard (mock data) + Ahmed |
+| Web Minor: file upload & management (types, validation, preview, progress, delete) | 1 | ⚠️ flyers/logos/avatars, nothing built |
+| A11y Minor: RTL (Arabic) | 1 | ⏳ Phase 7 |
+| A11y Minor: ≥3 languages + switcher | 1 | ⏳ Phase 7 (needs French too) |
+| Web Major: public API (API key, rate limiting, docs, GET/POST/PUT/DELETE) | 2 | ⚠️ Swagger docs exist; no API key, no throttling |
+| A11y Major: WCAG 2.1 AA | 2 | Possible (student site built with ARIA), risky: whole app incl. dashboard must pass |
+
+**Count:** ✅ demonstrable today ≈ **5** · with the ⚠️ items in progress finished ≈ **15** · + RTL and 3 languages ≈ **17** · + public API ≈ **19**. Target: 14 for sure + 2–3 extra as a safety margin (modules that fail the demo count 0).
+
+**Not for us:** game-dependent modules, chat/friends ("User interaction" major, "Standard user management" major both require friends).
+
