@@ -96,19 +96,24 @@ export const ClubContactCard = React.forwardRef<HTMLElement, ClubContactCardProp
             </div>
           </div>
           <ul className="space-y-2">
-            <li>
-              <a href={`mailto:${contact.president_email}`} className={contactLinkStyles}>
-                <MailIcon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{contact.president_email}</span>
-              </a>
-            </li>
-            <li>
-              {/* dir="ltr": a phone number stays left-to-right in Arabic pages (Phase 7). */}
-              <a href={`tel:${contact.president_phone}`} className={contactLinkStyles}>
-                <PhoneIcon className="h-4 w-4 shrink-0" />
-                <span dir="ltr">{formatPhone(contact.president_phone)}</span>
-              </a>
-            </li>
+            {/* Each line only when the API sent it (both are optional, types/api.ts). */}
+            {contact.president_email && (
+              <li>
+                <a href={`mailto:${contact.president_email}`} className={contactLinkStyles}>
+                  <MailIcon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{contact.president_email}</span>
+                </a>
+              </li>
+            )}
+            {contact.president_phone && (
+              <li>
+                {/* dir="ltr": a phone number stays left-to-right in Arabic pages (Phase 7). */}
+                <a href={`tel:${contact.president_phone}`} className={contactLinkStyles}>
+                  <PhoneIcon className="h-4 w-4 shrink-0" />
+                  <span dir="ltr">{formatPhone(contact.president_phone)}</span>
+                </a>
+              </li>
+            )}
           </ul>
         </div>
       ),

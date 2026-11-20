@@ -32,8 +32,9 @@ export interface Club {
     logo_url : string;
     banner_url: string | null;
     president_name : string;
-    president_phone : string;
-    president_email : string;
+    // Private: the API sends these only to signed-in users (absent for anonymous requests, API_SPEC.md).
+    president_phone? : string;
+    president_email? : string;
     created_at : string;
 }
 
