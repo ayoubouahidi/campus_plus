@@ -9,6 +9,14 @@ from .views import (
     board_stats,
     decide_request,
     join_club,
+    superadmin_audit_log,
+    superadmin_events_weekly,
+    superadmin_organization_detail,
+    superadmin_organizations,
+    superadmin_role_distribution,
+    superadmin_stats,
+    superadmin_user_detail,
+    superadmin_users,
 )
 
 
@@ -26,4 +34,15 @@ urlpatterns = [
     ),
     path("api/board/", include(router.urls)),
     path("api/clubs/<slug:slug>/join/", join_club),
+    path("api/superadmin/stats/", superadmin_stats),
+    path("api/superadmin/organizations/", superadmin_organizations),
+    path(
+        "api/superadmin/organizations/<int:organization_id>/",
+        superadmin_organization_detail,
+    ),
+    path("api/superadmin/users/", superadmin_users),
+    path("api/superadmin/users/<int:user_id>/", superadmin_user_detail),
+    path("api/superadmin/roles/distribution/", superadmin_role_distribution),
+    path("api/superadmin/events/weekly/", superadmin_events_weekly),
+    path("api/superadmin/audit-log/", superadmin_audit_log),
 ]

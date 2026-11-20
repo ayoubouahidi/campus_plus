@@ -61,6 +61,11 @@ def auth_sync(request):
 
     with transaction.atomic():
         user = User.objects.filter(forty_two_id=forty_two_id).first()
+        if user is not None and not user.is_active:
+            return Response(
+                {"detail": "This account is inactive."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if user is None:
             user = User(
                 username=login,

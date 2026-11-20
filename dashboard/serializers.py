@@ -1,7 +1,11 @@
 from rest_framework import serializers
 
-from core_data.models import UserMember
-from .models import Announcement, MembershipRequest
+from django.contrib.auth import get_user_model
+
+from core_data.models import Club, UserMember
+from .models import Announcement, AuditLog, MembershipRequest
+
+User = get_user_model()
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -54,3 +58,72 @@ class BoardMemberSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return "active" if not obj.user or obj.user.is_active else "inactive"
+
+
+class OrganizationAdminSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source="department.title", read_only=True)
+
+    class Meta:
+        model = Club
+        fields = ["id", "name", "department", "department_name", "is_active"]
+
+
+class OrganizationStatusSerializer(serializers.Serializer):
+    is_active = serializers.BooleanField()
+
+
+class SuperadminUserSerializer(serializers.ModelSerializer):
+    club_id = serializers.SerializerMethodField()
+    club_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "role",
+            "is_active",
+            "club_id",
+            "club_name",
+        ]
+        read_only_fields = fields
+
+    def get_club_id(self, obj):
+        try:
+            return obj.usermember.club_id_id
+        except UserMember.DoesNotExist:
+            return None
+
+    def get_club_name(self, obj):
+        try:
+            club = obj.usermember.club_id
+        except UserMember.DoesNotExist:
+            return None
+        return club.name if club else None
+
+
+class SuperadminUserUpdateSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(
+        choices=User.Role.choices,
+        required=False,
+    )
+    club_id = serializers.PrimaryKeyRelatedField(
+        queryset=Club.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(
+        source="actor.username",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = AuditLog
+        fields = ["id", "actor", "actor_username", "action", "target", "created_at"]

@@ -106,17 +106,59 @@ head of a club can create events for that club.
 ## Accounts and dashboard APIs
 
 `accounts.User` is the authentication identity (`AUTH_USER_MODEL`) and extends
-Django's `AbstractUser`. It stores the 42 ID, campus, avatar URL, phone, and
-one of the `STUDENT`, `BOARD_MEMBER`, or `SUPERADMIN` roles.
+Django's `AbstractUser`. Its primary key is a `BigAutoField`; the table is
+`accounts_user`, `username` remains the login field, and Django's inherited
+`UserManager` provides `create_user`/`create_superuser`. `USERNAME_FIELD` is
+`username` and inherited `REQUIRED_FIELDS` is empty. `first_name` and
+`last_name` are inherited 150-character fields; `email` is the inherited
+254-character `EmailField`. Additional fields are `forty_two_id`
+(`PositiveIntegerField`, unique, nullable), `role` (`CharField`, max 20,
+default `STUDENT`), `campus` (`CharField`, max 100), and `avatar_url`
+(`URLField`). Roles are `STUDENT`, `BOARD_MEMBER`, and `SUPERADMIN`.
+
 `core_data.UserMember` remains the club/department profile and links one-to-one
-to that identity. Board access is limited to the member's club (or a club the
-user heads).
+to that identity. The team has agreed that `phone` belongs on `UserMember`;
+the current branch still has a temporary `User.phone` field and must be aligned
+with Ahmed's model change before the migration contract is final. Board access
+is limited to the member's club (or a club the user heads).
+
+### User relationship inventory
+
+| Model field | Target | Relationship behavior |
+|---|---|---|
+| `Club.department` | `core_data.Department` | Foreign key, cascade |
+| `Club.head` | `core_data.UserMember` | Nullable foreign key, set null |
+| `ClubEvent.parent_id` | `core_data.Department` | Foreign key, cascade |
+| `ClubEvent.club` | `core_data.Club` | Nullable foreign key, cascade |
+| `UserMember.user` | `settings.AUTH_USER_MODEL` | One-to-one, nullable |
+| `UserMember.department_id` | `core_data.Department` | Nullable foreign key, set null |
+| `UserMember.club_id` | `core_data.Club` | Nullable foreign key, set null |
+| `Announcement.club` | `core_data.Club` | Foreign key, cascade |
+| `Announcement.created_by` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
+| `MembershipRequest.club` | `core_data.Club` | Foreign key, cascade |
+| `MembershipRequest.member` | `core_data.UserMember` | Foreign key, cascade |
+| `MembershipRequest.decided_by` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
+| `AuditLog.actor` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
+| `Rsvp` | Not present on this branch | Ahmed-owned; should use `settings.AUTH_USER_MODEL` |
+
+`accounts.0001_initial` depends on Django auth migration `0012`; the initial
+dashboard migration depends on `core_data.0006` and the swappable user model.
+The test suite migrates a fresh temporary database successfully. No
+existing-data user transition or rollback rehearsal has been completed.
 
 The internal `POST /auth/sync` endpoint requires `x-internal-key` to match
 `BACKEND_INTERNAL_KEY`; it must only be reachable from the Next.js container.
 Configure `SUPERADMIN_LOGINS` as a comma-separated list and optionally
 `ALLOWED_42_CAMPUSES` as a comma-separated allow-list. Do not commit `.env`
 files or send their secret values through chat.
+
+The request uses the camelCase fields sent by the dashboard's current
+`auth.ts`: `fortyTwoId`, `login`, `email`, `firstName`, `lastName`, `imageUrl`,
+and `campus`. The response is `{ "token": "<DRF token>", "user": { ... } }`;
+`user.id` is a JSON integer. The dashboard's current `BackendUser` declaration
+types `id` as a string and its session callback only accepts strings, so the
+frontend must normalize the ID with `String(data.user.id)` (or adopt a numeric
+ID type) before the login contract is considered integrated.
 
 Authenticated user endpoints:
 
@@ -129,6 +171,22 @@ The club-board endpoints are under `/api/board/`; membership requests and
 announcements are always scoped to the current user's club. Ahmed's event and
 RSVP APIs remain the source of truth for event management and registration
 counts.
+
+Superadmin endpoints require the `SUPERADMIN` role:
+
+```text
+GET   /api/superadmin/stats/
+GET   /api/superadmin/organizations/
+PATCH /api/superadmin/organizations/{id}/       # {"is_active": false}
+GET   /api/superadmin/users/?search=...&role=...
+PATCH /api/superadmin/users/{id}/               # {"role": "...", "club_id": 1}
+GET   /api/superadmin/roles/distribution/
+GET   /api/superadmin/events/weekly/
+GET   /api/superadmin/audit-log/
+```
+
+User and audit-log lists are paginated. Assigning `BOARD_MEMBER` requires a
+club; role and organization status changes are recorded in the audit log.
 
 ### Custom-user migration coordination
 

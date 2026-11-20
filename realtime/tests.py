@@ -5,7 +5,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
@@ -13,6 +13,9 @@ from rest_framework.test import APIClient
 from core_data.models import ClubEvent, Department
 from realtime.middleware import TokenAuthMiddleware
 from realtime.routing import websocket_urlpatterns
+
+
+User = get_user_model()
 
 
 test_application = TokenAuthMiddleware(

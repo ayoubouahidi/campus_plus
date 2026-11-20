@@ -1,12 +1,13 @@
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.test import RequestFactory
 from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
+from unittest.mock import patch
 
 from core_data.models import Club, Department, UserMember
 from dashboard.models import AuditLog
-from .permissions import IsClubBoard, user_club_id
+from .permissions import IsClubBoard, IsSuperAdmin, user_club_id
 
 
 User = get_user_model()
@@ -56,18 +57,35 @@ class AuthSyncTests(TestCase):
             )
             self.assertEqual(response.status_code, 200)
 
+        self.assertEqual(
+            set(response.data["user"]),
+            {
+                "id",
+                "email",
+                "full_name",
+                "login",
+                "avatar_url",
+                "campus",
+                "role",
+                "club_id",
+                "club_slug",
+            },
+        )
+        self.assertTrue(response.data["token"])
+        self.assertIsInstance(response.data["user"]["id"], int)
         user.refresh_from_db()
         self.assertEqual(User.objects.count(), 1)
         self.assertEqual(UserMember.objects.count(), 1)
         self.assertEqual(user.username, "student42")
         self.assertEqual(user.role, User.Role.BOARD_MEMBER)
         self.assertEqual(user.email, "student@example.com")
+        self.assertEqual(user.first_name, "Test")
+        self.assertEqual(user.last_name, "Student")
+        self.assertEqual(user.campus, "Benguerir")
         self.assertTrue(Token.objects.filter(user=user).exists())
         self.assertEqual(AuditLog.objects.filter(action="login").count(), 2)
 
     def test_auth_sync_bootstraps_configured_superadmin(self):
-        from unittest.mock import patch
-
         with patch.dict("os.environ", {"SUPERADMIN_LOGINS": "student42"}):
             response = self.client.post(
                 "/auth/sync",
@@ -86,8 +104,6 @@ class AuthSyncTests(TestCase):
             forty_two_id=4242,
             role=User.Role.BOARD_MEMBER,
         )
-        from unittest.mock import patch
-
         with patch.dict("os.environ", {"SUPERADMIN_LOGINS": "student42"}):
             response = self.client.post(
                 "/auth/sync",
@@ -99,6 +115,62 @@ class AuthSyncTests(TestCase):
         self.assertEqual(response.status_code, 200)
         user.refresh_from_db()
         self.assertEqual(user.role, User.Role.BOARD_MEMBER)
+
+    def test_auth_sync_rejects_inactive_accounts(self):
+        user = User.objects.create_user(
+            username="student42",
+            password="unused",
+            forty_two_id=4242,
+            is_active=False,
+        )
+
+        response = self.client.post(
+            "/auth/sync",
+            self.payload,
+            format="json",
+            HTTP_X_INTERNAL_KEY="test-internal-key",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Token.objects.filter(user=user).exists())
+        self.assertFalse(AuditLog.objects.filter(action="login").exists())
+
+
+class UserModelContractTests(TestCase):
+    def test_user_model_uses_expected_identity_contract(self):
+        user = User.objects.create_user(
+            username="regular-user",
+            password="test-password-123",
+        )
+
+        self.assertEqual(User.USERNAME_FIELD, "username")
+        self.assertEqual(User._meta.pk.get_internal_type(), "BigAutoField")
+        self.assertEqual(User._meta.db_table, "accounts_user")
+        self.assertTrue(user.check_password("test-password-123"))
+        self.assertEqual(
+            authenticate(username="regular-user", password="test-password-123"),
+            user,
+        )
+
+    def test_user_manager_creates_superusers_with_admin_flags(self):
+        user = User.objects.create_superuser(
+            username="admin-user",
+            password="test-password-123",
+        )
+
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+
+    def test_inactive_users_cannot_authenticate_with_password(self):
+        user = User.objects.create_user(
+            username="inactive-user",
+            password="test-password-123",
+            is_active=False,
+        )
+
+        self.assertIsNone(
+            authenticate(username="inactive-user", password="test-password-123")
+        )
 
 
 class UserApiTests(TestCase):
@@ -138,6 +210,7 @@ class UserApiTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Token.objects.filter(user=self.user).exists())
+        self.assertEqual(self.client.get("/api/me/").status_code, 401)
 
 
 class ClubBoardPermissionTests(TestCase):
@@ -163,3 +236,51 @@ class ClubBoardPermissionTests(TestCase):
         self.assertTrue(permission.has_permission(request, None))
         self.assertTrue(permission.has_object_permission(request, None, own_club))
         self.assertFalse(permission.has_object_permission(request, None, other_club))
+
+    def test_club_head_can_manage_the_club_they_head(self):
+        department = Department.objects.create(title="Technology")
+        user = User.objects.create_user(
+            username="club-head",
+            password="unused",
+            role=User.Role.STUDENT,
+        )
+        member = UserMember.objects.create(
+            user=user,
+            username=user.username,
+        )
+        club = Club.objects.create(
+            name="Robotics",
+            department=department,
+            head=member,
+        )
+        request = RequestFactory().get("/")
+        request.user = user
+        permission = IsClubBoard()
+
+        self.assertTrue(permission.has_permission(request, None))
+        self.assertTrue(permission.has_object_permission(request, None, club))
+
+    def test_superadmin_permission_recognizes_role_and_django_superuser(self):
+        request = RequestFactory().get("/")
+        permission = IsSuperAdmin()
+
+        role_admin = User.objects.create_user(
+            username="role-admin",
+            password="unused",
+            role=User.Role.SUPERADMIN,
+        )
+        request.user = role_admin
+        self.assertTrue(permission.has_permission(request, None))
+
+        django_superuser = User.objects.create_superuser(
+            username="django-superuser",
+            password="unused",
+        )
+        request.user = django_superuser
+        self.assertTrue(permission.has_permission(request, None))
+
+        request.user = User.objects.create_user(
+            username="student",
+            password="unused",
+        )
+        self.assertFalse(permission.has_permission(request, None))

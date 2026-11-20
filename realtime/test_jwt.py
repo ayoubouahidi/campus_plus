@@ -8,7 +8,7 @@ from channels.layers import get_channel_layer
 from channels.routing import URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
 from channels.testing import WebsocketCommunicator
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 from rest_framework.authtoken.models import Token
@@ -18,6 +18,9 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from realtime.authentication import get_websocket_auth_stack
 from realtime.consumers import CalendarConsumer
 from realtime.routing import websocket_urlpatterns
+
+
+User = get_user_model()
 
 
 @override_settings(
