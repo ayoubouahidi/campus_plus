@@ -1,11 +1,12 @@
 from datetime import datetime, time, timezone
 from io import BytesIO
 import os
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
+from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from PIL import Image
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -25,11 +26,14 @@ from .models import (
 )
 from .serializers import ClubEventSerializer, ClubSerializer, DepartmentSerializer
 from .views import (
+    CanCreateClubEvent,
+    CanModifyClubEvent,
     ClubViewSet,
     ClubEventFilterBackend,
     ClubEventPagination,
     ClubEventViewSet,
     DepartmentViewSet,
+    UserMemberViewSet,
 )
 
 
@@ -125,6 +129,576 @@ class ClubEventPublicReadSerializerTests(SimpleTestCase):
         self.assertIsNone(data['capacity'])
         self.assertIsNone(data['start_time'])
         self.assertIsNone(data['end_time'])
+
+
+class ClubEventOwnershipSecurityTests(SimpleTestCase):
+    def setUp(self):
+        self.department = Department(id=1, title='Technology')
+        self.other_department = Department(id=2, title='Arts')
+        self.head_user = User(id=10, username='head')
+        self.student = User(id=11, username='student')
+        self.staff = User(id=12, username='staff', is_staff=True)
+        self.head = UserMember(id=20, username='head', user=self.head_user)
+        self.other_head = UserMember(id=21, username='other-head')
+        self.club = Club(
+            id=30,
+            name='Programming',
+            department=self.department,
+            head=self.head,
+        )
+        self.other_club = Club(
+            id=31,
+            name='Robotics',
+            department=self.other_department,
+            head=self.other_head,
+        )
+        self.event = ClubEvent(
+            id=40,
+            name='Demo Day',
+            parent_id=self.department,
+            club=self.club,
+            location='Room 1',
+        )
+
+    @staticmethod
+    def request_for(user):
+        return SimpleNamespace(user=user)
+
+    def validate_update(self, user, attrs):
+        serializer = ClubEventSerializer(
+            instance=self.event,
+            context={'request': self.request_for(user)},
+        )
+        return serializer.validate(attrs)
+
+    def test_anonymous_event_modification_is_denied(self):
+        permission = CanModifyClubEvent()
+
+        self.assertFalse(permission.has_permission(
+            self.request_for(AnonymousUser()),
+            ClubEventViewSet(),
+        ))
+
+    @patch('core_data.views.Club.objects.filter')
+    def test_ordinary_student_event_modification_is_denied(self, club_filter):
+        club_filter.return_value.exists.return_value = False
+        permission = CanModifyClubEvent()
+        request = self.request_for(self.student)
+
+        self.assertTrue(permission.has_permission(request, ClubEventViewSet()))
+        self.assertFalse(permission.has_object_permission(
+            request,
+            ClubEventViewSet(),
+            self.event,
+        ))
+
+    @patch('core_data.views.Club.objects.filter')
+    def test_club_head_can_update_an_ordinary_field(self, club_filter):
+        club_filter.return_value.exists.return_value = True
+        permission = CanModifyClubEvent()
+        request = self.request_for(self.head_user)
+        update_data = {
+            'name': 'Updated Demo Day',
+            'description': 'Updated description',
+            'starts_at': '2026-11-21T10:00:00Z',
+            'ends_at': '2026-11-21T12:00:00Z',
+            'location': 'Main Hall',
+            'status': 'ongoing',
+        }
+
+        self.assertTrue(permission.has_object_permission(
+            request,
+            ClubEventViewSet(),
+            self.event,
+        ))
+        serializer = ClubEventSerializer(
+            instance=self.event,
+            data=update_data,
+            partial=True,
+            context={'request': request},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['name'], 'Updated Demo Day')
+        self.assertEqual(serializer.validated_data['location'], 'Main Hall')
+        self.assertEqual(serializer.validated_data['status'], 'ongoing')
+
+    @patch('core_data.views.Club.objects.filter')
+    def test_club_head_cannot_modify_another_clubs_event(self, club_filter):
+        club_filter.return_value.exists.return_value = False
+        other_event = ClubEvent(
+            id=41,
+            name='Other Event',
+            parent_id=self.other_department,
+            club=self.other_club,
+        )
+
+        self.assertFalse(CanModifyClubEvent().has_object_permission(
+            self.request_for(self.head_user),
+            ClubEventViewSet(),
+            other_event,
+        ))
+
+    def test_club_head_cannot_transfer_event_to_another_club(self):
+        with self.assertRaises(DRFValidationError) as context:
+            self.validate_update(self.head_user, {'club': self.other_club})
+
+        self.assertIn('club', context.exception.detail)
+
+    def test_club_head_cannot_remove_event_club(self):
+        with self.assertRaises(DRFValidationError) as context:
+            self.validate_update(self.head_user, {'club': None})
+
+        self.assertIn('club', context.exception.detail)
+
+    def test_club_head_cannot_change_event_department(self):
+        with self.assertRaises(DRFValidationError) as context:
+            self.validate_update(
+                self.head_user,
+                {'parent_id': self.other_department},
+            )
+
+        self.assertIn('parent_id', context.exception.detail)
+
+    def test_unchanged_relationship_values_are_allowed(self):
+        same_club = Club(id=self.club.pk, department=self.department)
+        same_department = Department(id=self.department.pk)
+
+        self.assertEqual(
+            self.validate_update(self.head_user, {
+                'club': same_club,
+                'parent_id': same_department,
+            }),
+            {'club': same_club, 'parent_id': same_department},
+        )
+
+    def test_rejected_transfer_is_not_saved_or_broadcast(self):
+        serializer = ClubEventSerializer(
+            instance=self.event,
+            data={'club': self.other_club.pk},
+            partial=True,
+            context={'request': self.request_for(self.head_user)},
+        )
+        serializer.fields['club'].queryset = Mock()
+        serializer.fields['club'].queryset.get.return_value = self.other_club
+        view = ClubEventViewSet()
+        view.get_object = Mock(return_value=self.event)
+        view.get_serializer = Mock(return_value=serializer)
+        view.perform_update = Mock()
+
+        with patch('core_data.views.broadcast_calendar_event') as broadcast:
+            with self.assertRaises(DRFValidationError):
+                view.partial_update(SimpleNamespace(data={
+                    'club': self.other_club.pk,
+                }))
+
+        view.perform_update.assert_not_called()
+        broadcast.assert_not_called()
+        self.assertEqual(self.event.club_id, self.club.pk)
+
+    def test_django_staff_permissions_and_relationship_updates_remain_allowed(self):
+        permission = CanModifyClubEvent()
+        request = self.request_for(self.staff)
+
+        self.assertTrue(permission.has_permission(request, ClubEventViewSet()))
+        self.assertTrue(permission.has_object_permission(
+            request,
+            ClubEventViewSet(),
+            self.event,
+        ))
+        self.assertEqual(
+            self.validate_update(self.staff, {
+                'club': self.other_club,
+                'parent_id': self.other_department,
+            }),
+            {
+                'club': self.other_club,
+                'parent_id': self.other_department,
+            },
+        )
+
+
+class ClubEventRelationshipIntegrityTests(SimpleTestCase):
+    def setUp(self):
+        self.department = Department(id=101, title='Technology')
+        self.other_department = Department(id=102, title='Arts')
+        self.head_user = User(id=110, username='head')
+        self.staff = User(id=111, username='staff', is_staff=True)
+        self.head = UserMember(
+            id=120,
+            username='head',
+            user=self.head_user,
+        )
+        self.club = Club(
+            id=130,
+            name='Programming',
+            department=self.department,
+            head=self.head,
+        )
+        self.other_club = Club(
+            id=131,
+            name='Robotics',
+            department=self.other_department,
+        )
+        self.event = ClubEvent(
+            id=140,
+            name='Demo Day',
+            parent_id=self.department,
+            club=self.club,
+            location='Room 1',
+        )
+
+    @staticmethod
+    def request_for(user, data=None):
+        return SimpleNamespace(user=user, data=data or {})
+
+    def validate(self, attrs, user=None, instance=None):
+        serializer = ClubEventSerializer(
+            instance=instance,
+            context={'request': self.request_for(user or self.staff)},
+        )
+        return serializer.validate(attrs)
+
+    @patch('core_data.views.Club.objects.filter')
+    def test_club_head_creates_for_own_club_and_department(self, club_filter):
+        club_filter.return_value.exists.return_value = True
+        request = self.request_for(self.head_user, {'club': self.club.pk})
+        attrs = {
+            'name': 'Valid Event',
+            'category': 'Tech',
+            'club': self.club,
+            'parent_id': self.department,
+            'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
+            'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+        }
+
+        self.assertTrue(CanCreateClubEvent().has_permission(
+            request,
+            ClubEventViewSet(),
+        ))
+        self.assertEqual(self.validate(attrs, self.head_user), attrs)
+
+    def test_club_head_cannot_create_with_mismatched_department(self):
+        with self.assertRaises(DRFValidationError) as context:
+            self.validate({
+                'name': 'Invalid Event',
+                'category': 'Tech',
+                'club': self.club,
+                'parent_id': self.other_department,
+                'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
+                'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            }, self.head_user)
+
+        self.assertIn('parent_id', context.exception.detail)
+
+    @patch('core_data.views.Club.objects.filter')
+    def test_club_head_cannot_create_for_another_club(self, club_filter):
+        club_filter.return_value.exists.return_value = False
+        request = self.request_for(self.head_user, {
+            'club': self.other_club.pk,
+        })
+
+        self.assertFalse(CanCreateClubEvent().has_permission(
+            request,
+            ClubEventViewSet(),
+        ))
+
+    def test_staff_can_create_with_consistent_relationships(self):
+        request = self.request_for(self.staff, {'club': self.club.pk})
+        attrs = {
+            'name': 'Staff Event',
+            'category': 'Tech',
+            'club': self.club,
+            'parent_id': self.department,
+            'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
+            'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+        }
+
+        self.assertTrue(CanCreateClubEvent().has_permission(
+            request,
+            ClubEventViewSet(),
+        ))
+        self.assertEqual(self.validate(attrs), attrs)
+
+    def test_staff_cannot_create_with_mismatched_relationships(self):
+        with self.assertRaises(DRFValidationError) as context:
+            self.validate({
+                'name': 'Invalid Staff Event',
+                'category': 'Tech',
+                'club': self.club,
+                'parent_id': self.other_department,
+                'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
+                'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            })
+
+        self.assertIn('parent_id', context.exception.detail)
+
+    def test_staff_cannot_transfer_event_into_inconsistent_relationships(self):
+        with self.assertRaises(DRFValidationError) as context:
+            self.validate(
+                {'club': self.other_club},
+                instance=self.event,
+            )
+
+        self.assertIn('parent_id', context.exception.detail)
+
+    def test_valid_staff_relationship_transfer_is_allowed(self):
+        attrs = {
+            'club': self.other_club,
+            'parent_id': self.other_department,
+        }
+
+        self.assertEqual(
+            self.validate(attrs, instance=self.event),
+            attrs,
+        )
+
+    def test_staff_department_only_event_remains_allowed(self):
+        request = self.request_for(self.staff)
+        attrs = {
+            'name': 'Department Event',
+            'category': 'Tech',
+            'parent_id': self.department,
+            'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
+            'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+        }
+
+        self.assertTrue(CanCreateClubEvent().has_permission(
+            request,
+            ClubEventViewSet(),
+        ))
+        self.assertEqual(self.validate(attrs), attrs)
+
+    def test_ordinary_event_edit_remains_allowed(self):
+        attrs = {'description': 'Updated description'}
+
+        self.assertEqual(
+            self.validate(attrs, self.head_user, self.event),
+            attrs,
+        )
+
+    def test_invalid_create_is_not_saved_or_broadcast(self):
+        serializer = ClubEventSerializer(
+            data={
+                'name': 'Invalid Event',
+                'category': 'Tech',
+                'club': self.club.pk,
+                'parent_id': self.other_department.pk,
+                'starts_at': '2026-11-21T10:00:00Z',
+                'ends_at': '2026-11-21T12:00:00Z',
+            },
+            context={'request': self.request_for(self.staff)},
+        )
+        serializer.fields['club'].queryset = Mock()
+        serializer.fields['club'].queryset.get.return_value = self.club
+        serializer.fields['parent_id'].queryset = Mock()
+        serializer.fields['parent_id'].queryset.get.return_value = (
+            self.other_department
+        )
+        view = ClubEventViewSet()
+        view.get_serializer = Mock(return_value=serializer)
+        view.perform_create = Mock()
+
+        with patch('core_data.views.broadcast_calendar_event') as broadcast:
+            with self.assertRaises(DRFValidationError):
+                view.create(SimpleNamespace(data=serializer.initial_data))
+
+        view.perform_create.assert_not_called()
+        broadcast.assert_not_called()
+
+
+class ClubEventManagementValidationTests(SimpleTestCase):
+    def setUp(self):
+        self.department = Department(id=201, title='Technology')
+        self.staff = User(id=210, username='staff', is_staff=True)
+        self.head_user = User(id=211, username='head')
+        self.head = UserMember(
+            id=220,
+            username='head',
+            user=self.head_user,
+        )
+        self.club = Club(
+            id=230,
+            name='Programming',
+            department=self.department,
+            head=self.head,
+        )
+        self.event = ClubEvent(
+            id=240,
+            name='Demo Day',
+            category='Tech',
+            parent_id=self.department,
+            club=self.club,
+            starts_at=datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
+            ends_at=datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            capacity=100,
+        )
+        self.valid_create_data = {
+            'name': 'New Event',
+            'category': 'Tech',
+            'parent_id': self.department.pk,
+            'club': self.club.pk,
+            'starts_at': '2026-11-22T10:00:00Z',
+            'ends_at': '2026-11-22T12:00:00Z',
+        }
+
+    def make_serializer(self, data, instance=None, user=None, partial=False):
+        request = SimpleNamespace(user=user or self.staff)
+        serializer = ClubEventSerializer(
+            instance=instance,
+            data=data,
+            partial=partial,
+            context={'request': request},
+        )
+        serializer.fields['parent_id'].queryset = Mock()
+        serializer.fields['parent_id'].queryset.get.return_value = self.department
+        serializer.fields['club'].queryset = Mock()
+        serializer.fields['club'].queryset.get.return_value = self.club
+        return serializer
+
+    def test_creation_requires_name_category_dates_and_department(self):
+        for field_name in (
+            'name',
+            'category',
+            'starts_at',
+            'ends_at',
+            'parent_id',
+        ):
+            with self.subTest(field=field_name):
+                data = dict(self.valid_create_data)
+                data.pop(field_name)
+                serializer = self.make_serializer(data)
+
+                self.assertFalse(serializer.is_valid())
+                self.assertIn(field_name, serializer.errors)
+
+        data = dict(self.valid_create_data, name='   ')
+        serializer = self.make_serializer(data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('name', serializer.errors)
+
+    def test_invalid_category_choice_is_rejected(self):
+        data = dict(self.valid_create_data, category='Unknown')
+        serializer = self.make_serializer(data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('category', serializer.errors)
+
+    def test_each_documented_category_is_valid(self):
+        for category, _ in ClubEvent.CATEGORY_CHOICES:
+            with self.subTest(category=category):
+                data = dict(self.valid_create_data, category=category)
+                serializer = self.make_serializer(data)
+
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+                self.assertEqual(serializer.validated_data['category'], category)
+
+    def test_invalid_datetime_values_are_rejected(self):
+        for field_name in ('starts_at', 'ends_at'):
+            with self.subTest(field=field_name):
+                data = dict(self.valid_create_data)
+                data[field_name] = 'not-a-datetime'
+                serializer = self.make_serializer(data)
+
+                self.assertFalse(serializer.is_valid())
+                self.assertIn(field_name, serializer.errors)
+
+    def test_end_must_be_strictly_later_than_start(self):
+        invalid_end_values = (
+            '2026-11-22T09:00:00Z',
+            '2026-11-22T10:00:00Z',
+        )
+        for end_value in invalid_end_values:
+            with self.subTest(end=end_value):
+                data = dict(self.valid_create_data, ends_at=end_value)
+                serializer = self.make_serializer(data)
+
+                self.assertFalse(serializer.is_valid())
+                self.assertIn('ends_at', serializer.errors)
+
+    def test_valid_chronological_dates_are_accepted(self):
+        serializer = self.make_serializer(self.valid_create_data)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertLess(
+            serializer.validated_data['starts_at'],
+            serializer.validated_data['ends_at'],
+        )
+
+    def test_valid_and_invalid_capacity_values(self):
+        for capacity in (0, 25, None):
+            with self.subTest(valid_capacity=capacity):
+                data = dict(self.valid_create_data, capacity=capacity)
+                serializer = self.make_serializer(data)
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+                self.assertEqual(serializer.validated_data['capacity'], capacity)
+
+        for capacity in (-1, 'not-an-integer', 1.5):
+            with self.subTest(invalid_capacity=capacity):
+                data = dict(self.valid_create_data, capacity=capacity)
+                serializer = self.make_serializer(data)
+                self.assertFalse(serializer.is_valid())
+                self.assertIn('capacity', serializer.errors)
+
+    def test_authorized_partial_update_uses_effective_dates(self):
+        valid_serializer = self.make_serializer(
+            {
+                'description': 'Updated',
+                'category': 'Music',
+                'capacity': 0,
+                'ends_at': '2026-11-21T13:00:00Z',
+            },
+            instance=self.event,
+            user=self.head_user,
+            partial=True,
+        )
+        self.assertTrue(valid_serializer.is_valid(), valid_serializer.errors)
+        self.assertEqual(valid_serializer.validated_data['category'], 'Music')
+        self.assertEqual(valid_serializer.validated_data['capacity'], 0)
+
+        invalid_serializer = self.make_serializer(
+            {'starts_at': '2026-11-21T12:00:00Z'},
+            instance=self.event,
+            user=self.head_user,
+            partial=True,
+        )
+        self.assertFalse(invalid_serializer.is_valid())
+        self.assertIn('ends_at', invalid_serializer.errors)
+
+    def test_ordinary_edit_preserves_nullable_legacy_event(self):
+        legacy_event = ClubEvent(
+            id=241,
+            name='Legacy Event',
+            parent_id=self.department,
+            club=self.club,
+            category=None,
+            starts_at=None,
+            ends_at=None,
+        )
+        serializer = self.make_serializer(
+            {'description': 'Ordinary edit'},
+            instance=legacy_event,
+            user=self.head_user,
+            partial=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_invalid_create_is_not_saved_or_broadcast(self):
+        data = dict(
+            self.valid_create_data,
+            ends_at='2026-11-22T10:00:00Z',
+        )
+        serializer = self.make_serializer(data)
+        view = ClubEventViewSet()
+        view.get_serializer = Mock(return_value=serializer)
+        view.perform_create = Mock()
+
+        with patch('core_data.views.broadcast_calendar_event') as broadcast:
+            with self.assertRaises(DRFValidationError):
+                view.create(SimpleNamespace(data=data))
+
+        view.perform_create.assert_not_called()
+        broadcast.assert_not_called()
 
 
 class PublicClubSerializerTests(SimpleTestCase):
@@ -702,6 +1276,68 @@ class ClubEventPaginationTests(SimpleTestCase):
     def test_duplicate_page_size_is_rejected(self):
         with self.assertRaises(DRFValidationError):
             self.paginate(query_string='page_size=5&page_size=10')
+
+
+class UserMemberPermissionTests(SimpleTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.view = UserMemberViewSet()
+        self.student = User(username='student', is_staff=False)
+        self.staff = User(username='staff', is_staff=True)
+
+    def is_allowed(self, user):
+        permissions = self.view.get_permissions()
+        self.assertEqual(len(permissions), 1)
+        return permissions[0].has_permission(
+            type('Request', (), {'user': user})(),
+            self.view,
+        )
+
+    def test_anonymous_user_cannot_list_or_retrieve_members(self):
+        for url in ('/api/members/', '/api/members/42/'):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 401)
+
+    def test_non_staff_user_cannot_list_members(self):
+        self.client.force_authenticate(user=self.student)
+
+        self.assertEqual(self.client.get('/api/members/').status_code, 403)
+
+    def test_non_staff_user_cannot_retrieve_another_member(self):
+        self.client.force_authenticate(user=self.student)
+
+        self.assertEqual(self.client.get('/api/members/42/').status_code, 403)
+
+    def test_non_staff_user_cannot_write_members(self):
+        self.client.force_authenticate(user=self.student)
+        operations = (
+            ('post', '/api/members/', {'username': 'blocked'}),
+            ('put', '/api/members/42/', {'username': 'blocked'}),
+            ('patch', '/api/members/42/', {'username': 'blocked'}),
+            ('delete', '/api/members/42/', None),
+        )
+        for method, url, data in operations:
+            with self.subTest(method=method):
+                request = getattr(self.client, method)
+                if data is None:
+                    response = request(url)
+                else:
+                    response = request(url, data, format='json')
+                self.assertEqual(response.status_code, 403)
+
+    def test_staff_user_can_list_retrieve_and_write_members(self):
+        actions = (
+            'list',
+            'retrieve',
+            'create',
+            'update',
+            'partial_update',
+            'destroy',
+        )
+        for action in actions:
+            with self.subTest(action=action):
+                self.view.action = action
+                self.assertTrue(self.is_allowed(self.staff))
 
 
 class DepartmentAndMemberApiTests(TestCase):

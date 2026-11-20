@@ -24,7 +24,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
 from .models import Club, ClubEvent, Department, UserMember
@@ -452,11 +452,8 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 class UserMemberViewSet(viewsets.ModelViewSet):
     queryset = UserMember.objects.select_related('department_id', 'club_id').all()
     serializer_class = UserMemberSerializer
-
-    def get_permissions(self):
-        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
-            return [IsAuthenticated()]
-        return [IsAdminUser()]
+    # [ahmed] Temporarily restrict all member data and writes to Django staff.
+    permission_classes = [IsAdminUser]
 
 
 @extend_schema_view(

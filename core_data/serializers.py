@@ -135,6 +135,16 @@ class ClubEventSerializer(serializers.ModelSerializer):
     parent = serializers.CharField(source='parent_id.title', read_only=True)
     # [ahmed] Publish the frontend's event names without renaming database fields.
     title = serializers.CharField(source='name', read_only=True)
+    category = serializers.ChoiceField(
+        choices=ClubEvent.CATEGORY_CHOICES,
+        required=False,
+        allow_null=True,
+    )
+    capacity = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
     club_id = serializers.IntegerField(read_only=True, allow_null=True)
     club_name = serializers.CharField(
         source='club.name',
@@ -161,6 +171,96 @@ class ClubEventSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.STR)
     def get_flyer_url(self, event):
         return absolute_file_url(event.image_path, self.context, '')
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if self.instance is not None and not (user and user.is_staff):
+            relationship_errors = {}
+            protected_relationships = {
+                'club': (
+                    self.instance.club_id,
+                    "Only Django staff may change or remove an event's club.",
+                ),
+                'parent_id': (
+                    self.instance.parent_id_id,
+                    "Only Django staff may change an event's department.",
+                ),
+            }
+            for field_name, (current_id, message) in protected_relationships.items():
+                if field_name not in attrs:
+                    continue
+                submitted_value = attrs[field_name]
+                submitted_id = getattr(submitted_value, 'pk', None)
+                if submitted_id != current_id:
+                    relationship_errors[field_name] = message
+
+            if relationship_errors:
+                raise serializers.ValidationError(relationship_errors)
+
+        effective_club = attrs.get('club')
+        if 'club' not in attrs and self.instance is not None:
+            effective_club = self.instance.club
+
+        effective_department = attrs.get('parent_id')
+        if effective_department is not None:
+            effective_department_id = effective_department.pk
+        elif self.instance is not None:
+            effective_department_id = self.instance.parent_id_id
+        else:
+            effective_department_id = None
+
+        if (
+            effective_club is not None
+            and effective_department_id is not None
+            and effective_club.department_id != effective_department_id
+        ):
+            raise serializers.ValidationError({
+                'parent_id': (
+                    "The event department must match the selected club's "
+                    'department.'
+                ),
+            })
+
+        event_errors = {}
+        if self.instance is None:
+            for field_name in ('category', 'starts_at', 'ends_at'):
+                if attrs.get(field_name) is None:
+                    event_errors[field_name] = 'This field is required.'
+        elif 'category' in attrs and attrs['category'] is None:
+            event_errors['category'] = 'This field may not be null.'
+
+        validate_schedule = (
+            self.instance is None
+            or 'starts_at' in attrs
+            or 'ends_at' in attrs
+        )
+        if validate_schedule:
+            effective_start = attrs.get('starts_at')
+            effective_end = attrs.get('ends_at')
+            if self.instance is not None:
+                if 'starts_at' not in attrs:
+                    effective_start = self.instance.starts_at
+                if 'ends_at' not in attrs:
+                    effective_end = self.instance.ends_at
+
+            if effective_start is None:
+                event_errors['starts_at'] = 'This field is required.'
+            if effective_end is None:
+                event_errors['ends_at'] = 'This field is required.'
+            if (
+                effective_start is not None
+                and effective_end is not None
+                and effective_end <= effective_start
+            ):
+                event_errors['ends_at'] = (
+                    'The end datetime must be later than the start datetime.'
+                )
+
+        if event_errors:
+            raise serializers.ValidationError(event_errors)
+
+        return attrs
 
     class Meta:
         model = ClubEvent
@@ -190,8 +290,6 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = [
-            'category',
-            'capacity',
             'created_at',
             'updated_at',
         ]

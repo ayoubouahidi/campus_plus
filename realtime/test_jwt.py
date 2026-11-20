@@ -125,10 +125,13 @@ class JWTWebSocketTests(TransactionTestCase):
             str(RefreshToken.for_user(self.user))
         )
 
-    def test_deleted_user_is_rejected(self):
-        token = str(AccessToken.for_user(self.user))
-        self.user.delete()
-        async_to_sync(self.check_rejected_token)(token)
+    def test_nonexistent_user_id_is_rejected(self):
+        token = AccessToken.for_user(self.user)
+        nonexistent_user_id = self.user.pk + 1
+        self.assertFalse(User.objects.filter(pk=nonexistent_user_id).exists())
+        token["user_id"] = nonexistent_user_id
+
+        async_to_sync(self.check_rejected_token)(str(token))
 
     def test_missing_user_claim_is_rejected(self):
         token = AccessToken.for_user(self.user)
