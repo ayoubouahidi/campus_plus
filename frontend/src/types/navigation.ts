@@ -9,7 +9,9 @@ export type AppRoute =
   | `/events/${string}`
   | '/auth/login'
   | '/profile'
-  | '/me';
+  | '/me'
+  | '/privacy'
+  | '/terms';
 
 // Icons are referenced by name so this contract stays plain data (no JSX, server-safe).
 // Each shell component resolves names through its own Record<NavIconName, Component>.

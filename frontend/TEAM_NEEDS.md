@@ -64,7 +64,7 @@ Spec: `API_SPEC.md` on `Ahmed` (Swagger `/api/docs/`). Blocked part: `AYOUB_DEPE
 | A model | `Rsvp(user, event, created_at)`, unique per user+event |
 | `POST /api/club-events/{id}/rsvp/` and `DELETE` the same URL | Signed-in only. Return the new `rsvps_count` and `has_user_rsvpd`. |
 | On every event in lists and detail: `rsvps_count`, `has_user_rsvpd` (false when signed out), `attendees_preview` (≤ 3 `{id, full_name, avatar_url}`, newest first) | The event cards show the count, the "Going" state and an avatar stack. |
-| `GET /api/club-events/{id}/attendees/` | The full list on the event page. **Decision needed:** visible to signed-in students only? (DOCS §6.9) |
+| `GET /api/club-events/{id}/attendees/` | The full list on the event page. **Decided (2026-11-20): signed-in only.** Anonymous requests get 401/403 here, and events in lists/detail carry `rsvps_count` but an **empty `attendees_preview`** (names and pictures never leave the server for signed-out visitors). Same rule as the president's contact details |
 
 ### 1.2 Events (`ClubEvent`): fields the UI shows
 
@@ -156,7 +156,7 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 
 | Question | Options | Frontend's suggestion |
 | --- | --- | --- |
-| Who can see who's going to an event? | Everyone / signed-in students / nobody but the count | Signed-in students |
+| Who can see who's going to an event? | ~~Everyone / signed-in students / nobody but the count~~ | **Decided 2026-11-20: signed-in students only.** Signed-out visitors see the count. Enforced by the API (Ahmed, §1.1) and written in the Privacy Policy (DOCS §9) |
 | EMINES students without a 42 account | ~~Email sign-up / campus SSO / 42 only~~ | **Decided by the subject (§5): email + password sign-up and login are mandatory for everyone.** 42 stays as the OAuth module |
 | Dashboard location | `/dashboard` on the same domain / `admin.` subdomain | Subdomain (no cookie clash, clean nginx) |
 | Event categories | The 7 above / editable list in the DB | Fixed list for now |
@@ -174,7 +174,7 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | --- | --- | --- |
 | Frontend + backend + database | ⚠️ All exist, but on separate branches; `master` has only a README; the student site and the dashboard still use mock data | all (merge, Phase 7) |
 | **Email + password sign-up and login, hashed + salted passwords** | ❌ **Student site is 42-only.** Django `POST /api/signup/` exists (Django hashes passwords); no login form, no register page | Ayoub (`accounts`) + Mouad (`/auth/register`, email form on `/auth/login`) |
-| **Privacy Policy + Terms of Service pages**, real content, linked from the footer | ❌ **Missing: rejection if absent** | Mouad (`/privacy`, `/terms`) + team for the content |
+| **Privacy Policy + Terms of Service pages**, real content, linked from the footer | ✅ **Live on `Mouad` (2026-11-20):** `/privacy`, `/terms`, footer links on every page. Contact `campushub.1337.team@gmail.com` (everyone: read it). **Team: read both texts once** | Mouad (DOCS §9) |
 | Forms validated in frontend **and** backend | ⚠️ Not yet (sign-up, login, RSVP, dashboard event forms) | everyone on their forms |
 | Multi-user: many users at once, no conflicts, real-time across users | ❌ Not demonstrable while data is mocked and RSVP has no API | Ahmed (RSVP, Rsvp model exists), Mouad (Phase 6–7) |
 | HTTPS for every browser/API connection | ✅ nginx 443 (self-signed), HTTP 301 → HTTPS | Hamza |

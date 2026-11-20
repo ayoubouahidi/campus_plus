@@ -1,4 +1,4 @@
-import { FooterLinkGroup, NavItem } from "@/types/navigation";
+import { AppRoute, FooterLinkGroup, NavItem } from "@/types/navigation";
 
 // Consumed by Navbar (desktop links) and MobileNav (bottom tab bar + drawer).
 export const PUBLIC_NAV: readonly NavItem[] = [
@@ -69,3 +69,10 @@ export const FULL_SCREEN_ROUTES: readonly string[] = ['/auth'];
 
 export const isFullScreenRoute = (pathname: string | null): boolean =>
   !!pathname && FULL_SCREEN_ROUTES.some((prefix) => matchesPrefix(normalizePath(pathname), prefix));
+
+// Mandatory legal pages (subject v21.2, DOCS.md §9): in the footer's bottom row on every page and in the
+// phone drawer, so they are one tap away from anywhere.
+export const LEGAL_LINKS: readonly { label: string; href: AppRoute }[] = [
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Service', href: '/terms' },
+];
