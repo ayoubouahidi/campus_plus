@@ -3,6 +3,7 @@ from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
+from accounts.models import ClubBoardAssignment
 from core_data.models import Club, Department, UserMember
 from .models import Announcement, AuditLog, MembershipRequest
 
@@ -25,6 +26,10 @@ class BoardApiTests(TestCase):
             user=self.board_user,
             username=self.board_user.username,
             club_id=self.club,
+        )
+        ClubBoardAssignment.objects.create(
+            user=self.board_user,
+            club=self.club,
         )
         self.other_user = User.objects.create_user(
             username="other-user",
@@ -190,7 +195,7 @@ class SuperadminApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         student.refresh_from_db()
         self.assertEqual(student.role, User.Role.BOARD_MEMBER)
-        self.assertEqual(student.usermember.club_id, self.club)
+        self.assertEqual(student.board_assignment.club, self.club)
         self.assertTrue(
             AuditLog.objects.filter(
                 actor=self.admin,
@@ -202,6 +207,11 @@ class SuperadminApiTests(TestCase):
         student = User.objects.create_user(
             username="unassigned-board-member",
             password="unused",
+        )
+        UserMember.objects.create(
+            user=student,
+            username=student.username,
+            club_id=self.club,
         )
 
         for payload in (

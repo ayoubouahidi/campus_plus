@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from core_data.models import Club, Department, UserMember
 from dashboard.models import AuditLog
+from .models import ClubBoardAssignment
 from .permissions import IsClubBoard, IsSuperAdmin, user_club_id
 
 
@@ -136,6 +137,61 @@ class AuthSyncTests(TestCase):
         self.assertFalse(AuditLog.objects.filter(action="login").exists())
 
 
+class EmailPasswordLoginTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="email-login",
+            password="secure-password-123",
+            email="student@example.com",
+        )
+
+    def test_login_returns_the_shared_token_and_user_contract(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {"email": "STUDENT@example.com", "password": "secure-password-123"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["token"])
+        self.assertEqual(response.data["user"]["id"], self.user.pk)
+        self.assertTrue(Token.objects.filter(user=self.user).exists())
+
+    def test_login_rejects_bad_credentials_inactive_and_ambiguous_emails(self):
+        invalid_password = self.client.post(
+            "/api/auth/login/",
+            {"email": self.user.email, "password": "wrong-password"},
+            format="json",
+        )
+        self.assertEqual(invalid_password.status_code, 401)
+
+        inactive_user = User.objects.create_user(
+            username="inactive-email-login",
+            password="secure-password-123",
+            email="inactive@example.com",
+            is_active=False,
+        )
+        inactive_response = self.client.post(
+            "/api/auth/login/",
+            {"email": inactive_user.email, "password": "secure-password-123"},
+            format="json",
+        )
+        self.assertEqual(inactive_response.status_code, 401)
+
+        User.objects.create_user(
+            username="duplicate-email-login",
+            password="secure-password-123",
+            email=self.user.email.upper(),
+        )
+        ambiguous_response = self.client.post(
+            "/api/auth/login/",
+            {"email": self.user.email, "password": "secure-password-123"},
+            format="json",
+        )
+        self.assertEqual(ambiguous_response.status_code, 401)
+
+
 class UserModelContractTests(TestCase):
     def test_user_model_uses_expected_identity_contract(self):
         user = User.objects.create_user(
@@ -228,6 +284,7 @@ class ClubBoardPermissionTests(TestCase):
             username=user.username,
             club_id=own_club,
         )
+        ClubBoardAssignment.objects.create(user=user, club=own_club)
         request = RequestFactory().get("/")
         request.user = user
         permission = IsClubBoard()
@@ -236,6 +293,27 @@ class ClubBoardPermissionTests(TestCase):
         self.assertTrue(permission.has_permission(request, None))
         self.assertTrue(permission.has_object_permission(request, None, own_club))
         self.assertFalse(permission.has_object_permission(request, None, other_club))
+
+    def test_ordinary_membership_does_not_grant_board_access(self):
+        department = Department.objects.create(title="Technology")
+        club = Club.objects.create(name="Robotics", department=department)
+        user = User.objects.create_user(
+            username="unassigned-board-user",
+            password="unused",
+            role=User.Role.BOARD_MEMBER,
+        )
+        UserMember.objects.create(
+            user=user,
+            username=user.username,
+            club_id=club,
+        )
+        request = RequestFactory().get("/")
+        request.user = user
+        permission = IsClubBoard()
+
+        self.assertIsNone(user_club_id(user))
+        self.assertFalse(permission.has_permission(request, None))
+        self.assertFalse(permission.has_object_permission(request, None, club))
 
     def test_club_head_can_manage_the_club_they_head(self):
         department = Department.objects.create(title="Technology")

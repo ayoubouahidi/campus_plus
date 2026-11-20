@@ -17,3 +17,16 @@ class User(AbstractUser):
     campus = models.CharField(max_length=100, blank=True)
     avatar_url = models.URLField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
+
+
+class ClubBoardAssignment(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="board_assignment",
+    )
+    club = models.ForeignKey(
+        "core_data.Club",
+        on_delete=models.CASCADE,
+        related_name="board_assignments",
+    )

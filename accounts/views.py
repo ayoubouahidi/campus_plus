@@ -2,7 +2,7 @@ import hmac
 import os
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.db import transaction
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
@@ -17,7 +17,11 @@ from rest_framework.response import Response
 
 from core_data.models import UserMember
 from dashboard.models import AuditLog
-from .serializers import UserPhoneSerializer, UserSerializer
+from .serializers import (
+    EmailPasswordLoginSerializer,
+    UserPhoneSerializer,
+    UserSerializer,
+)
 
 
 User = get_user_model()
@@ -26,6 +30,42 @@ User = get_user_model()
 def get_campus_allow_list():
     raw = os.getenv("ALLOWED_42_CAMPUSES", "")
     return {value.strip().lower() for value in raw.split(",") if value.strip()}
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def email_password_login(request):
+    serializer = EmailPasswordLoginSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    email = serializer.validated_data["email"].strip()
+    password = serializer.validated_data["password"]
+    matching_users = list(User.objects.filter(email__iexact=email)[:2])
+
+    if len(matching_users) != 1:
+        return Response(
+            {"detail": "Invalid email or password."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = authenticate(
+        request,
+        username=matching_users[0].get_username(),
+        password=password,
+    )
+    if user is None:
+        return Response(
+            {"detail": "Invalid email or password."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    token, _ = Token.objects.get_or_create(user=user)
+    AuditLog.objects.create(
+        actor=user,
+        action="login",
+        target=user.username,
+    )
+    return Response({"token": token.key, "user": UserSerializer(user).data})
 
 
 @api_view(["POST"])

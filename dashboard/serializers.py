@@ -1,7 +1,9 @@
 from rest_framework import serializers
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 
+from accounts.models import ClubBoardAssignment
 from core_data.models import Club, UserMember
 from .models import Announcement, AuditLog, MembershipRequest
 
@@ -93,16 +95,16 @@ class SuperadminUserSerializer(serializers.ModelSerializer):
 
     def get_club_id(self, obj):
         try:
-            return obj.usermember.club_id_id
-        except UserMember.DoesNotExist:
+            return obj.board_assignment.club_id
+        except ObjectDoesNotExist:
             return None
 
     def get_club_name(self, obj):
         try:
-            club = obj.usermember.club_id
-        except UserMember.DoesNotExist:
+            club = obj.board_assignment.club
+        except ObjectDoesNotExist:
             return None
-        return club.name if club else None
+        return club.name
 
 
 class SuperadminUserUpdateSerializer(serializers.Serializer):

@@ -14,6 +14,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from accounts.models import ClubBoardAssignment
 from accounts.permissions import IsClubBoard, IsSuperAdmin, user_club_id
 from core_data.models import Club, ClubEvent, UserMember
 from .models import Announcement, AuditLog, MembershipRequest
@@ -312,7 +313,9 @@ def superadmin_organization_detail(request, organization_id):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
 def superadmin_users(request):
-    queryset = User.objects.select_related("usermember__club_id").order_by("username")
+    queryset = User.objects.select_related(
+        "board_assignment__club",
+    ).order_by("username")
     role = request.query_params.get("role")
     if role:
         if role not in User.Role.values:
@@ -354,11 +357,23 @@ def superadmin_user_detail(request, user_id):
 
     validated_data = serializer.validated_data
     new_role = validated_data.get("role", target.role)
-    member = UserMember.objects.filter(user=target).first()
+    assignment = (
+        ClubBoardAssignment.objects.filter(user=target)
+        .select_related("club")
+        .first()
+    )
     effective_club = validated_data.get(
         "club_id",
-        member.club_id if member else None,
+        assignment.club if assignment else None,
     )
+    if (
+        validated_data.get("club_id") is not None
+        and new_role != User.Role.BOARD_MEMBER
+    ):
+        return Response(
+            {"club_id": "Only board members may be assigned to a club."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     if new_role == User.Role.BOARD_MEMBER and effective_club is None:
         return Response(
             {"club_id": "A board member must be assigned to a club."},
@@ -377,22 +392,34 @@ def superadmin_user_detail(request, user_id):
                     target=f"{target.username}: {old_role} -> {new_role}",
                 )
 
-        if "club_id" in validated_data:
-            if member is None:
-                member = UserMember.objects.create(
-                    user=target,
-                    username=target.username,
-                    club_id=validated_data["club_id"],
-                )
-            elif member.club_id_id != getattr(validated_data["club_id"], "pk", None):
-                old_club_name = member.club_id.name if member.club_id else ""
-                member.club_id = validated_data["club_id"]
-                member.save(update_fields=["club_id"])
-                new_club_name = member.club_id.name if member.club_id else ""
+        if new_role != User.Role.BOARD_MEMBER and assignment is not None:
+            old_club_name = assignment.club.name
+            assignment.delete()
+            AuditLog.objects.create(
+                actor=request.user,
+                action="board_assignment_removed",
+                target=f"{target.username}: {old_club_name}",
+            )
+        elif (
+            new_role == User.Role.BOARD_MEMBER
+            and "club_id" in validated_data
+        ):
+            new_club = validated_data["club_id"]
+            if assignment is None:
+                ClubBoardAssignment.objects.create(user=target, club=new_club)
                 AuditLog.objects.create(
                     actor=request.user,
-                    action="user_club_changed",
-                    target=f"{target.username}: {old_club_name} -> {new_club_name}",
+                    action="board_assignment_created",
+                    target=f"{target.username}: {new_club.name}",
+                )
+            elif assignment.club_id != new_club.pk:
+                old_club_name = assignment.club.name
+                assignment.club = new_club
+                assignment.save(update_fields=["club"])
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="board_assignment_changed",
+                    target=f"{target.username}: {old_club_name} -> {new_club.name}",
                 )
 
     return Response(SuperadminUserSerializer(target).data)

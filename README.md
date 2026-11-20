@@ -119,8 +119,10 @@ default `STUDENT`), `campus` (`CharField`, max 100), and `avatar_url`
 `core_data.UserMember` remains the club/department profile and links one-to-one
 to that identity. The team has agreed that `phone` belongs on `UserMember`;
 the current branch still has a temporary `User.phone` field and must be aligned
-with Ahmed's model change before the migration contract is final. Board access
-is limited to the member's club (or a club the user heads).
+with Ahmed's model change before the migration contract is final. Board
+authorization uses `accounts.ClubBoardAssignment`, not ordinary `UserMember`
+club membership. Each board user has one explicit club assignment; a club may
+have multiple board users. `Club.head` remains an explicit head relationship.
 
 ### User relationship inventory
 
@@ -140,6 +142,8 @@ is limited to the member's club (or a club the user heads).
 | `MembershipRequest.decided_by` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
 | `AuditLog.actor` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
 | `Rsvp` | Not present on this branch | Ahmed-owned; should use `settings.AUTH_USER_MODEL` |
+| `ClubBoardAssignment.user` | `settings.AUTH_USER_MODEL` | One-to-one explicit board assignment |
+| `ClubBoardAssignment.club` | `core_data.Club` | Foreign key, cascade |
 
 `accounts.0001_initial` depends on Django auth migration `0012`; the initial
 dashboard migration depends on `core_data.0006` and the swappable user model.
@@ -163,14 +167,24 @@ ID type) before the login contract is considered integrated.
 Authenticated user endpoints:
 
 ```text
+POST      /api/auth/login/        # JSON: {"email": "...", "password": "..."}
 GET/PATCH /api/me/             # PATCH only accepts phone
 POST      /api/auth/logout/    # deletes the current DRF token
 ```
 
+Email/password login returns `{ "token": "<DRF token>", "user": { ... } }`,
+matching `/auth/sync`. Login requires exactly one case-insensitive email match;
+Ahmed should make `/api/signup/` reject duplicate email addresses so new
+registrations satisfy that contract. `/api/signup/` already accepts
+`first_name`, `last_name`, `email`, `year_of_study`, `department_id`, and
+`password`, with optional `club_id`; it returns `{ "token": "...", "member":
+{ ... } }`.
+
 The club-board endpoints are under `/api/board/`; membership requests and
-announcements are always scoped to the current user's club. Ahmed's event and
-RSVP APIs remain the source of truth for event management and registration
-counts.
+announcements are always scoped to the current user's explicit
+`ClubBoardAssignment` or `Club.head` relationship. A `UserMember.club_id`
+membership alone never grants management access. Ahmed's event and RSVP APIs
+remain the source of truth for event management and registration counts.
 
 Superadmin endpoints require the `SUPERADMIN` role:
 

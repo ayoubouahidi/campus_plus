@@ -31,3 +31,11 @@ class UserSerializer(serializers.Serializer):
 
 class UserPhoneSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=30, allow_blank=True, required=True)
+
+
+class EmailPasswordLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(
+        trim_whitespace=False,
+        write_only=True,
+    )
