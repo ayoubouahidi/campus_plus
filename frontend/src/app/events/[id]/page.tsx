@@ -1,13 +1,13 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { connection } from 'next/server';
 import { EventBackLink } from '@/components/events/EventBackLink';
 import { EventDetails } from '@/components/events/EventDetails';
 import { EventPageShell } from '@/components/events/EventPageShell';
 import { getEventDateDetails, readCalendarLocation } from '@/lib/calendar';
 import { getClubById, getEventById } from '@/lib/events';
 import { getMockAttendees, mockClubs, mockEvents } from '@/lib/mockData';
+import { getRequestTime } from '@/lib/requestTime';
 
 interface EventPageProps {
   params: Promise<{ id: string }>;
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
 // the campus time zone, renders the static content, and hands the RSVP state to <EventPageShell>.
 export default async function EventPage({ params, searchParams }: EventPageProps) {
   // Render per request: "has it ended?" uses the request time (same reason as `/`, DOCS.md §5.5).
-  await connection();
+  const now = await getRequestTime();
 
   const event = loadEvent((await params).id);
   if (!event) notFound(); // → ./not-found.tsx, HTTP 404
@@ -57,7 +57,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
       <EventPageShell
         initialEvent={event}
-        hasEnded={Date.parse(event.end_time) <= Date.now()}
+        hasEnded={Date.parse(event.end_time) <= now}
         attendees={getMockAttendees(event)}
       >
         <EventDetails

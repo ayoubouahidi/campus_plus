@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { connection } from 'next/server';
 import { EventCalendar } from '@/components/calendar/EventCalendar';
 import { getEventIdsByDay, getEventTimes, toCampusDayKey } from '@/lib/calendar';
 import { mockEvents } from '@/lib/mockData';
+import { getRequestTime } from '@/lib/requestTime';
 
 export const metadata: Metadata = {
   title: 'Calendar | Campus Hub',
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 // the server's time-zone data, DOCS.md §5.2), then hands plain data to the interactive <EventCalendar>.
 export default async function CalendarPage() {
   // Render per request, so "today" is the request date, not the build date (same as `/`, DOCS.md §5.5).
-  await connection();
+  const now = await getRequestTime();
 
   // Phase 7: fetch the events of the visible range from the API instead of mockEvents.
   // Past events stay listed: a calendar shows what happened too, unlike the "upcoming" feed.
@@ -27,7 +27,7 @@ export default async function CalendarPage() {
         events={events}
         eventIdsByDay={getEventIdsByDay(events)}
         eventTimes={getEventTimes(events)}
-        todayKey={toCampusDayKey(Date.now())}
+        todayKey={toCampusDayKey(now)}
         urlState
       />
     </div>

@@ -2,7 +2,6 @@ import { cache } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { connection } from 'next/server';
 import { getSessionState } from '@/auth';
 import { ClubEvents } from '@/components/clubs/ClubEvents';
 import { ClubHeader } from '@/components/clubs/ClubHeader';
@@ -10,6 +9,7 @@ import { IconBase } from '@/components/ui/layout/navIcons';
 import { formatClubSince, getClubBySlug, getClubContact, getClubEvents } from '@/lib/clubs';
 import { mockClubs, mockEvents } from '@/lib/mockData';
 import { getEventSchedules } from '@/lib/time';
+import { getRequestTime } from '@/lib/requestTime';
 
 interface ClubPageProps {
   params: Promise<{ slug: string }>;
@@ -33,13 +33,13 @@ export async function generateMetadata({ params }: ClubPageProps): Promise<Metad
 // formats dates in campus time, decides whether to send contact details, then renders.
 export default async function ClubPage({ params }: ClubPageProps) {
   // Render per request: upcoming vs past uses the request time (same reason as `/`, DOCS.md §5.5).
-  await connection();
+  const now = await getRequestTime();
 
   const club = loadClub((await params).slug);
   if (!club) notFound(); // → ./not-found.tsx, HTTP 404
 
   // Phase 7: the club's events from the API instead of filtering mockEvents.
-  const { upcoming, past } = getClubEvents(mockEvents, club.id, Date.now());
+  const { upcoming, past } = getClubEvents(mockEvents, club.id, now);
 
   // Decided on the server: signed-out visitors never receive the president's contact details, not even in the
   // page data (DOCS.md §6.13). Same cached session read as the root layout (one cookie decode per request).

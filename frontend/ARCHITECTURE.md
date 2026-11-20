@@ -274,7 +274,7 @@ sequenceDiagram
   B->>N: GET /events/evt_hackathon_ai
   N->>S: proxy to frontend:3000
   Note over S: app/layout.tsx + app/events/[id]/page.tsx run on the server
-  S->>S: await connection()  → render now, per request
+  S->>S: now = await getRequestTime()  → connection(): render per request
   S->>S: loadEvent(id) (cached) → notFound() if missing
   S->>S: compute hasEnded, dates (campus TZ), club, attendees
   S->>S: render Server Components to HTML (EventDetails…)<br/>+ "RSC payload" describing client components & their props
@@ -291,7 +291,7 @@ Key points:
 1. **The page file is a Server Component.** It runs only on the server, can read data directly, and ships **no JavaScript** for itself.
 2. **Interactive parts are Client Components** (`'use client'`), e.g. `EventPageShell`. They are rendered to HTML on the server too (that's SSR), then **hydrated** in the browser.
 3. `EventDetails` is a Server Component passed *as `children`* into the client `EventPageShell`: it stays server-only (no JS), even though it's displayed inside a client component (§11.1).
-4. **`await connection()`** makes the page render **per request** (dynamic). Without it Next.js would prerender the page at build time and "now" would be frozen at the build date (DOCS §5.5).
+4. **`const now = await getRequestTime()`** (`lib/requestTime.ts`: `await connection()` + `Date.now()`) makes the page render **per request** (dynamic) and gives it the request time. Without it Next.js would prerender the page at build time and "now" would be frozen at the build date (DOCS §5.5).
 5. **Client-side navigation:** clicking a `<Link>` to another page does *not* reload the document. The browser fetches only the new page's RSC payload, React swaps `<main>`'s content, and the layout + its state stay.
 
 ---
@@ -344,7 +344,7 @@ The design keeps the swap small: replace `mockEvents`/`mockClubs` reads in the *
 
 | What | Cached? | When it changes |
 | --- | --- | --- |
-| Page data (events, RSVPs, clubs) | **No.** Pages call `await connection()` (rendered per request), and `fetch` isn't cached by default in Next 16 | Visible on the next reload |
+| Page data (events, RSVPs, clubs) | **No.** Pages call `getRequestTime()` → `connection()` (rendered per request), and `fetch` isn't cached by default in Next 16 | Visible on the next reload |
 | Images (flyers, logos) | **Yes, per URL** (container: `.next/dev/cache/images`; production: `.next/cache/images`) | A **new URL** is fresh immediately; **same URL, new content** stays stale until the copy expires |
 
 **Rules that follow from this:**
@@ -488,7 +488,7 @@ Each concept: **what it is**, **where we use it**, **the trap to avoid**.
 - **SSR (server-side rendering):** HTML is generated on the server per request; the user sees content before JS loads. *All our pages.*
 - **CSR (client-side rendering):** the browser renders/updates with JS. *Everything after hydration:* filtering the feed, switching calendar month, opening the palette.
 - **Static (prerendered at build):** HTML made once at `next build`. Only `/test` and the global 404 are static here.
-- **Dynamic:** rendered per request. **`await connection()`** opts a page in (it reads "now"). The build output shows `ƒ` for dynamic, `○` for static.
+- **Dynamic:** rendered per request. **`await connection()`** opts a page in; pages that need "now" call `getRequestTime()`, which does it for them. The build output shows `ƒ` for dynamic, `○` for static.
 - **Streaming:** the server sends HTML in chunks as parts finish. With a `loading.tsx` above the page, the skeleton is sent first and the page streams in after; the status (200) is already sent, so a later `notFound()` can't change it to 404 (DOCS §6.21).
 
 ### 11.4 Hydration (and mismatches)
@@ -545,7 +545,7 @@ unmount  → component removed: effect cleanups run → DOM removed → its stat
 
 | API | What | Where |
 | --- | --- | --- |
-| `connection()` | Make the page dynamic (per request) | all main pages |
+| `connection()` | Make the page dynamic (per request) | inside `getRequestTime()` (`lib/requestTime.ts`), used by all main pages |
 | `notFound()` | Render the nearest `not-found.tsx` (404, or 200 + noindex under a `loading.tsx`) | event & club pages |
 | `generateMetadata` | Per-page title/description/OG | event & club pages |
 | `cache()` (React) | Dedupe a lookup within one request | `loadEvent`, `loadClub` |
@@ -576,7 +576,7 @@ RSVP updates the UI immediately (`setEvent(toggleRsvp)`) and shows a toast; in P
 
 ### Add a new page (e.g. `/about`)
 1. Create `src/app/about/page.tsx` exporting a default (async) Server Component and `metadata`.
-2. Need "now" or per-request data? `await connection()` first.
+2. Need "now"? `const now = await getRequestTime()` (never `Date.now()` in a component: lint `react-hooks/purity`). Per-request data without "now"? `await connection()`.
 3. Need interactivity? Put it in a `'use client'` component under `src/components/<feature>/` and render it from the page.
 4. Add the link in `src/lib/navigation.ts` (+ `AppRoute` in `types/navigation.ts`).
 

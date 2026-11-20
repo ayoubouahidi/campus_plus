@@ -87,7 +87,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | `make typecheck` | `tsc --noEmit` inside the container. |
 | `make lint` | ESLint inside the container (`frontend/eslint.config.mjs`: Next 16 flat config, `core-web-vitals` + `typescript`). |
 
-- **ESLint config** didn't exist before (installed but never configured), so `eslint` always failed. First run: 10 errors + 1 warning, all in existing code, none breaking the build: `react-hooks/purity` for `Date.now()` in the per-request server pages (intentional after `connection()`) and in `useCampusSearch` (real: read during render); `react-hooks/set-state-in-effect` for the `setMounted(true)` mount guards in `Modal`, `MobileNav`, `NotificationPopover` (the pattern CLAUDE.md rule 5 prescribes; modern replacement: `useSyncExternalStore`) and the popover's clock; `no-img-element` in `Avatar`. **Follow-up:** a dedicated lint cleanup (and updating CLAUDE.md rule 5) before making lint a required check.
+- **ESLint config** didn't exist before (installed but never configured), so `eslint` always failed. First run: 10 errors + 1 warning, all in existing code, none breaking the build: `react-hooks/purity` for `Date.now()` in the per-request server pages (intentional after `connection()`) and in `useCampusSearch` (real: read during render); `react-hooks/set-state-in-effect` for the `setMounted(true)` mount guards in `Modal`, `MobileNav`, `NotificationPopover` (the pattern CLAUDE.md rule 5 prescribes; modern replacement: `useSyncExternalStore`) and the popover's clock; `no-img-element` in `Avatar`. **Follow-up:** a dedicated lint cleanup (and updating CLAUDE.md rule 5) before making lint a required check. **In progress: §8 (2026-11-20).**
 - **`frontend/.dockerignore`** keeps `node_modules`, `.next` and build output out of the image context.
 - Run `npm install` for new dependencies inside the container (`docker compose exec frontend npm install <pkg>`), then `make dev` rebuilds the image so the anonymous `node_modules` volume matches.
 - **Replaced an image in `public/` but still see the old one?** Next caches resized images by URL, not content. Rename the file, or run `make clear-images` and hard-refresh (ARCHITECTURE §7.5). Keep source images ≤ ~2000 px: the 77 MB `basketball.png` (8256 px) timed out the optimizer until it was resized to 1600 px (2026-11-06).
@@ -3452,3 +3452,54 @@ Signed in (dev login): h1 "Mouad Najjar"; "My profile", "Log out", both banner t
 - **Root `.env.example`** (TEAM_NEEDS 0.3): DB, Django and every login variable with comments; `AUTH_DEV_LOGIN=false` by default.
 
 **Verified (2026-11-19):** served version 16.4.6; signed out `/`, `/calendar`, `/clubs`, a club, an event, `/auth/login`, `/test` 200, `/profile` 307, `/nope` 404; dev login → `/profile` 200, `/me` 307, `/auth/login` 307, club email shown, session role STUDENT. `tsc` passes; ESLint shows only the known older errors (§1.5b, next on the list). No server errors.
+
+---
+
+## 8. Lint cleanup (2026-11-20)
+
+Goal: `make lint` with zero errors, so it can become a required check (§1.5b). Starting point: 10 errors + 1 warning, all in code from before ESLint was configured. Done step by step:
+
+| Step | Fixes | Status |
+| --- | --- | --- |
+| L.1 | `react-hooks/purity`: `Date.now()` in the 6 per-request server pages | ✅ Done (§8.1) |
+| L.2 | `react-hooks/set-state-in-effect`: `setMounted(true)` mount guards in `Modal`, `MobileNav`, `NotificationPopover`; update CLAUDE.md rule 5 | ⏳ |
+| L.3 | `NotificationPopover` clock (`setNow` in an effect), `useCampusSearch` (`Date.now()` in `useMemo`) | ⏳ |
+| L.4 | `@next/next/no-img-element` warning in `Avatar` | ⏳ |
+
+### 8.1 `getRequestTime()`: "now" for Server Components (Step L.1)
+
+**File:** `src/lib/requestTime.ts` (new). **Used by:** `(feed)/page.tsx`, `calendar/page.tsx`, `clubs/page.tsx`, `clubs/[slug]/page.tsx`, `events/[id]/page.tsx`, `profile/page.tsx`.
+**Status:** ✅ Done.
+
+#### Business & Product Purpose
+No visible change. Every page that hides ended events or picks "today" still uses the request time. The point is that lint can pass without hiding errors, and that nobody can read "now" on a page and forget to make it per-request (the bug in §5.5: ended events kept showing in production).
+
+#### Core Concepts & Engineering Decisions
+- `getRequestTime()` = `await connection()` + `return Date.now()`. One call does both, so "per-request" and "now" can't drift apart.
+- React's `react-hooks/purity` rule flags `Date.now()` **in a component body** (a component should give the same output for the same input). Reading it inside a helper outside the component is fine: the page receives `now` as a value, and it is still read once per request.
+- `/profile` had silenced the same error with `// eslint-disable-next-line react-hooks/purity`; that comment is gone.
+- **Rule from now on:** a Server Component that needs the time writes `const now = await getRequestTime();` and passes `now` down. Never `Date.now()` in a component.
+
+#### Architectural Tradeoffs
+| Chosen | Alternative | Why not |
+| --- | --- | --- |
+| A helper that does `connection()` + `Date.now()` | `eslint-disable` comment on each page (what `/profile` did) | Six comments that hide the rule; a new page would copy the comment, not the reason |
+| Same | Turn `react-hooks/purity` off in `eslint.config.mjs` | Loses the rule for Client Components, where `Date.now()` in render really is a bug (`useCampusSearch`, L.3) |
+| Same | Read time in the browser | Browser clock and time-zone data differ from the server's, hydration mismatch (§5.5, ARCHITECTURE §7.2) |
+
+#### Contract
+```ts
+getRequestTime(): Promise<number>   // ms since epoch, at request time; makes the calling route dynamic. Server only.
+```
+
+#### Usage Example
+```tsx
+export default async function Page() {
+  const now = await getRequestTime();
+  return <EventGrid events={getUpcomingEvents(mockEvents, now)} />;
+}
+```
+
+#### Verified (2026-11-20)
+`tsc --noEmit` passes. ESLint 11 → 6 findings (all 6 server-page purity errors gone; left: L.2–L.4). `/`, `/calendar`, `/clubs`, `/clubs/1337`, `/events/1`, `/test` 200; `/profile` and `/me` 307 signed out (unchanged). No server errors. Nothing to try on `/test`: no visible change.
+
