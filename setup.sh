@@ -31,10 +31,6 @@ fi
 echo "[2/5] Installing dependencies..."
 uv pip install --python .venv/bin/python -r requirements.txt
 
-# [Member 3] Ensure Daphne is installed while older branches
-# are missing it from requirements.txt.
-uv pip install --python .venv/bin/python "daphne>=4.2,<5.0"
-
 # [Member 3] Create secure local configuration without exposing secrets.
 echo "[3/5] Configuring environment..."
 
