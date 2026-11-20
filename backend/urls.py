@@ -31,6 +31,7 @@ from core_data.views import (
     UserMemberViewSet,
     signup,
 )
+from backend.views import HealthLiveView, HealthView
 
 
 router = DefaultRouter()
@@ -62,6 +63,10 @@ router.register(
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+
+    # [ahmed] Public liveness probes; neither endpoint touches external services.
+    path("api/health/", HealthView.as_view(), name="health"),
+    path("api/health/live", HealthLiveView.as_view(), name="health-live"),
 
     path("api/", include(router.urls)),
 

@@ -3,15 +3,34 @@ from rest_framework import serializers
 import secrets
 
 from django.contrib.auth.models import User
+from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Club, ClubEvent, Department, UserMember
 
 
+def absolute_file_url(file_field, context, empty_value):
+    """Return an absolute media URL when a request is available."""
+    if not file_field:
+        return empty_value
+
+    url = file_field.url
+    request = context.get('request')
+    if request is None:
+        return url
+    return request.build_absolute_uri(url)
+
+
 class DepartmentSerializer(serializers.ModelSerializer):
+    # [ahmed] Keep the legacy title while publishing the frontend's field name.
+    name = serializers.CharField(source='title', read_only=True)
+
     class Meta:
         model = Department
-        fields = ['id', 'title']
+        fields = ['id', 'name', 'title', 'slug']
+        read_only_fields = ['slug']
 
 
 class ClubSerializer(serializers.ModelSerializer):
@@ -21,19 +40,78 @@ class ClubSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
-    member_count = serializers.IntegerField(source='members.count', read_only=True)
-    event_count = serializers.IntegerField(source='events.count', read_only=True)
+    department_id = serializers.IntegerField(read_only=True)
+    department_name = serializers.CharField(
+        source='department.title',
+        read_only=True,
+    )
+    department_slug = serializers.CharField(
+        source='department.slug',
+        read_only=True,
+        allow_null=True,
+    )
+    logo_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+    president_name = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
+    event_count = serializers.SerializerMethodField()
+    upcoming_event_count = serializers.SerializerMethodField()
+    # [ahmed] Preserve existing write input without leaking it publicly.
+    contact_email = serializers.EmailField(write_only=True, required=False)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_logo_url(self, club):
+        return absolute_file_url(club.logo, self.context, '')
+
+    @extend_schema_field({'type': 'string', 'nullable': True})
+    def get_banner_url(self, club):
+        return absolute_file_url(club.banner, self.context, None)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_president_name(self, club):
+        if club.head is None:
+            return ''
+        return f'{club.head.first_name} {club.head.last_name}'.strip()
+
+    @staticmethod
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_member_count(club):
+        if hasattr(club, 'member_count'):
+            return club.member_count
+        return club.members.count()
+
+    @staticmethod
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_event_count(club):
+        if hasattr(club, 'event_count'):
+            return club.event_count
+        return club.events.count()
+
+    @staticmethod
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_upcoming_event_count(club):
+        if hasattr(club, 'upcoming_event_count'):
+            return club.upcoming_event_count
+        return club.events.filter(ends_at__gt=timezone.now()).count()
 
     class Meta:
         model = Club
         fields = [
             'id',
+            'slug',
             'name',
             'description',
             'department',
+            'department_id',
+            'department_name',
+            'department_slug',
+            'logo_url',
+            'banner_url',
             'president',
+            'president_name',
             'member_count',
             'event_count',
+            'upcoming_event_count',
             'contact_email',
             'meeting_day',
             'meeting_time',
@@ -42,7 +120,7 @@ class ClubSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['slug', 'created_at', 'updated_at']
 
     def validate_president(self, president):
         department = self.initial_data.get('department')
@@ -55,24 +133,68 @@ class ClubSerializer(serializers.ModelSerializer):
 
 class ClubEventSerializer(serializers.ModelSerializer):
     parent = serializers.CharField(source='parent_id.title', read_only=True)
+    # [ahmed] Publish the frontend's event names without renaming database fields.
+    title = serializers.CharField(source='name', read_only=True)
+    club_id = serializers.IntegerField(read_only=True, allow_null=True)
+    club_name = serializers.CharField(
+        source='club.name',
+        read_only=True,
+        allow_null=True,
+    )
+    club_slug = serializers.CharField(
+        source='club.slug',
+        read_only=True,
+        allow_null=True,
+    )
+    department_name = serializers.CharField(
+        source='parent_id.title',
+        read_only=True,
+    )
+    department_slug = serializers.CharField(
+        source='parent_id.slug',
+        read_only=True,
+    )
+    flyer_url = serializers.SerializerMethodField()
+    start_time = serializers.DateTimeField(source='starts_at', read_only=True)
+    end_time = serializers.DateTimeField(source='ends_at', read_only=True)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_flyer_url(self, event):
+        return absolute_file_url(event.image_path, self.context, '')
 
     class Meta:
         model = ClubEvent
         fields = [
             'id',
+            'title',
             'name',
             'description',
             'parent_id',
             'club',
+            'club_id',
+            'club_name',
+            'club_slug',
             'parent',
+            'department_name',
+            'department_slug',
+            'flyer_url',
             'starts_at',
             'ends_at',
+            'start_time',
+            'end_time',
             'location',
+            'category',
             'status',
+            'capacity',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = [
+            'category',
+            'capacity',
+            'created_at',
+            'updated_at',
+        ]
 
 
 class UserMemberSerializer(serializers.ModelSerializer):
