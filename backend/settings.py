@@ -54,6 +54,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'accounts.apps.AccountsConfig',
+    'dashboard.apps.DashboardConfig',
+
     'channels',  # [ahmed] Adds Django Channels functionality for handling WebSocket connections.
 
     'rest_framework',
@@ -65,6 +68,9 @@ INSTALLED_APPS = [
 
     'drf_spectacular',  # [ahmed] Enables OpenAPI schema generation and Swagger documentation.
 ]
+
+AUTH_USER_MODEL = 'accounts.User'
+BACKEND_INTERNAL_KEY = os.getenv('BACKEND_INTERNAL_KEY', '')
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

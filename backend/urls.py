@@ -63,6 +63,9 @@ router.register(
 urlpatterns = [
     path("admin/", admin.site.urls),
 
+    path("", include("accounts.urls")),
+    path("", include("dashboard.urls")),
+
     path("api/", include(router.urls)),
 
     path(

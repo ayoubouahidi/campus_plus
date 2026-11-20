@@ -2,10 +2,12 @@ from rest_framework import serializers
 
 import secrets
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import Club, ClubEvent, Department, UserMember
+
+User = get_user_model()
 
 
 class DepartmentSerializer(serializers.ModelSerializer):

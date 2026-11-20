@@ -2,12 +2,14 @@ from io import BytesIO
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from PIL import Image
 from rest_framework.test import APIClient
 
 from .models import Club, ClubEvent, Department, UserMember, validate_file_size, validate_image_content
+
+User = get_user_model()
 
 
 class ImageValidationTests(TestCase):

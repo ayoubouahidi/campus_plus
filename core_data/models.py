@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.contrib.auth.models import User
+from django.conf import settings
 from PIL import Image, UnidentifiedImageError
 
 
@@ -125,7 +125,12 @@ class ClubEvent(models.Model):
 
 class UserMember(models.Model):
     username = models.CharField(max_length=150, unique=True)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     year_of_study = models.PositiveSmallIntegerField(null=True, blank=True)
