@@ -228,6 +228,27 @@ class SuperadminApiTests(TestCase):
         student.refresh_from_db()
         self.assertEqual(student.role, User.Role.STUDENT)
 
+    def test_demoting_board_member_removes_management_assignment(self):
+        board_user = User.objects.create_user(
+            username="board-to-demote",
+            password="unused",
+            role=User.Role.BOARD_MEMBER,
+        )
+        ClubBoardAssignment.objects.create(user=board_user, club=self.club)
+
+        response = self.client.patch(
+            f"/api/superadmin/users/{board_user.pk}/",
+            {"role": User.Role.STUDENT},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        board_user.refresh_from_db()
+        self.assertEqual(board_user.role, User.Role.STUDENT)
+        self.assertFalse(
+            ClubBoardAssignment.objects.filter(user=board_user).exists()
+        )
+
     def test_users_search_role_counts_and_audit_pagination(self):
         User.objects.create_user(
             username="searched-board",

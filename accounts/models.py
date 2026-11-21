@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 
 
 class User(AbstractUser):
@@ -17,6 +19,21 @@ class User(AbstractUser):
     campus = models.CharField(max_length=100, blank=True)
     avatar_url = models.URLField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
+
+    class Meta:
+        verbose_name = "user"
+        verbose_name_plural = "users"
+        constraints = [
+            models.UniqueConstraint(
+                Lower("email"),
+                condition=~Q(email=""),
+                name="accounts_user_email_ci_unique",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.email = self.email.strip().lower()
+        super().save(*args, **kwargs)
 
 
 class ClubBoardAssignment(models.Model):

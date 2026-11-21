@@ -1,6 +1,16 @@
 from rest_framework import serializers
 
 
+class AuthSyncSerializer(serializers.Serializer):
+    fortyTwoId = serializers.IntegerField(min_value=1)
+    login = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    firstName = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    lastName = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    imageUrl = serializers.URLField(required=False, allow_blank=True)
+    campus = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+
 class UserSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     email = serializers.EmailField(read_only=True)

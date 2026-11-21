@@ -3,7 +3,7 @@ import os
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from core_data.models import UserMember
 from dashboard.models import AuditLog
 from .serializers import (
+    AuthSyncSerializer,
     EmailPasswordLoginSerializer,
     UserPhoneSerializer,
     UserSerializer,
@@ -25,6 +26,20 @@ from .serializers import (
 
 
 User = get_user_model()
+
+
+def save_user_with_email_conflict_check(user, email):
+    try:
+        with transaction.atomic():
+            user.save()
+    except IntegrityError:
+        matches = User.objects.filter(email__iexact=email)
+        if user.pk is not None:
+            matches = matches.exclude(pk=user.pk)
+        if matches.exists():
+            return False
+        raise
+    return True
 
 
 def get_campus_allow_list():
@@ -77,15 +92,14 @@ def auth_sync(request):
     if not expected_key or not hmac.compare_digest(supplied_key, expected_key):
         return Response({"detail": "Invalid internal key."}, status=status.HTTP_403_FORBIDDEN)
 
-    forty_two_id = request.data.get("fortyTwoId")
-    login = request.data.get("login")
-    if not forty_two_id or not login:
-        return Response(
-            {"detail": "fortyTwoId and login are required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    serializer = AuthSyncSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    identity = serializer.validated_data
+    forty_two_id = identity["fortyTwoId"]
+    login = identity["login"]
+    email = identity["email"].strip().lower()
 
-    campus = request.data.get("campus") or ""
+    campus = identity.get("campus", "")
     allowed_campuses = get_campus_allow_list()
     if allowed_campuses and campus.lower() not in allowed_campuses:
         return Response(
@@ -106,12 +120,20 @@ def auth_sync(request):
                 {"detail": "This account is inactive."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        matching_email = User.objects.filter(email__iexact=email)
+        if user is not None:
+            matching_email = matching_email.exclude(pk=user.pk)
+        if matching_email.exists():
+            return Response(
+                {"email": "This email is already linked to another account."},
+                status=status.HTTP_409_CONFLICT,
+            )
         if user is None:
             user = User(
                 username=login,
-                first_name=request.data.get("firstName", ""),
-                last_name=request.data.get("lastName", ""),
-                email=request.data.get("email", ""),
+                first_name=identity.get("firstName", ""),
+                last_name=identity.get("lastName", ""),
+                email=email,
                 forty_two_id=forty_two_id,
                 role=(
                     "SUPERADMIN"
@@ -119,18 +141,26 @@ def auth_sync(request):
                     else "STUDENT"
                 ),
                 campus=campus,
-                avatar_url=request.data.get("imageUrl") or "",
+                avatar_url=identity.get("imageUrl") or "",
             )
             user.set_unusable_password()
-            user.save()
+            if not save_user_with_email_conflict_check(user, email):
+                return Response(
+                    {"email": "This email is already linked to another account."},
+                    status=status.HTTP_409_CONFLICT,
+                )
         else:
             user.username = login
-            user.first_name = request.data.get("firstName", "")
-            user.last_name = request.data.get("lastName", "")
-            user.email = request.data.get("email", "")
+            user.first_name = identity.get("firstName", "")
+            user.last_name = identity.get("lastName", "")
+            user.email = email
             user.campus = campus
-            user.avatar_url = request.data.get("imageUrl") or ""
-            user.save()
+            user.avatar_url = identity.get("imageUrl") or ""
+            if not save_user_with_email_conflict_check(user, email):
+                return Response(
+                    {"email": "This email is already linked to another account."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         member, _ = UserMember.objects.get_or_create(
             user=user,

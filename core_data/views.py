@@ -1,5 +1,7 @@
 # [ahmed] Run broadcasts after successful database commits.
 from django.db import transaction
+from django.db import IntegrityError
+from django.contrib.auth import get_user_model
 
 # [ahmed] Broadcast calendar events through Redis.
 from realtime.broadcast import broadcast_calendar_event
@@ -8,9 +10,12 @@ from django.db.models import Q
 from rest_framework import filters, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
+
+from accounts.models import ClubBoardAssignment
+from accounts.permissions import IsSuperAdmin
 from .models import Club, ClubEvent, Department, UserMember
 from .serializers import (
     ClubEventSerializer,
@@ -19,6 +24,8 @@ from .serializers import (
     SignupSerializer,
     UserMemberSerializer,
 )
+
+User = get_user_model()
 
 
 class ClubEventFilterBackend(filters.BaseFilterBackend):
@@ -34,37 +41,43 @@ class ClubEventFilterBackend(filters.BaseFilterBackend):
 
 
 class CanCreateClubEvent(BasePermission):
-    message = 'Only an admin or the club head can create an event.'
+    message = 'Only a superadmin or an assigned club board member can create events.'
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_staff:
+        if IsSuperAdmin().has_permission(request, view):
             return True
 
         club_id = request.data.get('club')
-        if not request.user or not request.user.is_authenticated or not club_id:
+        if (
+            not request.user
+            or not request.user.is_authenticated
+            or request.user.role != "BOARD_MEMBER"
+            or not club_id
+        ):
             return False
 
-        return Club.objects.filter(
-            pk=club_id,
-            head__user=request.user,
+        return ClubBoardAssignment.objects.filter(
+            user=request.user,
+            club_id=club_id,
         ).exists()
 
 # [ahmed] Protect changes to existing club events.
 class CanModifyClubEvent(BasePermission):
-    message = "Only an admin or this event's club head can modify it."
+    message = "Only a superadmin or this event's assigned board member can modify it."
 
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated)
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
+        if IsSuperAdmin().has_permission(request, view):
             return True
 
         return bool(
-            obj.club_id
-            and Club.objects.filter(
-                pk=obj.club_id,
-                head__user=request.user,
+            request.user.role == "BOARD_MEMBER"
+            and obj.club_id
+            and ClubBoardAssignment.objects.filter(
+                user=request.user,
+                club_id=obj.club_id,
             ).exists()
         )
 
@@ -140,6 +153,11 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     filter_backends = [SearchFilter]
     search_fields = ['title']
 
+    def get_permissions(self):
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return [AllowAny()]
+        return [IsSuperAdmin()]
+
 
 class UserMemberViewSet(viewsets.ModelViewSet):
     queryset = UserMember.objects.select_related('department_id', 'club_id').all()
@@ -148,7 +166,7 @@ class UserMemberViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
             return [IsAuthenticated()]
-        return [IsAdminUser()]
+        return [IsSuperAdmin()]
 
 
 class ClubViewSet(viewsets.ModelViewSet):
@@ -156,9 +174,9 @@ class ClubViewSet(viewsets.ModelViewSet):
     serializer_class = ClubSerializer
 
     def get_permissions(self):
-        if self.action == 'create':
-            return [IsAdminUser()]
-        return [AllowAny()]
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return [AllowAny()]
+        return [IsSuperAdmin()]
 
 
 @api_view(['POST'])
@@ -166,7 +184,17 @@ class ClubViewSet(viewsets.ModelViewSet):
 def signup(request):
     serializer = SignupSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    member = serializer.save()
+    try:
+        with transaction.atomic():
+            member = serializer.save()
+    except IntegrityError:
+        email = serializer.validated_data['email']
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'email': 'An account with this email already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        raise
     token, _ = Token.objects.get_or_create(user=member.user)
     return Response(
         {

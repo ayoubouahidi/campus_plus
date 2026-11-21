@@ -112,6 +112,14 @@ class SignupSerializer(serializers.Serializer):
         allow_null=True,
     )
 
+    def validate_email(self, value):
+        normalized_email = value.strip().lower()
+        if User.objects.filter(email__iexact=normalized_email).exists():
+            raise serializers.ValidationError(
+                'An account with this email already exists.'
+            )
+        return normalized_email
+
     def validate(self, attrs):
         club = attrs.get('club_id')
         if club and club.department_id != attrs['department_id'].id:

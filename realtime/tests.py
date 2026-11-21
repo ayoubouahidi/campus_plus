@@ -188,10 +188,9 @@ class AutomaticEventBroadcastTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-        self.admin = User.objects.create_user(
+        self.admin = User.objects.create_superuser(
             username="test_admin",
             password="test_password",
-            is_staff=True,
         )
 
         self.client.force_authenticate(user=self.admin)

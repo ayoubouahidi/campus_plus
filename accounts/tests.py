@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, get_user_model
+from django.db import IntegrityError, transaction
 from django.test import RequestFactory
 from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
@@ -21,7 +22,7 @@ class AuthSyncTests(TestCase):
         self.payload = {
             "fortyTwoId": 4242,
             "login": "student42",
-            "email": "student@example.com",
+            "email": "Student@Example.com",
             "firstName": "Test",
             "lastName": "Student",
             "imageUrl": "https://example.com/avatar.png",
@@ -136,6 +137,33 @@ class AuthSyncTests(TestCase):
         self.assertFalse(Token.objects.filter(user=user).exists())
         self.assertFalse(AuditLog.objects.filter(action="login").exists())
 
+    def test_auth_sync_requires_email_and_rejects_duplicate_email(self):
+        missing_email = dict(self.payload)
+        missing_email["email"] = ""
+        response = self.client.post(
+            "/auth/sync",
+            missing_email,
+            format="json",
+            HTTP_X_INTERNAL_KEY="test-internal-key",
+        )
+        self.assertEqual(response.status_code, 400)
+
+        User.objects.create_user(
+            username="existing-email-user",
+            password="unused",
+            email="taken@example.com",
+        )
+        duplicate_email = dict(self.payload)
+        duplicate_email["email"] = "TAKEN@example.com"
+        response = self.client.post(
+            "/auth/sync",
+            duplicate_email,
+            format="json",
+            HTTP_X_INTERNAL_KEY="test-internal-key",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(User.objects.filter(forty_two_id=4242).exists())
+
 
 class EmailPasswordLoginTests(TestCase):
     def setUp(self):
@@ -158,7 +186,7 @@ class EmailPasswordLoginTests(TestCase):
         self.assertEqual(response.data["user"]["id"], self.user.pk)
         self.assertTrue(Token.objects.filter(user=self.user).exists())
 
-    def test_login_rejects_bad_credentials_inactive_and_ambiguous_emails(self):
+    def test_login_rejects_bad_credentials_and_inactive_accounts(self):
         invalid_password = self.client.post(
             "/api/auth/login/",
             {"email": self.user.email, "password": "wrong-password"},
@@ -178,19 +206,6 @@ class EmailPasswordLoginTests(TestCase):
             format="json",
         )
         self.assertEqual(inactive_response.status_code, 401)
-
-        User.objects.create_user(
-            username="duplicate-email-login",
-            password="secure-password-123",
-            email=self.user.email.upper(),
-        )
-        ambiguous_response = self.client.post(
-            "/api/auth/login/",
-            {"email": self.user.email, "password": "secure-password-123"},
-            format="json",
-        )
-        self.assertEqual(ambiguous_response.status_code, 401)
-
 
 class UserModelContractTests(TestCase):
     def test_user_model_uses_expected_identity_contract(self):
@@ -226,6 +241,31 @@ class UserModelContractTests(TestCase):
 
         self.assertIsNone(
             authenticate(username="inactive-user", password="test-password-123")
+        )
+
+    def test_nonblank_email_is_normalized_and_unique_case_insensitively(self):
+        user = User.objects.create_user(
+            username="normalized-email",
+            password="test-password-123",
+            email=" Student@Example.com ",
+        )
+        self.assertEqual(user.email, "student@example.com")
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                User.objects.create_user(
+                    username="duplicate-email",
+                    password="test-password-123",
+                    email="STUDENT@example.com",
+                )
+
+        User.objects.create_user(
+            username="no-email-one",
+            password="test-password-123",
+        )
+        User.objects.create_user(
+            username="no-email-two",
+            password="test-password-123",
         )
 
 
@@ -285,6 +325,8 @@ class ClubBoardPermissionTests(TestCase):
             club_id=own_club,
         )
         ClubBoardAssignment.objects.create(user=user, club=own_club)
+        other_club.head = UserMember.objects.get(user=user)
+        other_club.save(update_fields=["head"])
         request = RequestFactory().get("/")
         request.user = user
         permission = IsClubBoard()
@@ -315,7 +357,23 @@ class ClubBoardPermissionTests(TestCase):
         self.assertFalse(permission.has_permission(request, None))
         self.assertFalse(permission.has_object_permission(request, None, club))
 
-    def test_club_head_can_manage_the_club_they_head(self):
+    def test_assignment_without_board_role_does_not_grant_access(self):
+        department = Department.objects.create(title="Technology")
+        club = Club.objects.create(name="Robotics", department=department)
+        user = User.objects.create_user(
+            username="student-with-stale-assignment",
+            password="unused",
+        )
+        ClubBoardAssignment.objects.create(user=user, club=club)
+        request = RequestFactory().get("/")
+        request.user = user
+        permission = IsClubBoard()
+
+        self.assertIsNone(user_club_id(user))
+        self.assertFalse(permission.has_permission(request, None))
+        self.assertFalse(permission.has_object_permission(request, None, club))
+
+    def test_club_head_without_board_assignment_cannot_manage_club(self):
         department = Department.objects.create(title="Technology")
         user = User.objects.create_user(
             username="club-head",
@@ -335,8 +393,8 @@ class ClubBoardPermissionTests(TestCase):
         request.user = user
         permission = IsClubBoard()
 
-        self.assertTrue(permission.has_permission(request, None))
-        self.assertTrue(permission.has_object_permission(request, None, club))
+        self.assertFalse(permission.has_permission(request, None))
+        self.assertFalse(permission.has_object_permission(request, None, club))
 
     def test_superadmin_permission_recognizes_role_and_django_superuser(self):
         request = RequestFactory().get("/")
@@ -362,3 +420,12 @@ class ClubBoardPermissionTests(TestCase):
             password="unused",
         )
         self.assertFalse(permission.has_permission(request, None))
+
+        staff_user = User.objects.create_user(
+            username="staff-only",
+            password="unused",
+            is_staff=True,
+        )
+        request.user = staff_user
+        self.assertFalse(permission.has_permission(request, None))
+        self.assertFalse(IsClubBoard().has_permission(request, None))

@@ -7,6 +7,7 @@ from django.test import TestCase
 from PIL import Image
 from rest_framework.test import APIClient
 
+from accounts.models import ClubBoardAssignment
 from .models import Club, ClubEvent, Department, UserMember, validate_file_size, validate_image_content
 
 User = get_user_model()
@@ -65,6 +66,11 @@ class DepartmentAndMemberApiTests(TestCase):
         self.department = Department.objects.create(title='Technology')
 
     def test_department_can_be_created_and_listed(self):
+        admin = User.objects.create_superuser(
+            username='department-admin',
+            password='admin-password-123',
+        )
+        self.client.force_authenticate(user=admin)
         create_response = self.client.post(
             '/api/departments/',
             {'title': 'Arts'},
@@ -148,6 +154,28 @@ class DepartmentAndMemberApiTests(TestCase):
             second_response.data['member']['username'],
         )
 
+    def test_signup_rejects_case_insensitive_duplicate_email(self):
+        User.objects.create_user(
+            username='existing-email-user',
+            password='safe-password-123',
+            email='existing@example.com',
+        )
+        response = self.client.post(
+            '/api/signup/',
+            {
+                'password': 'safe-password-123',
+                'first_name': 'New',
+                'last_name': 'User',
+                'email': 'EXISTING@example.com',
+                'year_of_study': 2,
+                'department_id': self.department.pk,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('email', response.data)
+
     def test_admin_can_create_club_with_president_and_metadata(self):
         admin = User.objects.create_superuser(
             username='admin',
@@ -179,10 +207,11 @@ class DepartmentAndMemberApiTests(TestCase):
         self.assertEqual(response.data['event_count'], 0)
         self.assertEqual(Club.objects.get(name='Programming').head, president)
 
-    def test_club_event_can_store_schedule_and_club(self):
+    def test_assigned_board_member_can_create_club_event(self):
         head_user = User.objects.create_user(
             username='event-head',
             password='head-password-123',
+            role=User.Role.BOARD_MEMBER,
         )
         head = UserMember.objects.create(
             username='event-head',
@@ -194,6 +223,7 @@ class DepartmentAndMemberApiTests(TestCase):
             department=self.department,
             head=head,
         )
+        ClubBoardAssignment.objects.create(user=head_user, club=club)
         self.client.force_authenticate(user=head_user)
 
         response = self.client.post(
@@ -247,3 +277,55 @@ class DepartmentAndMemberApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+        self.client.force_authenticate(user=head_user)
+        head_response = self.client.post(
+            '/api/club-events/',
+            {
+                'name': 'Head-only Event',
+                'parent_id': self.department.pk,
+                'club': club.pk,
+            },
+            format='json',
+        )
+        self.assertEqual(head_response.status_code, 403)
+
+    def test_staff_flag_alone_cannot_mutate_core_data(self):
+        staff_user = User.objects.create_user(
+            username='staff-only',
+            password='staff-password-123',
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=staff_user)
+
+        department_response = self.client.post(
+            '/api/departments/',
+            {'title': 'Unauthorized'},
+            format='json',
+        )
+        member_response = self.client.post(
+            '/api/members/',
+            {
+                'username': 'unauthorized-member',
+                'department_id': self.department.pk,
+            },
+            format='json',
+        )
+        club_response = self.client.post(
+            '/api/clubs/',
+            {'name': 'Unauthorized', 'department': self.department.pk},
+            format='json',
+        )
+        event_response = self.client.post(
+            '/api/club-events/',
+            {
+                'name': 'Unauthorized',
+                'parent_id': self.department.pk,
+            },
+            format='json',
+        )
+
+        self.assertEqual(department_response.status_code, 403)
+        self.assertEqual(member_response.status_code, 403)
+        self.assertEqual(club_response.status_code, 403)
+        self.assertEqual(event_response.status_code, 403)

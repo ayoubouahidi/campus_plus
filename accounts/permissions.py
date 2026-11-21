@@ -1,4 +1,3 @@
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.permissions import BasePermission
 
 from .models import ClubBoardAssignment
@@ -8,19 +7,12 @@ def user_club_id(user):
     if not user or not user.is_authenticated:
         return None
 
-    if getattr(user, "role", None) == "BOARD_MEMBER":
-        assignment = ClubBoardAssignment.objects.filter(user=user).values_list(
-            "club_id",
-            flat=True,
-        ).first()
-        if assignment is not None:
-            return assignment
-
-    try:
-        member = user.usermember
-    except (AttributeError, ObjectDoesNotExist):
+    if getattr(user, "role", None) != "BOARD_MEMBER":
         return None
-    return member.headed_clubs.order_by("pk").values_list("pk", flat=True).first()
+    return ClubBoardAssignment.objects.filter(user=user).values_list(
+        "club_id",
+        flat=True,
+    ).first()
 
 
 class IsSuperAdmin(BasePermission):
@@ -51,18 +43,11 @@ class IsClubBoard(BasePermission):
         if getattr(user, "role", None) == "BOARD_MEMBER":
             return ClubBoardAssignment.objects.filter(user=user).exists()
 
-        try:
-            return user.usermember.headed_clubs.exists()
-        except (AttributeError, ObjectDoesNotExist):
-            return False
+        return False
 
     def has_object_permission(self, request, view, obj):
         user = request.user
         if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
-            return True
-
-        head = getattr(obj, "head", None)
-        if head and head.user_id == user.pk:
             return True
 
         if getattr(user, "role", None) != "BOARD_MEMBER":
