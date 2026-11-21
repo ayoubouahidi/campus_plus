@@ -67,7 +67,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
 
       <ClubEvents
         className="mt-12"
-        // Attendee faces only for signed-in students (DOCS.md §9.3).
+        // Signed out: no attendee names, no "Going" (DOCS.md §9.3, §9.4).
         upcoming={eventsForVisitor(upcoming, isSignedIn)}
         past={eventsForVisitor(past, isSignedIn)}
         schedules={getEventSchedules([...upcoming, ...past])}

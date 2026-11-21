@@ -6,7 +6,7 @@ import { EventBackLink } from '@/components/events/EventBackLink';
 import { EventDetails } from '@/components/events/EventDetails';
 import { EventPageShell } from '@/components/events/EventPageShell';
 import { getEventDateDetails, readCalendarLocation } from '@/lib/calendar';
-import { getClubById, getEventById, withoutAttendees } from '@/lib/events';
+import { getClubById, getEventById, forSignedOutVisitor } from '@/lib/events';
 import { getMockAttendees, mockClubs, mockEvents } from '@/lib/mockData';
 import { getRequestTime } from '@/lib/requestTime';
 
@@ -52,8 +52,8 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         })
       : undefined;
 
-  // Attendee names are for signed-in students only (DOCS.md §9.3): a signed-out visitor never receives them,
-  // not even in the page data, only rsvps_count. Same cached session read as the root layout.
+  // Signed-out visitors never receive attendee names or "you're going", not even in the page data
+  // (DOCS.md §9.3, §9.4). Same cached session read as the root layout.
   const isSignedIn = (await getSessionState()).status === 'signed-in';
 
   return (
@@ -61,7 +61,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
       <EventBackLink calendar={backToCalendar} className="mb-6" />
 
       <EventPageShell
-        initialEvent={isSignedIn ? event : withoutAttendees(event)}
+        initialEvent={isSignedIn ? event : forSignedOutVisitor(event)}
         hasEnded={Date.parse(event.end_time) <= now}
         attendees={isSignedIn ? getMockAttendees(event) : []}
       >

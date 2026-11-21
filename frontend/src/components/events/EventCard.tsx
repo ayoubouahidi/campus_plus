@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { CheckIcon, MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
 import { CATEGORY_LABELS } from '@/lib/events';
+import { loginHref } from '@/lib/login';
+import type { SessionStatus } from '@/types/session';
 import { EventSchedule } from '@/lib/time';
 import { flyerFallbackStyles } from './eventStyles';
 
@@ -31,6 +33,21 @@ const FLYER_SIZES = '(min-width: 1280px) 400px, (min-width: 1024px) 33vw, (min-w
 
 const CalendarIcon = NAV_ICONS.calendar;
 
+// What the RSVP slot shows. Only signed-in students can RSVP (DOCS.md §9.4): signed out, the slot is a link to
+// the login page that comes back to this event; while the session loads, a disabled button (no flash).
+type CardRsvpState = 'loading' | 'signedOut' | 'going' | 'notGoing';
+
+const getCardRsvpState = (status: SessionStatus, isGoing: boolean): CardRsvpState => {
+  if (status === 'loading') return 'loading';
+  if (status === 'signed-out') return 'signedOut';
+  return isGoing ? 'going' : 'notGoing';
+};
+
+// Mirrors Button's primary/sm styles: "Log in to RSVP" navigates, so it is a link. relative z-10 keeps it
+// above the card's stretched link.
+const loginLinkStyles =
+  'relative z-10 inline-flex shrink-0 items-center justify-center rounded-md border-transparent bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-violet-700 active:bg-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40';
+
 export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
   ({ event, schedule, onRsvpToggle, headingLevel = 'h3', imageLoading, className = '', ...props }, ref) => {
     const isGoing = event.has_user_rsvpd;
@@ -38,6 +55,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
     // visitors an empty preview; this also covers the session loading and the /test switcher.
     const { session } = useSession();
     const attendees = session.status === 'signed-in' ? event.attendees_preview : [];
+    const rsvpState = getCardRsvpState(session.status, isGoing);
 
     return (
       <Card ref={ref} isHoverable className={`relative flex h-full flex-col ${className}`} {...props}>
@@ -100,17 +118,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
             </span>
           </div>
 
-          <Button
-            size="sm"
-            variant={isGoing ? 'secondary' : 'primary'}
-            leftIcon={isGoing ? <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : undefined}
-            onClick={() => onRsvpToggle(event)}
-            className="relative z-10 shrink-0"
-          >
-            {isGoing ? 'Going' : 'RSVP'}
-            {/* Six "RSVP" buttons are indistinguishable in a screen reader's button list without the title. */}
-            <span className="sr-only">{isGoing ? ` to ${event.title}, cancel RSVP` : ` to ${event.title}`}</span>
-          </Button>
+          {rsvpActions(rsvpState, event, onRsvpToggle)}
         </CardFooter>
       </Card>
     );
@@ -118,3 +126,41 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
 );
 
 EventCard.displayName = 'EventCard';
+
+// One entry per state (exhaustive Record, no nested ternaries). Built per call: each entry needs the event.
+const rsvpActions = (
+  state: CardRsvpState,
+  event: EventItem,
+  onRsvpToggle: (event: EventItem) => void
+): React.ReactNode => {
+  // Six "RSVP" buttons are indistinguishable in a screen reader's button list without the title.
+  const actions: Record<CardRsvpState, React.ReactNode> = {
+    loading: (
+      <Button size="sm" disabled className="relative z-10 shrink-0">
+        RSVP<span className="sr-only">{` to ${event.title}`}</span>
+      </Button>
+    ),
+    signedOut: (
+      <Link href={loginHref(`/events/${event.id}`)} className={loginLinkStyles}>
+        Log in to RSVP<span className="sr-only">{` to ${event.title}`}</span>
+      </Link>
+    ),
+    going: (
+      <Button
+        size="sm"
+        variant="secondary"
+        leftIcon={<CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+        onClick={() => onRsvpToggle(event)}
+        className="relative z-10 shrink-0"
+      >
+        Going<span className="sr-only">{` to ${event.title}, cancel RSVP`}</span>
+      </Button>
+    ),
+    notGoing: (
+      <Button size="sm" onClick={() => onRsvpToggle(event)} className="relative z-10 shrink-0">
+        RSVP<span className="sr-only">{` to ${event.title}`}</span>
+      </Button>
+    ),
+  };
+  return actions[state];
+};

@@ -3516,6 +3516,7 @@ The subject rejects the project if these pages are missing, empty or placeholder
 | 9.1 | `LegalPage` layout + the text of both documents | ✅ Built (previewed on `/test`, then moved to the routes in 9.2) |
 | 9.2 | Routes `/privacy` and `/terms`, metadata, footer "Legal" links (page footer + phone drawer) | ✅ Live (§9.2), waiting for the user's browser check |
 | 9.3 | Event page: attendee names and faces for signed-in students only, signed-out visitors see the count (matches the policy) | ✅ live |
+| 9.4 | Only signed-in students can RSVP: event cards show "Log in to RSVP" when signed out, no "Going" for signed-out visitors | ✅ live |
 
 ### 9.1 `LegalPage`, `legalContent`, `lib/legal.ts` (Step 9.1, 2026-11-20)
 
@@ -3578,7 +3579,7 @@ LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, SESSION_LIFETIME_DAYS   // lib/legal.ts
 
 ### 9.3 Attendee names for signed-in students only (Step 9.3, 2026-11-21)
 
-**Files:** `lib/events.ts` (`withoutAttendees`, `eventsForVisitor`), `components/events/AttendeesSection.tsx` (states), `components/events/EventCard.tsx` (faces only when signed in, now `'use client'`), `components/ui/layout/navIcons.tsx` (`LockIcon`, moved here from `ClubContactCard`), pages: `app/events/[id]/page.tsx`, `app/(feed)/page.tsx`, `app/clubs/[slug]/page.tsx` (server filtering). Tested on `/test` (session switcher + server check), then `/test` reset.
+**Files:** `lib/events.ts` (`withoutAttendees`, renamed `forSignedOutVisitor` in §9.4, `eventsForVisitor`), `components/events/AttendeesSection.tsx` (states), `components/events/EventCard.tsx` (faces only when signed in, now `'use client'`), `components/ui/layout/navIcons.tsx` (`LockIcon`, moved here from `ClubContactCard`), pages: `app/events/[id]/page.tsx`, `app/(feed)/page.tsx`, `app/clubs/[slug]/page.tsx` (server filtering). Tested on `/test` (session switcher + server check), then `/test` reset.
 **Status:** ✅ Live (validated 2026-11-21). `/profile` needs nothing: it is signed-in only.
 
 **Business purpose.** The Privacy Policy ("Who can see it") promises that only signed-in students see who is going to an event; signed-out visitors see how many. This step makes the site keep that promise, the same way the club president's contact is protected (§6.13).
@@ -3596,7 +3597,7 @@ LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, SESSION_LIFETIME_DAYS   // lib/legal.ts
 
 **Contract.**
 ```ts
-withoutAttendees(event: EventItem): EventItem               // same object if already empty
+forSignedOutVisitor(event: EventItem): EventItem            // was withoutAttendees; same object if nothing to hide
 eventsForVisitor(events: EventItem[], isSignedIn: boolean): EventItem[]
 // AttendeesSection props unchanged: { event, attendees, hasEnded } (attendees = [] for signed-out visitors)
 ```
@@ -3604,10 +3605,33 @@ eventsForVisitor(events: EventItem[], isSignedIn: boolean): EventItem[]
 **Usage (as in the real pages):**
 ```tsx
 const isSignedIn = (await getSessionState()).status === 'signed-in';
-<EventPageShell initialEvent={isSignedIn ? event : withoutAttendees(event)}
+<EventPageShell initialEvent={isSignedIn ? event : forSignedOutVisitor(event)}
   attendees={isSignedIn ? getMockAttendees(event) : []} … />
 <EventFeed initialEvents={eventsForVisitor(upcomingEvents, isSignedIn)} … />
 ```
+
+---
+
+### 9.4 Only signed-in students can RSVP (Step 9.4, 2026-11-21)
+
+**Files:** `components/events/EventCard.tsx` (RSVP slot per session state), `lib/events.ts` (`withoutAttendees` → `forSignedOutVisitor`, now also clears `has_user_rsvpd`), pages: `app/events/[id]`, `app/(feed)`, `app/clubs/[slug]`, `app/calendar` (now filtered too).
+**Status:** ✅ Live (2026-11-21). Bug fix reported by the user, checked on the real pages (no `/test` step).
+
+**Business purpose.** Signed-out visitors could press "RSVP" on the event cards (feed, club pages): the count went up and a "You're going" toast appeared, for a visitor with no account. The event page's RSVP card already did the right thing ("Log in to RSVP", §6.9); the cards didn't. Also, signed-out visitors saw "Going" on events the mock user RSVP'd to.
+
+**Core concepts & decisions.**
+- **Card RSVP slot = exhaustive state table** (`CardRsvpState`: `loading` → disabled "RSVP"; `signedOut` → "Log in to RSVP" **link** to `loginHref('/events/:id')`; `going` → "Going ✓" button; `notGoing` → "RSVP" button), same states as `RsvpCard`. The link lands on the event page after login, where the student can RSVP with the full details in view. Each entry keeps the sr-only "to <event title>" so the buttons/links stay distinguishable in a screen reader's list.
+- **Link, not a button that redirects:** it navigates, so it is an `<a>` (opens in a new tab, shows its URL). Styled like Button primary/sm; `relative z-10` keeps it above the card's stretched link.
+- **Server guard:** `forSignedOutVisitor` now also sets `has_user_rsvpd: false`, so no page tells a signed-out visitor "Going" (cards, event page, calendar agenda badge). The calendar page now runs `eventsForVisitor` as well.
+- **The backend is the real lock:** Ahmed's `POST /api/events/:id/rsvp` must answer 401 without a session (TEAM_NEEDS §1.1). The UI only stops offering the action.
+
+**Tradeoffs.**
+- *Hide the button vs. "Log in to RSVP":* hiding it leaves signed-out visitors without the main call to action; the link explains why and leads to login.
+- *Guard in each `onRsvpToggle` handler (EventFeed, ClubEvents, ProfileActivity) vs. in the card:* the card is the one place every grid goes through, and it already reads the session for the faces (§9.3).
+
+**Contract.** `EventCard` props unchanged. `forSignedOutVisitor(event): EventItem` (empty `attendees_preview`, `has_user_rsvpd: false`; same object if nothing to change).
+
+**Usage:** unchanged for callers: `<EventCard event={…} schedule={…} onRsvpToggle={…} />`; server pages pass `eventsForVisitor(events, isSignedIn)`.
 
 ---
 

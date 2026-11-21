@@ -13,7 +13,7 @@ export default async function Home() {
   const now = await getRequestTime();
 
   // Phase 7: replace mockEvents with the API response.
-  // Attendee faces only for signed-in students (DOCS.md §9.3): signed-out visitors get the count, not the names.
+  // Signed out: the count only, no attendee names, no "Going" (DOCS.md §9.3, §9.4).
   const isSignedIn = (await getSessionState()).status === 'signed-in';
   const upcomingEvents = eventsForVisitor(getUpcomingEvents(mockEvents, now), isSignedIn);
 

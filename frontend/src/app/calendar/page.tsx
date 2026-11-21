@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { getSessionState } from '@/auth';
 import { EventCalendar } from '@/components/calendar/EventCalendar';
 import { getEventIdsByDay, getEventTimes, toCampusDayKey } from '@/lib/calendar';
+import { eventsForVisitor } from '@/lib/events';
 import { mockEvents } from '@/lib/mockData';
 import { getRequestTime } from '@/lib/requestTime';
 
@@ -17,7 +19,9 @@ export default async function CalendarPage() {
 
   // Phase 7: fetch the events of the visible range from the API instead of mockEvents.
   // Past events stay listed: a calendar shows what happened too, unlike the "upcoming" feed.
-  const events = mockEvents;
+  // Signed out: no "Going" badges in the day agenda (DOCS.md §9.4).
+  const isSignedIn = (await getSessionState()).status === 'signed-in';
+  const events = eventsForVisitor(mockEvents, isSignedIn);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">

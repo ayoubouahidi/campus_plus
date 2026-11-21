@@ -62,7 +62,7 @@ Spec: `API_SPEC.md` on `Ahmed` (Swagger `/api/docs/`). Blocked part: `AYOUB_DEPE
 | Need | Detail |
 | --- | --- |
 | A model | `Rsvp(user, event, created_at)`, unique per user+event |
-| `POST /api/club-events/{id}/rsvp/` and `DELETE` the same URL | Signed-in only. Return the new `rsvps_count` and `has_user_rsvpd`. |
+| `POST /api/club-events/{id}/rsvp/` and `DELETE` the same URL | Signed-in only: anonymous requests get **401** (the UI shows "Log in to RSVP" since 2026-11-21, but the API is the real lock). Return the new `rsvps_count` and `has_user_rsvpd`. |
 | On every event in lists and detail: `rsvps_count`, `has_user_rsvpd` (false when signed out), `attendees_preview` (≤ 3 `{id, full_name, avatar_url}`, newest first) | The event cards show the count, the "Going" state and an avatar stack. |
 | `GET /api/club-events/{id}/attendees/` | The full list on the event page. **Decided (2026-11-20): signed-in only.** Anonymous requests get 401/403 here, and events in lists/detail carry `rsvps_count` but an **empty `attendees_preview`** (names and pictures never leave the server for signed-out visitors). Same rule as the president's contact details |
 
