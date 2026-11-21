@@ -51,7 +51,7 @@ flowchart LR
 
 - Everything runs in **Docker Compose** (`docker-compose.yml` at the repo root): `nginx`, `frontend`, `web`, `db`, `redis`.
 - `nginx` terminates HTTPS (port 80 redirects to 443) and routes by path (`infrastructure/nginx/nginx.conf`).
-- **Today the frontend uses mock data** (`src/lib/mockData.ts`). It doesn't call Django yet; that's Phase 7. Login is real since Phase 5 (Auth.js + 42, `src/auth.ts`; DOCS §7.5–7.6), with a dev login button while the 42 keys and Django's `/auth/sync` are missing.
+- **Today the frontend uses mock data** (`src/lib/mockData.ts`). It doesn't call Django yet; that's Phase 7. Login is real since Phase 5 (Auth.js + 42, `src/auth.ts`; DOCS §7.5–7.6), with a dev login button while the 42 keys and Django's `/auth/sync` are missing. Email + password login and sign-up (`/auth/register`) since 2026-11-21 (DOCS §11): Django `POST /api/auth/login/` and `POST /api/signup/`, with an in-memory dev fallback (`src/lib/devAccounts.ts`) while `BACKEND_URL` is empty.
 
 **Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript (strict) · Tailwind CSS v4. No other runtime dependencies (no state library, no date library, no UI kit).
 
@@ -620,7 +620,7 @@ Use `Modal` + `ModalHeader` + `ModalTitle` (it handles portal, focus, Escape, sc
 
 | Item | Where tracked |
 | --- | --- |
-| **Phase 5** ✅ login (Auth.js + 42), real session, `/profile` (DOCS §7.4–7.8). Left: real 42 keys + Django `/auth/sync` (Ayoub), EMINES login, attendee-name visibility | DOCS §7, TEAM_NEEDS |
+| **Phase 5** ✅ login (Auth.js + 42 + email/password), `/auth/register`, real session, `/profile` (DOCS §7.4–7.8, §11). Left: real 42 keys + Django `/auth/sync`, `/api/auth/login/` and unique-email signup on `master` (Ayoub/Ahmed, TEAM_NEEDS §1b.3) | DOCS §7, TEAM_NEEDS |
 | **Phase 6** real-time notifications (WebSockets `/ws/calendar/`) | roadmap |
 | **Phase 7** Django API instead of mocks, Arabic RTL + i18n, (loading and error pages done, DOCS §6.20–6.21), RSVP requests, `og:image` | roadmap |
 | ESLint findings in older code (mount guards, `Date.now` purity) | DOCS §1.5b |

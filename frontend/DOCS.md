@@ -55,7 +55,8 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | `/clubs` | Clubs directory |
 | `/clubs/[slug]` | Individual club hub: banner, bio, contact, club events |
 | `/events/[id]` | Event detail: flyer, description, venue, RSVP |
-| `/auth/login` | Student login: 42 Intra (Auth.js); the first login creates the account (§7.4–7.6) |
+| `/auth/login` | Student login: 42 Intra (Auth.js; the first login creates the account) or email + password (§7.4–7.6, §11) |
+| `/auth/register` | Email sign-up for students without 42, then logged in right away (§11) |
 | `/profile` (alias `/me`) | Student profile (Figma design): identity, stats, going / went to, logout. Signed-in only (§7.7–7.8). Avatar upload later |
 | `/privacy`, `/terms` | Privacy Policy and Terms of Service (mandatory, subject v21.2), linked from the footer on every page (§9) |
 
@@ -212,7 +213,7 @@ This contract is the single source of truth for them, so adding or renaming a pa
 
 ```ts
 type AppRoute = '/' | '/calendar' | '/clubs' | `/clubs/${string}` | `/events/${string}`
-  | '/auth/login' | '/profile' | '/me';   // '/auth/register' removed in Step 5.3 (§7.6)
+  | '/auth/login' | '/auth/register' | '/profile' | '/me';   // '/auth/register' removed in Step 5.3 (§7.6), back in Step 11.3 (§11.3)
 
 type NavIconName = 'discover' | 'calendar' | 'clubs' | 'profile';
 type NavMatchStrategy = 'exact' | 'prefix';
@@ -3679,4 +3680,125 @@ Colors: edit the classes in `Logo.tsx`. New artwork: export the SVG again; if th
 
 #### Verified (2026-11-20)
 Rendered previews of the converted logo (light and dark) match the design; re-checked without the hub square. `/` shows 2 full logos (navbar, footer) + 1 `LogoMark` (navbar < 360 px); `/auth/login` back link "Back to Campus Hub"; `/icon.svg` 200 `image/svg+xml`, `/favicon.ico` 200 `image/x-icon`, both `<link rel="icon">` in the page head. `tsc` passes; ESLint no new findings; no server errors (after `docker compose restart frontend`, §1.5b).
+
+
+---
+
+## 11. Email sign-up & login (mandatory, subject v21.2)
+
+The subject requires sign-up and login with email + password (passwords hashed and salted). Until now the student site was 42-only. Backend: `POST /api/auth/login/` (Ayoub, `Ayoub-backend`, accounts app: `{email, password}` → `{token, user}` or 401) and `POST /api/signup/` (Ahmed / Ayoub: first/last name, email, password ≥ 8, year of study, department, optional club → 201 `{token, member}`). Django hashes the passwords; the frontend never stores one.
+
+| Step | What | Status |
+|---|---|---|
+| 11.1 | Email + password form on `/auth/login`, under the 42 button | ✅ live (11.3) |
+| 11.2 | `/auth/register` sign-up page, then automatic login | ✅ live (11.3) |
+| 11.3 | Put both on the real routes (`/auth/login` form, `/auth/register` page), "Create an account" link, `?registered=1` notice | ✅ live |
+
+### 11.1 `EmailLoginForm`, the `email` Auth.js provider, `signInWithEmail` (Step 11.1, 2026-11-21)
+
+**Files:** `src/components/auth/EmailLoginForm.tsx` (form), `src/components/auth/LoginPanel.tsx` (`LoginDivider` "or with email", footer text now "First time with 42?"), `src/app/auth/login/actions.ts` (server action `signInWithEmail`), `src/auth.ts` (Credentials provider `email`, `loginWithBackend`, `BackendUnavailable`, `DEV_EMAIL_PASSWORD`), `src/lib/login.ts` (`validateEmailLogin`, `EmailLoginState`, messages). Test: `src/app/test/page.tsx`.
+**Status:** ✅ Live on `/auth/login` (validated 2026-11-21, integrated in 11.3).
+
+**Business purpose.** Students without a 42 account (EMINES) need a way in, and the subject makes email + password login mandatory. The 42 button stays first: it's the one-click path for 1337 students.
+
+**Core concepts & decisions.**
+- **Flow:** form → server action `signInWithEmail` (validates again) → Auth.js `signIn('email')` → provider `authorize()` → Django `POST /api/auth/login/` → `{token, user}` → the same JWT cookie as 42 (`backendToken` stays server-side, §7.5) → redirect to `?next=`. Same session shape as 42, so the rest of the app needs no change. `login` is `null` for email accounts (Django's username is a random `user_…`).
+- **Two error kinds**, decided in `authorize()`: `null` → Auth.js `CredentialsSignin` → "Wrong email or password" (one message for both fields, so the form doesn't reveal which emails have accounts); Django unreachable / 5xx / bad JSON → `BackendUnavailable` (a `CredentialsSignin` with `code = 'backend_unavailable'`) → "Login is temporarily unavailable". With `signIn()` from a server action, Auth.js throws these errors to the caller (raw mode), so the action catches them and returns state instead of redirecting to `?error=`.
+- **`useActionState`** (React 19): the action's return value is the form state (`error`, `fieldErrors`, `email`), `isPending` drives the button spinner ("Logging in…"). React resets the form after an action: `defaultValue={state.email}` keeps the email, the password is cleared (never sent back).
+- **Validation twice, same rules** (`validateEmailLogin` in `lib/login.ts`): in the browser on submit (`noValidate` + our messages under the fields via `Input`'s `error` → `aria-invalid` + `aria-describedby`; focus moves to the first wrong field; nothing is posted), and again in the action and in `authorize()` (the browser check can be skipped, and the Auth.js endpoint can be posted to directly). Typing in a field clears its message.
+- **Accessibility:** `<form aria-label="Log in with email">`, labelled inputs (`useId` in `Input`), error box `role="alert"`, `autocomplete="email"` / `"current-password"` so password managers work; the "or with email" divider is `aria-hidden` (two labelled forms already say it).
+- **Dev fallback** (no `BACKEND_URL`, never in production, like the 42 `syncWithBackend` fallback): one account, `student@1337.ma` / `campushub-dev` (`DEV_EMAIL_PASSWORD`), signs in as the mock student; since 11.2 also any account made on the sign-up form (`lib/devAccounts.ts`). In production without `BACKEND_URL` the form answers "temporarily unavailable".
+
+**Tradeoffs.**
+- *Server action + `useActionState` vs. client `fetch` to `/api/auth/callback/email`:* the action keeps CSRF, cookies and redirects inside Auth.js, works without JavaScript (plain form post), and needs no client state machine.
+- *Custom messages (`noValidate`) vs. browser bubbles:* bubbles look different per browser, vanish, and aren't styled like the rest; ours sit under the field and are announced.
+- *One "wrong email or password" message vs. "no account with this email":* the second helps a little and leaks who has an account. Django already answers the same 401 for both.
+- *Validate in the browser only vs. also on the server:* the server check is a few lines and is the one that counts.
+
+**Contract.**
+```ts
+// EmailLoginForm (client)
+interface EmailLoginFormProps extends Omit<FormHTMLAttributes<HTMLFormElement>, 'action'> {
+  action: (previous: EmailLoginState, formData: FormData) => Promise<EmailLoginState>; // signInWithEmail, or a mock
+  next: string; // cleaned with safeNextPath()
+}
+interface EmailLoginState { error: 'invalid' | 'unavailable' | null; fieldErrors: { email?: string; password?: string }; email: string }
+// LoginDivider: { className?: string }
+```
+
+**Usage (integration step):**
+```tsx
+<LoginPanel action={signInWith42} next={next} error={getLoginErrorKind(params.error)}>
+  <LoginDivider />
+  <EmailLoginForm action={signInWithEmail} next={next} />
+  {DEV_LOGIN_ENABLED && <DevLoginForm action={signInWithDevLogin} next={next} />}
+</LoginPanel>
+```
+
+**Verified (2026-11-21):** `/test` 200 with the form; Auth.js `POST /api/auth/callback/email` with the wrong password → `/auth/login?error=CredentialsSignin&code=credentials`, with `campushub-dev` → redirect to `/test` and `/api/auth/session` shows the student (role STUDENT, login null); `tsc` passes; ESLint no new findings. Django's `Role` values (`STUDENT`, `BOARD_MEMBER`, `SUPERADMIN`) match `UserRole`.
+
+### 11.2 `RegisterForm`, `RegisterPanel`, `registerWithEmail` (Step 11.2, 2026-11-21)
+
+**Files:** `src/components/auth/RegisterForm.tsx` (form), `src/components/auth/RegisterPanel.tsx` (heading, 42 hint, "Already have an account? Log in", Terms/Privacy line), `src/app/auth/register/actions.ts` (server action `registerWithEmail` + `createAccount`), `src/lib/register.ts` (values, `validateRegistration`, `fromDjangoErrors`, messages), `src/lib/devAccounts.ts` (dev-only account store), `src/auth.ts` (email dev fallback now reads `devAccounts`). Test: `src/app/test/page.tsx` (both forms side by side). Backend needs: TEAM_NEEDS §1b.3.
+**Status:** ✅ Live on `/auth/register` (validated 2026-11-21, integrated in 11.3).
+
+**Business purpose.** Students without 42 (EMINES) create an account with email + password; the subject requires it. 1337 students are told the 42 button creates their account, so they don't make a second one.
+
+**Core concepts & decisions.**
+- **Flow:** form → `registerWithEmail` (validates again) → `createAccount` → Django `POST /api/signup/` (Django hashes the password) → 201 → `signIn('email')` with the same email and password → same session as the login form → redirect to `?next=`. If the account was created but that login fails, the student is sent to `/auth/login?…&registered=1` rather than shown a sign-up error for an account that exists.
+- **Fields = Django's** (`first_name`, `last_name`, `email`, `password`, `year_of_study` 1–7, `department_id`, optional `club_id`) plus our `password_confirm`, which is never sent. Same limits as `SignupSerializer` (names ≤ 150, password ≥ 8; we cap at 128).
+- **Errors:** field messages under fields; `fromDjangoErrors` maps DRF's `{field: ["msg"]}` 400 bodies onto our fields; an email message containing "already exists" becomes the `email-taken` box with a **"Log in instead"** link; other refusals → "We couldn't create your account"; network / 5xx → "Sign-up is temporarily unavailable".
+- **Values kept after a failure** (`defaultValue` from `state.values`, React resets the form to them), **passwords never sent back**: `toPublicValues` lists the safe fields one by one, so a future secret field can't be copied by accident.
+- **Club follows School:** the club `<select>` lists only the chosen school's clubs, is disabled until a school is picked, and resets when the school changes (`key={departmentId}` remounts it with its default). A disabled select isn't posted: the action reads `''` = no club.
+- **Accessibility:** same as 11.1 (labels via `useId`, `aria-invalid` + described-by messages, focus on the first wrong field in form order, `role="alert"` box), `autocomplete` `given-name` / `family-name` / `email` / `new-password` (password managers offer a strong password).
+- **Dev fallback** (`lib/devAccounts.ts`, no `BACKEND_URL`, never in production): sign-ups are kept in memory on `globalThis` (survive hot reload, lost on container restart) and the email login reads them, so sign up → logged in → log out → log in again works locally. The mock student `student@1337.ma` is in it from the start ("email taken" case). Test values only: stored in plain text.
+
+**Tradeoffs.**
+- *Sign up then call the login (2 requests) vs. use the token `/api/signup/` returns:* signup returns a `member`, not the `user` shape the session needs; reusing the login path means one way to build a session, and login works the same whatever branch's signup is merged.
+- *One page vs. a multi-step wizard:* 8 fields fit one screen; steps would hide errors from earlier steps and need state between them.
+- *Departments/clubs as props vs. fetched in the form:* the server page already has them (Phase 7: `GET /api/departments/`, `/api/clubs/`), the form stays a plain client component with no loading state.
+
+**Contract.**
+```ts
+interface RegisterFormProps extends Omit<FormHTMLAttributes<HTMLFormElement>, 'action'> {
+  action: (previous: RegisterState, formData: FormData) => Promise<RegisterState>; // registerWithEmail, or a test wrapper
+  next: string;                                                                   // cleaned with safeNextPath()
+  departments: { id: string; name: string }[];
+  clubs: { id: string; name: string; department_id: string }[];
+}
+interface RegisterState { error: 'email-taken' | 'rejected' | 'unavailable' | null; fieldErrors: RegisterFieldErrors; values: RegisterPublicValues }
+interface RegisterPanelProps extends HTMLAttributes<HTMLDivElement> { next: string; children: ReactNode }
+```
+
+**Usage (11.3, `/auth/register/page.tsx`):**
+```tsx
+<LoginLayout>
+  <RegisterPanel next={next}>
+    <RegisterForm action={registerWithEmail} next={next} departments={departments} clubs={clubs} />
+  </RegisterPanel>
+</LoginLayout>
+```
+
+**Verified (2026-11-21):** `/test` 200 with both forms (needed `docker compose restart frontend` for the new `app/auth/register` folder, §1.5b); year labels 1st…7th; `tsc` passes; ESLint no new findings.
+
+### 11.3 Real routes: email form on `/auth/login`, `/auth/register` page (Step 11.3, 2026-11-21)
+
+**Files:** `src/app/auth/login/page.tsx` (divider + `EmailLoginForm` + "No account and no 42? Create an account" + `?registered=1` notice), `src/app/auth/register/page.tsx` (new), `src/components/auth/LoginPanel.tsx` (`notice` prop), `src/lib/login.ts` (`registerHref`), `src/types/navigation.ts` (`'/auth/register'` back in `AppRoute`). `/test` reset to "nothing under test".
+**Status:** ✅ Live (2026-11-21).
+
+**Business purpose.** Both forms validated on `/test` (11.1 + 11.2) now live where students look for them. The login page stays 42-first; email is the second option; sign-up is one link away and keeps `?next=` both ways, so a student who clicked "Log in to RSVP" on an event comes back to that event whichever path they take.
+
+**Core concepts & decisions.**
+- **`/auth/register`** = `LoginLayout` + `RegisterPanel` + `RegisterForm`, full screen (`FULL_SCREEN_ROUTES` already covers `/auth`), `robots: noindex`. Signed-in visitors are redirected to `next` (no second account). Departments and clubs come from the mocks, trimmed to what the form needs (Phase 7: `GET /api/departments/`, `/api/clubs/`).
+- **`?registered=1`**: if the account was created but the automatic login failed, the register action sends the student to `/auth/login?next=…&registered=1`; `LoginPanel`'s new `notice` prop shows "Your account was created. Log in with your email and password." in a green `role="status"` box (polite: good news, not an error).
+- **Link wording** "No account and no 42? Create an account": 1337 students shouldn't create an email account next to their 42 one (two accounts, split RSVPs). The register page repeats it ("With 42, just continue with 42 Intra").
+- **Mobile tab bar:** "Log in" stays highlighted on `/auth/register` (alias `/auth`, §2).
+
+**Tradeoffs.** *Sign-up as a tab on `/auth/login` vs. its own route:* a route has its own URL to share and link (`registerHref(next)`), its own title, and the browser Back button works as expected.
+
+**Contract.** `LoginPanelProps.notice?: ReactNode` (green status box above the error/42 button). `registerHref(next: string): '/auth/register?next=…'` (cleans `next` like `loginHref`).
+
+**Usage:** `<Link href={registerHref(next)}>Create an account</Link>`; `<LoginPanel … notice={registered ? '…' : null}>`.
+
+**Verified (2026-11-21):** `/auth/login?next=/calendar` 200 with the email form and a link to `/auth/register?next=%2Fcalendar`; `/auth/register?next=/calendar` 200 with the form and a link back to `/auth/login?next=%2Fcalendar`; `/auth/login?registered=1` shows the notice; `/test` back to "nothing under test"; `tsc` passes; ESLint no new findings; no server errors.
 

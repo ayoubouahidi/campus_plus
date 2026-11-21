@@ -1,10 +1,12 @@
 import { cache } from 'react';
 import { unstable_rethrow } from 'next/navigation';
-import NextAuth from 'next-auth';
+import NextAuth, { CredentialsSignin, type User as AuthUser } from 'next-auth';
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
 import FortyTwoSchool from 'next-auth/providers/42-school';
+import { findDevAccount } from '@/lib/devAccounts';
 import { mockCurrentUser } from '@/lib/mockData';
+import { BACKEND_UNAVAILABLE_CODE, hasFieldErrors, validateEmailLogin } from '@/lib/login';
 import { toSessionState } from '@/lib/session';
 import type { SessionState } from '@/types/session';
 import type { UserRole } from '@/types/api';
@@ -12,7 +14,7 @@ import type { UserRole } from '@/types/api';
 // Auth.js config (Step 5.2), adapted from Ayoub's dashboard (branch Ayoub, dashboard_campus/auth.ts) so both
 // apps log in the same way: 42 Intra → Django POST /auth/sync → our session. Server only: never import this
 // from a 'use client' file. Env: AUTH_SECRET, AUTH_42_SCHOOL_ID/SECRET, BACKEND_URL, BACKEND_INTERNAL_KEY,
-// AUTH_DEV_LOGIN (DOCS.md §7.5).
+// AUTH_DEV_LOGIN (DOCS.md §7.5). Providers: 42, email + password (§11.1), dev login.
 
 // The 42 /v2/me fields we send to Django (the full type is huge; we only need these).
 type FortyTwoProfile = {
@@ -73,7 +75,89 @@ async function syncWithBackend(profile: FortyTwoProfile): Promise<BackendSyncRes
   }
 }
 
-const providers: Provider[] = [FortyTwoSchool];
+// Email + password login (Step 11.1, DOCS.md §11.1): Django POST /api/auth/login/ (Ayoub, accounts app)
+// checks the hashed password and answers { token, user } or 401. Django is the only place passwords live.
+type BackendLoginResponse = {
+  token: string;
+  user: { id: number | string; email: string; full_name: string; avatar_url: string | null; campus: string | null; role: string };
+};
+
+// Django unreachable or answering nonsense: a CredentialsSignin with its own code, so the login form can say
+// "try again later" instead of "wrong password". The code ends up in a URL: it must not hint at anything secret.
+class BackendUnavailable extends CredentialsSignin {
+  code = BACKEND_UNAVAILABLE_CODE;
+}
+
+// Dev fallback, like syncWithBackend's: without BACKEND_URL (and never in production) the mock student logs in
+// with the password below, and so does any account created on the sign-up form (lib/devAccounts.ts), so the
+// forms can be tried before Django has the endpoints. Same value as the mock student's in devAccounts.ts.
+export const DEV_EMAIL_PASSWORD = 'campushub-dev';
+
+// null = wrong email or password (→ CredentialsSignin). Throws BackendUnavailable when Django can't answer.
+async function loginWithBackend(email: string, password: string): Promise<AuthUser | null> {
+  if (!process.env.BACKEND_URL) {
+    if (process.env.NODE_ENV === 'production') throw new BackendUnavailable();
+    // Dev fallback: the mock student (DEV_EMAIL_PASSWORD) and any account made on the sign-up form (devAccounts).
+    const account = findDevAccount(email);
+    if (!account || account.password !== password) return null;
+    return {
+      id: account.id,
+      name: account.full_name,
+      email: account.email,
+      image: null,
+      role: 'STUDENT',
+      login: null,
+      campus: null,
+      backendToken: 'dev-token',
+      backendUserId: account.id,
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${process.env.BACKEND_URL}/api/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      cache: 'no-store',
+    });
+  } catch {
+    throw new BackendUnavailable(); // network error, Django down
+  }
+  // 400 = Django's own validation refused the fields (we validate first, so rare): same answer as 401.
+  if (res.status === 401 || res.status === 400) return null;
+  if (!res.ok) throw new BackendUnavailable();
+
+  const data = (await res.json().catch(() => null)) as BackendLoginResponse | null;
+  if (!data?.token || data.user?.id === undefined || !isRole(data.user.role)) throw new BackendUnavailable();
+  return {
+    id: String(data.user.id),
+    name: data.user.full_name,
+    email: data.user.email,
+    image: data.user.avatar_url,
+    role: data.user.role,
+    login: null, // email accounts have no 42 login (Django's username is a random user_… id)
+    campus: data.user.campus,
+    backendToken: data.token,
+    backendUserId: String(data.user.id),
+  };
+}
+
+const providers: Provider[] = [
+  FortyTwoSchool,
+  Credentials({
+    id: 'email',
+    name: 'Email',
+    credentials: { email: {}, password: {} },
+    // The server action already validated; check again here because this endpoint can be posted to directly.
+    authorize: async (credentials) => {
+      const email = typeof credentials.email === 'string' ? credentials.email.trim() : '';
+      const password = typeof credentials.password === 'string' ? credentials.password : '';
+      if (hasFieldErrors(validateEmailLogin(email, password))) return null;
+      return loginWithBackend(email, password);
+    },
+  }),
+];
 
 if (DEV_LOGIN_ENABLED) {
   providers.push(
@@ -106,6 +190,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // Runs once, right after 42 (or the dev login) approves the user. false → /auth/login?error=AccessDenied
     async signIn({ user, account, profile }) {
       if (account?.provider === 'dev') return DEV_LOGIN_ENABLED;
+      if (account?.provider === 'email') return true; // authorize() already asked Django and filled `user`
       if (account?.provider !== '42-school' || !profile) return false;
 
       const fortyTwo = profile as unknown as FortyTwoProfile;

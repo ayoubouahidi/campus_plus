@@ -10,7 +10,10 @@ export interface LoginPanelProps extends Omit<React.HTMLAttributes<HTMLDivElemen
   next: string;
   // From ?error= via getLoginErrorKind(). null = no error box.
   error?: LoginErrorKind | null;
-  // Extra sign-in options under the 42 button (today: <DevLoginForm> on developer machines).
+  // A good-news line above the buttons (today: "account created" after a sign-up, ?registered=1).
+  notice?: React.ReactNode;
+  // Extra sign-in options under the 42 button: <LoginDivider> + <EmailLoginForm> (Step 11.1), and
+  // <DevLoginForm> on developer machines.
   children?: React.ReactNode;
 }
 
@@ -19,7 +22,7 @@ export interface LoginPanelProps extends Omit<React.HTMLAttributes<HTMLDivElemen
 // Server Component (no 'use client'): only the button needs the browser (pending spinner). The form posts to
 // a server action, so it works before JavaScript loads and with JavaScript off.
 export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
-  ({ action, next, error = null, children, className = '', ...props }, ref) => {
+  ({ action, next, error = null, notice, children, className = '', ...props }, ref) => {
     const message = error ? LOGIN_ERROR_MESSAGES[error] : null;
 
     return (
@@ -28,6 +31,16 @@ export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
         <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
           Log in to Campus Hub to RSVP to events, see who&apos;s going and reach club contacts.
         </p>
+
+        {notice && (
+          // role="status": announced politely, it's information, not a problem.
+          <div
+            role="status"
+            className="mt-7 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-200"
+          >
+            {notice}
+          </div>
+        )}
 
         {message && (
           // role="alert": announced when it appears; also read first because it sits above the button.
@@ -48,7 +61,7 @@ export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
         {children}
 
         <p className="mt-5 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-          First time here? Signing in creates your account. We receive your 42 login, name, email, campus and
+          First time with 42? Signing in creates your account. We receive your 42 login, name, email, campus and
           photo, nothing else.
         </p>
       </div>
@@ -57,3 +70,13 @@ export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
 );
 
 LoginPanel.displayName = 'LoginPanel';
+
+// "or" between the 42 button and the email form. A plain line with text: decorative for screen readers,
+// which already hear two separate forms ("Continue with 42 Intra", then the "Log in with email" form).
+export const LoginDivider = ({ className = '' }: { className?: string }) => (
+  <div aria-hidden="true" className={`my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 ${className}`}>
+    <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+    or with email
+    <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+  </div>
+);

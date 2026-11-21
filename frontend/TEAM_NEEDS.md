@@ -116,7 +116,17 @@ Ahmed owns `realtime` (Channels, Daphne, Redis, WebSocket JWT, `POST /api/realti
 | Public reads | `GET` on events, clubs and departments must work **without** a token (`AllowAny` for safe methods); writes need auth |
 | `GET /api/me/` | The current user from the token |
 | 42 app keys (Step 5.2 is ready, DOCS §7.5) | Share `AUTH_42_SCHOOL_ID` / `AUTH_42_SCHOOL_SECRET` for the student site (or create a second 42 app), and add the redirect URIs **`https://localhost/api/auth/callback/42-school`** (dev) and `https://campusplus.ma/api/auth/callback/42-school` (prod). |
-| Email/password | 42 is enough for students? `api/signup/` exists. **Decide** whether EMINES students (no 42 account) sign up with email. Until then the student login page is **42 only** (DOCS §7.4). |
+| Email/password | **Decided: mandatory (subject).** Frontend built on `Mouad` (DOCS §11, 2026-11-21): the login form calls `POST /api/auth/login/` (`Ayoub-backend`: `{email, password}` → `{token, user}` / 401), the sign-up page calls `POST /api/signup/` then logs in. See §1b.3 for what is still needed. |
+
+### 1b.3 Email sign-up & login: what the frontend needs (2026-11-21, owners Ayoub + Ahmed)
+
+| Need | Why |
+| --- | --- |
+| **Refuse a second sign-up with the same email** (case-insensitive): 400 `{ "email": ["A user with this email already exists."] }` | Today `SignupSerializer` doesn't check. Two accounts with one email → `POST /api/auth/login/` finds 2 users and answers 401 forever: that student can never log in. The frontend already shows "An account with this email already exists → Log in instead" for any `email` error containing "already exists". |
+| **One sign-up endpoint**: `POST /api/signup/` is on both `Ahmed` and `Ayoub-backend`. Agree which one is merged | The frontend calls one URL. Body we send: `first_name, last_name, email, password, year_of_study (1–7), department_id, club_id \| null`. We only need `201`; the login right after gives us `{token, user}`. |
+| `POST /api/auth/login/` merged to `master` | Without it the email login answers "temporarily unavailable" (locally a dev fallback is used, DOCS §11.1). |
+| 400 bodies in DRF's usual shape `{ field: ["message"] }` | Shown under the matching field. Field names = the request's. |
+| Optional: run Django's password validators (`validate_password`) in `SignupSerializer` | The frontend asks for ≥ 8 characters; Django is the place to refuse common passwords like `password123`. Its messages show under the password field. |
 
 ### 1b.2 Real-time (WebSocket `/ws/calendar/`), Phase 6
 
@@ -173,7 +183,7 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | Requirement | Status | Owner |
 | --- | --- | --- |
 | Frontend + backend + database | ⚠️ All exist, but on separate branches; `master` has only a README; the student site and the dashboard still use mock data | all (merge, Phase 7) |
-| **Email + password sign-up and login, hashed + salted passwords** | ❌ **Student site is 42-only.** Django `POST /api/signup/` exists (Django hashes passwords); no login form, no register page | Ayoub (`accounts`) + Mouad (`/auth/register`, email form on `/auth/login`) |
+| **Email + password sign-up and login, hashed + salted passwords** | 🟡 **Frontend done (2026-11-21, DOCS §11):** email form on `/auth/login`, `/auth/register` page. Waiting for Django `/api/auth/login/` + unique-email `/api/signup/` on `master` (§1b.3) | Ayoub (`accounts`) + Mouad (`/auth/register`, email form on `/auth/login`) |
 | **Privacy Policy + Terms of Service pages**, real content, linked from the footer | ✅ **Live on `Mouad` (2026-11-20):** `/privacy`, `/terms`, footer links on every page. Contact `campushub.1337.team@gmail.com` (everyone: read it). **Team: read both texts once** | Mouad (DOCS §9) |
 | Forms validated in frontend **and** backend | ⚠️ Not yet (sign-up, login, RSVP, dashboard event forms) | everyone on their forms |
 | Multi-user: many users at once, no conflicts, real-time across users | ❌ Not demonstrable while data is mocked and RSVP has no API | Ahmed (RSVP, Rsvp model exists), Mouad (Phase 6–7) |

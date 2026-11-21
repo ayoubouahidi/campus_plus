@@ -1,14 +1,17 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { DEV_LOGIN_ENABLED, auth, signIn } from '@/auth';
 import { DevLoginForm } from '@/components/auth/DevLoginForm';
+import { EmailLoginForm } from '@/components/auth/EmailLoginForm';
 import { LoginLayout } from '@/components/auth/LoginLayout';
-import { LoginPanel } from '@/components/auth/LoginPanel';
-import { getLoginErrorKind, safeNextPath } from '@/lib/login';
+import { LoginDivider, LoginPanel } from '@/components/auth/LoginPanel';
+import { getLoginErrorKind, registerHref, safeNextPath } from '@/lib/login';
+import { signInWithEmail } from './actions';
 
 export const metadata: Metadata = {
   title: 'Log in | Campus Hub',
-  description: 'Log in with your 42 Intra account to RSVP to campus events.',
+  description: 'Log in with your 42 Intra account or your email to RSVP to campus events.',
   robots: { index: false, follow: true },
 };
 
@@ -28,8 +31,9 @@ async function signInWithDevLogin(formData: FormData) {
   await signIn('dev', { redirectTo: redirectTarget(formData) });
 }
 
-// `/auth/login` (Step 5.2). Full screen (no shell, lib/navigation.ts FULL_SCREEN_ROUTES).
-// ?next= where to go after login (every "Log in" link sends it); ?error= set by Auth.js after a failed login.
+// `/auth/login` (Step 5.2, email form since Step 11.3). Full screen (no shell, lib/navigation.ts FULL_SCREEN_ROUTES).
+// ?next= where to go after login (every "Log in" link sends it); ?error= set by Auth.js after a failed 42 login;
+// ?registered=1 after a sign-up whose automatic login failed (app/auth/register/actions.ts).
 export default async function LoginPage({
   searchParams,
 }: {
@@ -43,7 +47,23 @@ export default async function LoginPage({
 
   return (
     <LoginLayout>
-      <LoginPanel action={signInWith42} next={next} error={getLoginErrorKind(params.error)}>
+      <LoginPanel
+        action={signInWith42}
+        next={next}
+        error={getLoginErrorKind(params.error)}
+        notice={params.registered === '1' ? 'Your account was created. Log in with your email and password.' : null}
+      >
+        <LoginDivider />
+        <EmailLoginForm action={signInWithEmail} next={next} />
+        <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+          No account and no 42?{' '}
+          <Link
+            href={registerHref(next)}
+            className="rounded font-medium text-violet-700 underline underline-offset-2 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400 dark:hover:text-violet-300"
+          >
+            Create an account
+          </Link>
+        </p>
         {DEV_LOGIN_ENABLED && <DevLoginForm action={signInWithDevLogin} next={next} />}
       </LoginPanel>
     </LoginLayout>
