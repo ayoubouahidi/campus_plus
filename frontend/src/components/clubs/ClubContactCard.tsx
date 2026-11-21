@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { IconBase, type NavIconProps } from '@/components/ui/layout/navIcons';
+import { IconBase, LockIcon, type NavIconProps } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
 import { formatPhone, type ClubContact } from '@/lib/clubs';
 import type { SessionStatus } from '@/types/session';
@@ -38,13 +38,6 @@ const MailIcon = (props: NavIconProps) => (
 const PhoneIcon = (props: NavIconProps) => (
   <IconBase {...props}>
     <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
-  </IconBase>
-);
-
-const LockIcon = (props: NavIconProps) => (
-  <IconBase {...props}>
-    <rect x="5" y="11" width="14" height="10" rx="2" />
-    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
   </IconBase>
 );
 

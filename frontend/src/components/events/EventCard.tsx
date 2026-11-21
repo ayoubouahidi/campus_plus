@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { EventItem } from '@/types/api';
@@ -6,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Avatar, AvatarGroup } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { CheckIcon, MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
+import { useSession } from '@/components/providers/SessionProvider';
 import { CATEGORY_LABELS } from '@/lib/events';
 import { EventSchedule } from '@/lib/time';
 import { flyerFallbackStyles } from './eventStyles';
@@ -31,6 +34,10 @@ const CalendarIcon = NAV_ICONS.calendar;
 export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
   ({ event, schedule, onRsvpToggle, headingLevel = 'h3', imageLoading, className = '', ...props }, ref) => {
     const isGoing = event.has_user_rsvpd;
+    // Faces and names are for signed-in students only (DOCS.md §9.3). The server already sends signed-out
+    // visitors an empty preview; this also covers the session loading and the /test switcher.
+    const { session } = useSession();
+    const attendees = session.status === 'signed-in' ? event.attendees_preview : [];
 
     return (
       <Card ref={ref} isHoverable className={`relative flex h-full flex-col ${className}`} {...props}>
@@ -74,10 +81,10 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
 
         <CardFooter className="gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            {event.attendees_preview.length > 0 && (
+            {attendees.length > 0 && (
               // Hidden from screen readers (the count says it); raised above the link so name tooltips work.
               <AvatarGroup max={3} aria-hidden="true" className="relative z-10 shrink-0">
-                {event.attendees_preview.map((attendee) => (
+                {attendees.map((attendee) => (
                   <Avatar
                     key={attendee.id}
                     size="xs"

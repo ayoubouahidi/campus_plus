@@ -3515,7 +3515,7 @@ The subject rejects the project if these pages are missing, empty or placeholder
 | --- | --- | --- |
 | 9.1 | `LegalPage` layout + the text of both documents | ✅ Built (previewed on `/test`, then moved to the routes in 9.2) |
 | 9.2 | Routes `/privacy` and `/terms`, metadata, footer "Legal" links (page footer + phone drawer) | ✅ Live (§9.2), waiting for the user's browser check |
-| 9.3 | Event page: attendee names and faces for signed-in students only, signed-out visitors see the count (matches the policy) | ⏳ |
+| 9.3 | Event page: attendee names and faces for signed-in students only, signed-out visitors see the count (matches the policy) | ✅ live |
 
 ### 9.1 `LegalPage`, `legalContent`, `lib/legal.ts` (Step 9.1, 2026-11-20)
 
@@ -3558,7 +3558,7 @@ LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, SESSION_LIFETIME_DAYS   // lib/legal.ts
 
 #### To confirm with the team
 - ✅ **Contact:** `campushub.1337.team@gmail.com`, the team's shared Gmail (2026-11-20). Every member can read it; someone must answer within 30 days (the policy promises it).
-- ✅ **Attendee names: signed-in students only** (team decision, 2026-11-20, TEAM_NEEDS §4). Signed-out visitors see the count. ⚠️ The event page still shows names to everyone (§6.9): to fix (Step 9.3), and Ahmed's API must enforce it (TEAM_NEEDS §1.1).
+- ✅ **Attendee names: signed-in students only** (team decision, 2026-11-20, TEAM_NEEDS §4). Signed-out visitors see the count. Done on our side in Step 9.3 (§9.3); Ahmed's API must enforce it too (TEAM_NEEDS §1.1).
 - When a feature changes data or cookies (uploads, avatars, live updates), update `legalContent.tsx` and `LEGAL_LAST_UPDATED` in the same change.
 
 #### Verified (2026-11-20)
@@ -3575,6 +3575,39 @@ LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, SESSION_LIFETIME_DAYS   // lib/legal.ts
 - **Gotcha hit twice today:** new route folders were 404 / "Module not found" until `docker compose restart frontend` (§1.5b).
 
 **Verified (2026-11-20):** `/privacy` 200 "Privacy Policy | Campus Hub", `/terms` 200 "Terms of Service | Campus Hub"; the footer of `/calendar` links to `/privacy` and `/terms`; `/terms` links back to `/privacy`; `/`, `/calendar`, `/clubs`, `/test` 200; `tsc` passes; ESLint no new findings; no server errors.
+
+### 9.3 Attendee names for signed-in students only (Step 9.3, 2026-11-21)
+
+**Files:** `lib/events.ts` (`withoutAttendees`, `eventsForVisitor`), `components/events/AttendeesSection.tsx` (states), `components/events/EventCard.tsx` (faces only when signed in, now `'use client'`), `components/ui/layout/navIcons.tsx` (`LockIcon`, moved here from `ClubContactCard`), pages: `app/events/[id]/page.tsx`, `app/(feed)/page.tsx`, `app/clubs/[slug]/page.tsx` (server filtering). Tested on `/test` (session switcher + server check), then `/test` reset.
+**Status:** ✅ Live (validated 2026-11-21). `/profile` needs nothing: it is signed-in only.
+
+**Business purpose.** The Privacy Policy ("Who can see it") promises that only signed-in students see who is going to an event; signed-out visitors see how many. This step makes the site keep that promise, the same way the club president's contact is protected (§6.13).
+
+**Core concepts & decisions.**
+- **Two layers.** (1) The **server** decides what data leaves it: `eventsForVisitor(events, isSignedIn)` empties `attendees_preview` for signed-out visitors and the event page sends `attendees=[]`. Hiding names with CSS or a client check alone is not privacy: they would still be in the page's RSC payload (anyone can read it with "View source"). (2) The **client** decides what to draw from `useSession()`, which covers the session `loading` state and the `/test` session switcher.
+- **`AttendeesSection` states** (`Record<AttendeesState, ReactNode>`, no nested ternaries): `empty` (count 0: "Nobody has RSVP'd yet", wins because there is nothing to hide) → `loading` (grey circles + line, `aria-hidden`, names never flash) → `locked` (signed out: lock line "Names are only shown to signed-in students." + "Log in to see who's going/who went" link built with `loginHref`, so the student comes back to the same event) → `visible` (as before: avatars, sentence, "See all" dialog). The heading keeps the count in every state: "Who's going (120)". The dialog can only open in `visible`.
+- **`EventCard`**: draws the small faces only when `session.status === 'signed-in'`; otherwise just "120 going". It was already a client component (rendered inside `EventGrid`), the `'use client'` line now says so explicitly because it calls a hook.
+- **Login link is a text link**, not a primary button: the RSVP card on the same page already has the primary "Log in to RSVP"; two violet buttons would compete.
+
+**Tradeoffs.**
+- *Server filtering vs. client-only hiding:* client-only is one line, but leaks the names in the page data. Server filtering costs one helper call per page and is the only version that matches the policy.
+- *Strip in the page vs. trust the API (Phase 7):* Ahmed's API will return an empty list to anonymous requests (TEAM_NEEDS §1.1). We keep `eventsForVisitor` anyway as a second guard: if the API ever forgets, the frontend still doesn't leak.
+- *Blurred/anonymous faces vs. no faces:* grey placeholder faces would hint at a list you can't see and look broken; a lock line says why and how to fix it.
+
+**Contract.**
+```ts
+withoutAttendees(event: EventItem): EventItem               // same object if already empty
+eventsForVisitor(events: EventItem[], isSignedIn: boolean): EventItem[]
+// AttendeesSection props unchanged: { event, attendees, hasEnded } (attendees = [] for signed-out visitors)
+```
+
+**Usage (as in the real pages):**
+```tsx
+const isSignedIn = (await getSessionState()).status === 'signed-in';
+<EventPageShell initialEvent={isSignedIn ? event : withoutAttendees(event)}
+  attendees={isSignedIn ? getMockAttendees(event) : []} … />
+<EventFeed initialEvents={eventsForVisitor(upcomingEvents, isSignedIn)} … />
+```
 
 ---
 

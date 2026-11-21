@@ -7,6 +7,7 @@ import { ClubEvents } from '@/components/clubs/ClubEvents';
 import { ClubHeader } from '@/components/clubs/ClubHeader';
 import { IconBase } from '@/components/ui/layout/navIcons';
 import { formatClubSince, getClubBySlug, getClubContact, getClubEvents } from '@/lib/clubs';
+import { eventsForVisitor } from '@/lib/events';
 import { mockClubs, mockEvents } from '@/lib/mockData';
 import { getEventSchedules } from '@/lib/time';
 import { getRequestTime } from '@/lib/requestTime';
@@ -66,8 +67,9 @@ export default async function ClubPage({ params }: ClubPageProps) {
 
       <ClubEvents
         className="mt-12"
-        upcoming={upcoming}
-        past={past}
+        // Attendee faces only for signed-in students (DOCS.md §9.3).
+        upcoming={eventsForVisitor(upcoming, isSignedIn)}
+        past={eventsForVisitor(past, isSignedIn)}
         schedules={getEventSchedules([...upcoming, ...past])}
       />
     </div>

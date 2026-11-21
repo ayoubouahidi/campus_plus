@@ -113,3 +113,13 @@ export const getEventById = (events: EventItem[], id: string): EventItem | undef
   events.find((event) => event.id === id);
 
 export const getClubById = (clubs: Club[], id: string): Club | undefined => clubs.find((club) => club.id === id);
+
+// Attendee names are for signed-in students only (Privacy Policy "Who can see it", DOCS.md §9.3). Server pages
+// run this before handing events to the browser, so a signed-out visitor never receives the names, not even
+// in the page data: only rsvps_count. Phase 7: the API already sends an empty list to anonymous requests
+// (TEAM_NEEDS §1.1); this stays as a second guard.
+export const withoutAttendees = (event: EventItem): EventItem =>
+  event.attendees_preview.length === 0 ? event : { ...event, attendees_preview: [] };
+
+export const eventsForVisitor = (events: EventItem[], isSignedIn: boolean): EventItem[] =>
+  isSignedIn ? events : events.map(withoutAttendees);

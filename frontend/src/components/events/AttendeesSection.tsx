@@ -1,12 +1,17 @@
 'use client';
 
 import React, { useId, useState } from 'react';
+import Link from 'next/link';
 import type { AttendeePreview, EventItem } from '@/types/api';
+import type { SessionStatus } from '@/types/session';
 import { Avatar, AvatarGroup } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalContent, ModalHeader, ModalTitle } from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { LockIcon } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
+import { loginHref } from '@/lib/login';
 
 /* --------------------------------- Types ---------------------------------- */
 
@@ -14,6 +19,7 @@ export interface AttendeesSectionProps extends Omit<React.HTMLAttributes<HTMLEle
   // Current RSVP state (controlled, shared with RsvpCard): the user appears here as soon as they RSVP.
   event: EventItem;
   // Everyone else who is going (getMockAttendees today, the API in Phase 7). Never includes the user.
+  // Empty for signed-out visitors: the server page doesn't send names to them (DOCS.md §9.3).
   attendees: AttendeePreview[];
   hasEnded: boolean;
 }
@@ -33,6 +39,19 @@ const summarize = (names: string[], total: number): string => {
 
 const HEADINGS = { upcoming: "Who's going", ended: 'Who went' } as const;
 
+// Names are for signed-in students only (Privacy Policy, DOCS.md §9.3). 'empty' wins: with nobody going there
+// is nothing to hide. 'loading' shows a skeleton so names never flash in and out.
+type AttendeesState = 'empty' | 'loading' | 'locked' | 'visible';
+
+const getAttendeesState = (total: number, status: SessionStatus): AttendeesState => {
+  if (total === 0) return 'empty';
+  if (status === 'loading') return 'loading';
+  return status === 'signed-in' ? 'visible' : 'locked';
+};
+
+const loginLinkStyles =
+  'rounded text-sm font-medium text-violet-700 underline underline-offset-2 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400 dark:hover:text-violet-300';
+
 /* ---------------------------- AttendeesSection ---------------------------- */
 
 export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionProps>(
@@ -49,6 +68,49 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
     const total = event.rsvps_count;
     const heading = HEADINGS[hasEnded ? 'ended' : 'upcoming'];
     const names = people.slice(0, 2).map((person) => (person.isMe ? 'You' : person.full_name));
+    const state = getAttendeesState(total, session.status);
+
+    const body: Record<AttendeesState, React.ReactNode> = {
+      empty: (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {hasEnded ? 'Nobody RSVP’d to this event.' : 'Nobody has RSVP’d yet.'}
+        </p>
+      ),
+      loading: (
+        <div className="flex items-center gap-4" aria-hidden="true">
+          <div className="flex -space-x-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} variant="circular" className="h-8 w-8 ring-2 ring-white dark:ring-slate-950" />
+            ))}
+          </div>
+          <Skeleton className="h-4 w-48" />
+        </div>
+      ),
+      locked: (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+            Names are only shown to signed-in students.
+          </p>
+          <Link href={loginHref(`/events/${event.id}`)} className={loginLinkStyles}>
+            {hasEnded ? 'Log in to see who went' : 'Log in to see who’s going'}
+          </Link>
+        </div>
+      ),
+      visible: (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <AvatarGroup max={MAX_AVATARS} total={total} aria-hidden="true">
+            {people.slice(0, MAX_AVATARS).map((person) => (
+              <Avatar key={person.id} size="sm" name={person.full_name} src={person.avatar_url} />
+            ))}
+          </AvatarGroup>
+          <p className="min-w-0 flex-1 text-sm text-slate-600 dark:text-slate-400">{summarize(names, total)}</p>
+          <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setIsOpen(true)}>
+            See all
+          </Button>
+        </div>
+      ),
+    };
 
     return (
       <section ref={ref} aria-labelledby={headingId} className={`space-y-3 ${className}`} {...props}>
@@ -56,25 +118,10 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
           {heading} <span className="font-normal text-slate-500 dark:text-slate-400">({total})</span>
         </h2>
 
-        {total === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {hasEnded ? 'Nobody RSVP’d to this event.' : 'Nobody has RSVP’d yet.'}
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            <AvatarGroup max={MAX_AVATARS} total={total} aria-hidden="true">
-              {people.slice(0, MAX_AVATARS).map((person) => (
-                <Avatar key={person.id} size="sm" name={person.full_name} src={person.avatar_url} />
-              ))}
-            </AvatarGroup>
-            <p className="min-w-0 flex-1 text-sm text-slate-600 dark:text-slate-400">{summarize(names, total)}</p>
-            <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setIsOpen(true)}>
-              See all
-            </Button>
-          </div>
-        )}
+        {body[state]}
 
-        <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
+        {/* Only reachable from "See all", i.e. the visible state. */}
+        <Modal isOpen={isOpen && state === 'visible'} onClose={() => setIsOpen(false)}>
           <ModalHeader onClose={() => setIsOpen(false)}>
             <ModalTitle>
               {heading} ({total})

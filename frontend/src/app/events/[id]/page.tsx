@@ -1,11 +1,12 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { getSessionState } from '@/auth';
 import { EventBackLink } from '@/components/events/EventBackLink';
 import { EventDetails } from '@/components/events/EventDetails';
 import { EventPageShell } from '@/components/events/EventPageShell';
 import { getEventDateDetails, readCalendarLocation } from '@/lib/calendar';
-import { getClubById, getEventById } from '@/lib/events';
+import { getClubById, getEventById, withoutAttendees } from '@/lib/events';
 import { getMockAttendees, mockClubs, mockEvents } from '@/lib/mockData';
 import { getRequestTime } from '@/lib/requestTime';
 
@@ -51,14 +52,18 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         })
       : undefined;
 
+  // Attendee names are for signed-in students only (DOCS.md §9.3): a signed-out visitor never receives them,
+  // not even in the page data, only rsvps_count. Same cached session read as the root layout.
+  const isSignedIn = (await getSessionState()).status === 'signed-in';
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <EventBackLink calendar={backToCalendar} className="mb-6" />
 
       <EventPageShell
-        initialEvent={event}
+        initialEvent={isSignedIn ? event : withoutAttendees(event)}
         hasEnded={Date.parse(event.end_time) <= now}
-        attendees={getMockAttendees(event)}
+        attendees={isSignedIn ? getMockAttendees(event) : []}
       >
         <EventDetails
           event={event}

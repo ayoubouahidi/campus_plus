@@ -1,5 +1,6 @@
+import { getSessionState } from '@/auth';
 import { EventFeed } from '@/components/events/EventFeed';
-import { getUpcomingEvents } from '@/lib/events';
+import { eventsForVisitor, getUpcomingEvents } from '@/lib/events';
 import { mockEvents } from '@/lib/mockData';
 import { getEventSchedules } from '@/lib/time';
 import { getRequestTime } from '@/lib/requestTime';
@@ -12,7 +13,9 @@ export default async function Home() {
   const now = await getRequestTime();
 
   // Phase 7: replace mockEvents with the API response.
-  const upcomingEvents = getUpcomingEvents(mockEvents, now);
+  // Attendee faces only for signed-in students (DOCS.md §9.3): signed-out visitors get the count, not the names.
+  const isSignedIn = (await getSessionState()).status === 'signed-in';
+  const upcomingEvents = eventsForVisitor(getUpcomingEvents(mockEvents, now), isSignedIn);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
