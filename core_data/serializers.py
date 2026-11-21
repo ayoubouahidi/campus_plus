@@ -2,13 +2,16 @@ from rest_framework import serializers
 
 import secrets
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Club, ClubEvent, Department, UserMember
+
+
+User = get_user_model()
 
 
 def absolute_file_url(file_field, context, empty_value):
@@ -329,6 +332,13 @@ class SignupSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+
+    def validate_email(self, email):
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                'An account with this email already exists.'
+            )
+        return email
 
     def validate(self, attrs):
         club = attrs.get('club_id')

@@ -32,6 +32,7 @@ from core_data.views import (
     signup,
 )
 from backend.views import HealthLiveView, HealthView
+from realtime.views import RealtimeTokenView
 
 
 router = DefaultRouter()
@@ -67,6 +68,12 @@ urlpatterns = [
     # [ahmed] Public liveness probes; neither endpoint touches external services.
     path("api/health/", HealthView.as_view(), name="health"),
     path("api/health/live", HealthLiveView.as_view(), name="health-live"),
+
+    path(
+        "api/realtime/token/",
+        RealtimeTokenView.as_view(),
+        name="realtime-token",
+    ),
 
     path("api/", include(router.urls)),
 

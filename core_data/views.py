@@ -378,7 +378,8 @@ class ClubEventViewSet(viewsets.ModelViewSet):
             lambda: broadcast_calendar_event(
                 "event_created",
                 event_data,
-            )
+            ),
+            robust=True,
         )
 
     # [ahmed] Broadcast changes when an event is updated.
@@ -394,7 +395,8 @@ class ClubEventViewSet(viewsets.ModelViewSet):
             lambda: broadcast_calendar_event(
                 "event_updated",
                 event_data,
-            )
+            ),
+            robust=True,
         )
 
     # [ahmed] Broadcast when an event is deleted.
@@ -410,7 +412,8 @@ class ClubEventViewSet(viewsets.ModelViewSet):
             lambda: broadcast_calendar_event(
                 "event_deleted",
                 {"id": event_id},
-            )
+            ),
+            robust=True,
         )
 
 

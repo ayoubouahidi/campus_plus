@@ -208,6 +208,63 @@ The planned superadmin-only component readiness response is not implemented.
 Its route ownership, timeouts, 200/503 policy, and AY-03 permission dependency
 must be resolved before implementation.
 
+## WebSocket JWT issuance
+
+### Issue a short-lived access token
+
+`POST /api/realtime/token/`
+
+Authentication: required using the project's configured DRF HTTP authentication
+(`Authorization: Token …` at present).
+
+Request body: none. Any submitted user ID, username, or role is ignored. The
+token subject is derived exclusively from the authenticated `request.user`.
+
+Successful response (`200`):
+
+```json
+{
+  "access": "<signed SimpleJWT access token>",
+  "expires_in": 300
+}
+```
+
+The response has `Cache-Control: no-store`. `expires_in` is measured in seconds
+from the token's issued-at claim to its expiry claim. Its value comes from
+SimpleJWT's configured `ACCESS_TOKEN_LIFETIME`; the current default is five
+minutes. The endpoint uses SimpleJWT's configured signing key, algorithm, user
+ID field, and claim names. It does not create a refresh token or database row.
+
+Failure behavior:
+
+- Missing, invalid, revoked, or inactive DRF authentication is rejected before
+  issuance (normally `401`). A defensive inactive-user check also returns `403`
+  if an inactive authenticated user object reaches the view.
+- If `WS_AUTH_BACKEND` is not `jwt`, the response is `503` with
+  `{"detail":"WebSocket JWT authentication is disabled."}`.
+- GET, PUT, PATCH, DELETE, and OPTIONS return `405`. Only POST is allowed.
+- Failure responses are also marked `Cache-Control: no-store`.
+
+The endpoint returns the JWT to a trusted HTTP caller; it does not set a browser
+cookie. Mouad's Next.js server must call this endpoint server-to-server using
+the current user's authenticated DRF credentials, then set `ws_access` on the
+browser response with `HttpOnly`, `Secure`, an appropriate `SameSite` policy,
+an expiry matching the JWT, and a path that includes the WebSocket request
+(currently `/ws/`). The token must not be placed in a URL query parameter or
+browser localStorage.
+
+The browser then opens `/ws/calendar/` and sends the cookie automatically. In
+JWT mode, Django's existing WebSocket middleware verifies the SimpleJWT
+signature, token type, expiry, and user, and the consumer rejects unsuccessful
+authentication. In development, the default `WS_AUTH_BACKEND=token_dev` keeps
+this issuance endpoint disabled. Production must explicitly select
+`WS_AUTH_BACKEND=jwt`; `token_dev` is already rejected when `DEBUG=False`.
+
+This implements issuance only. Ayoub's future `/auth/sync`, `/api/me/`, logout,
+custom user, and token lifecycle remain dependencies for complete login and
+frontend integration. Existing sockets currently remain valid until their JWT
+expires unless the team later approves active logout revocation.
+
 ## Existing non-public/interim operations
 
 Event POST/PUT/PATCH/DELETE operations exist at runtime and therefore remain in

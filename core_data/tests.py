@@ -4,7 +4,8 @@ import os
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
@@ -35,6 +36,9 @@ from .views import (
     DepartmentViewSet,
     UserMemberViewSet,
 )
+
+
+User = get_user_model()
 
 
 class ClubEventPublicReadSerializerTests(SimpleTestCase):
