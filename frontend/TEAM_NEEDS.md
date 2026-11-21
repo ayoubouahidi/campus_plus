@@ -134,6 +134,61 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 
 ---
 
+## 1c. Merge plan and open questions (2026-11-21)
+
+**Decision (Mouad, 2026-11-21): no merge yet.** We wait until **Ayoub's dashboard endpoints** are finished and integrated, and **Ahmed gives his OK** on the final endpoints, then merge everything once into an integration branch (or `master`). Reason: the data flow is **dashboard → Django → student site**. Board members create clubs and events on the dashboard, Django stores them, the student site only reads them. Merging before those endpoints are final means merging twice and fixing conflicts twice.
+
+Meanwhile the frontend keeps working on what doesn't need the backend (languages EN/FR/AR + RTL, search sorting/pagination, design-system page, lint and console checks, README part) and builds the API mapping layer against the shapes agreed below, so the merge is "switch the mocks off", not a rewrite.
+
+**Please answer in the team chat or directly in this file (write your answer under the question).**
+
+### 1c.1 Everyone
+
+| # | Question | Why it matters |
+| --- | --- | --- |
+| E1 | **Dates:** when are the endpoints frozen (no more renames), and when do we merge? Proposal: freeze first, merge a few days later, leave a week before the evaluation for testing | "Real data + many users" is mandatory: without a date, waiting can eat the time we need to test |
+| E2 | **Where do we merge:** a shared `integration` branch first, then `master`, or straight to `master`? | `master` has only a README today. An integration branch lets us fix conflicts without breaking `master` |
+| E3 | Merge order (rule 0.2): infra + backend (Hamza, Ahmed, Ayoub) → student site (Mouad) → dashboard (Ayoub). Still OK? | Each layer needs the one below it to run |
+| E4 | **Roles for the README** (subject): who is Product Owner, Project Manager, Tech Lead? | Mandatory README section, checked at the evaluation |
+| E5 | Everyone writes their own part of the README (features, modules, contributions) by the merge date | Mandatory; the evaluators ask each member about their part |
+| E6 | Set `git config user.name` / `user.email` to your real name and 42 email | The subject checks that every member committed. Mouad adds a `.mailmap` for his older commits |
+
+### 1c.2 Ayoub (dashboard + accounts)
+
+| # | Question | Why it matters for the student site |
+| --- | --- | --- |
+| AY1 | **Dashboard host: same domain (`/dashboard`) or another host (`admin.…` / `dashboard.…`)?** (also §2.3) | Same host: one certificate, no CORS, cookies need different names. Other host: second 42 redirect URL, CORS in Django, a second nginx `server` block (Hamza §3.7), separate logins |
+| AY2 | **One login for both apps or two?** If one: same `AUTH_SECRET` and cookie, and the student site sends board members to the dashboard already logged in. If two: they log in again on the dashboard | Decides what "Manage my club" does on the student site |
+| AY3 | **The list of dashboard endpoints** (create/edit/delete club, event, members, join requests, announcements), with request and response JSON. Which are done, which are left, and an ETA | The student site shows what the dashboard creates: we need to know every field an event and a club will have |
+| AY4 | Do dashboard writes go into **Ahmed's tables** (`core_data` `Club`, `ClubEvent`) through the same serializers, or into separate tables? | Must be the same rows, or what board members create never appears on the student site |
+| AY5 | When a board member creates/edits/deletes an event or a club, does Django **broadcast it** on `/ws/calendar/` (Ahmed's realtime)? | Real-time module (2 pts) + notifications module (1 pt): the student site updates live from those messages (§1b.2) |
+| AY6 | Required fields when creating an event (§2.6): category from our 7, start/end, location, flyer ≤ size limit. Validated in the dashboard form **and** in Django? | The student site has no fallback for a missing category or dates. The subject requires frontend + backend validation |
+| AY7 | **`accounts.User` and `GET /api/me/`**: ETA and final JSON (`id, email, full_name, avatar_url, role, club_id, club_slug, campus`) | `/profile`, roles, and Ahmed's RSVP (blocked on your User model, AY-01/AY-04) |
+| AY8 | Email auth (§1b.3): `POST /api/auth/login/` merged, **unique email** on sign-up, and which `/api/signup/` we keep (yours or Ahmed's) | Login and sign-up pages are live and call these URLs |
+| AY9 | When a superadmin changes someone's role, does the student site see it at the next `/api/me/` call, or only after logging in again? | Decides whether we re-read the role on each page |
+| AY10 | The URL the student site should link board members to ("Manage my club" on `/profile`) | Board members need a way from one app to the other |
+
+### 1c.3 Ahmed (core API + RSVP + realtime)
+
+| # | Question | Why it matters for the student site |
+| --- | --- | --- |
+| AH1 | **Your OK on the final endpoint list** in `API_SPEC.md` (events, clubs, departments, RSVP, attendees, health), and the date after which names don't change | The student site's mapping layer is written once against these names |
+| AH2 | **Sample JSON** for each endpoint (one list page, one detail, one error), as files or in `API_SPEC.md` | Mouad builds and tests the mapping layer on `/test` with them before the merge |
+| AH3 | **RSVP endpoints** (`POST`/`DELETE /api/club-events/{id}/rsvp/`, 401 when signed out) and `rsvps_count` / `has_user_rsvpd` / `attendees_preview` on events: ETA once Ayoub's User exists (§1.1) | RSVP is the main feature and the "many users" proof |
+| AH4 | `GET /api/club-events/{id}/attendees/`: signed-in only, anonymous → 401, empty `attendees_preview` for anonymous (decided 2026-11-20, §1.1) | The Privacy Policy promises it; the student site already hides names (DOCS §9.3) |
+| AH5 | Clubs and departments: stay **bare arrays** or become paginated like events? (§1.0) | The mapping layer reads one shape; tell us which is final |
+| AH6 | Club `slug` never null after migration A0? | Club pages are `/clubs/{slug}` |
+| AH7 | Do events created by the dashboard (Ayoub) go through **your** serializer and validation, and trigger **your** broadcast? (same question as AY4–AY5, you two decide together) | One source of truth for events |
+| AH8 | WebSocket: confirm `POST /api/realtime/token/` accepts the Django token we get at login, and the JWT lifetime (5 min?) | The student site's server sets the `ws_access` cookie and must refresh it (Phase 6) |
+
+### 1c.4 Hamza (infrastructure)
+
+| # | Question | Why it matters |
+| --- | --- | --- |
+| HZ1 | After AY1: does the dashboard need its own nginx `server` block and certificate (§3.7)? | Depends on Ayoub's answer |
+| HZ2 | In the merged compose: `BACKEND_URL=http://web:8000` for the frontend container, and Django + the frontend share the same `BACKEND_INTERNAL_KEY` (§3.4) | Without it the student site can't reach Django (login, data) |
+| HZ3 | Who sets up the integration branch (E2) and checks that `make up` still starts everything with one command after the merge? | Mandatory: one-command Docker start |
+
 ## 2. Ayoub (42 login + club dashboard, branch `Ayoub`)
 
 | # | Need | Why |
@@ -169,6 +224,7 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 | Who can see who's going to an event? | ~~Everyone / signed-in students / nobody but the count~~ | **Decided 2026-11-20: signed-in students only.** Signed-out visitors see the count. Enforced by the API (Ahmed, §1.1) and written in the Privacy Policy (DOCS §9) |
 | EMINES students without a 42 account | ~~Email sign-up / campus SSO / 42 only~~ | **Decided by the subject (§5): email + password sign-up and login are mandatory for everyone.** 42 stays as the OAuth module |
 | Dashboard location | `/dashboard` on the same domain / `admin.` subdomain | Subdomain (no cookie clash, clean nginx) |
+| When to merge | Now / after the dashboard endpoints | **Decided 2026-11-21 (Mouad): after Ayoub's dashboard endpoints are integrated and Ahmed OKs the endpoints.** Dates still to set (§1c, E1) |
 | Event categories | The 7 above / editable list in the DB | Fixed list for now |
 | Languages | English + Arabic (RTL) / + French | English + Arabic + **French**: the "multiple languages" module needs 3 (§5) |
 
