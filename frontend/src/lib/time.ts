@@ -8,21 +8,41 @@ const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
 ];
 
-// 'en' until Phase 7 swaps in the active locale.
-const relativeFormatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-const absoluteFormatter = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
+// One formatter per language, built on first use (building an Intl formatter is the slow part).
+// `locale` = the active language (useLocale() / getLocale(), Step 12.2); 'en' by default.
+const relativeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+const absoluteFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const relativeFormatter = (locale: string) => {
+  let formatter = relativeFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    relativeFormatters.set(locale, formatter);
+  }
+  return formatter;
+};
+
+const absoluteFormatter = (locale: string) => {
+  let formatter = absoluteFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+    absoluteFormatters.set(locale, formatter);
+  }
+  return formatter;
+};
 
 // Pure: `now` is passed in so the caller decides when time "moves" and tests stay deterministic.
-export const formatRelativeTime = (iso: string, now: number): string => {
+// Under 45 s: "now" / "maintenant" / "الآن" (Intl's own word for 0 seconds with numeric: 'auto').
+export const formatRelativeTime = (iso: string, now: number, locale = 'en'): string => {
   const diffSeconds = Math.round((new Date(iso).getTime() - now) / 1000);
-  if (Math.abs(diffSeconds) < 45) return 'just now';
+  if (Math.abs(diffSeconds) < 45) return relativeFormatter(locale).format(0, 'second');
 
   const [unit, unitSeconds] =
     RELATIVE_UNITS.find(([, seconds]) => Math.abs(diffSeconds) >= seconds) ?? RELATIVE_UNITS[RELATIVE_UNITS.length - 1];
-  return relativeFormatter.format(Math.round(diffSeconds / unitSeconds), unit);
+  return relativeFormatter(locale).format(Math.round(diffSeconds / unitSeconds), unit);
 };
 
-export const formatAbsoluteTime = (iso: string): string => absoluteFormatter.format(new Date(iso));
+export const formatAbsoluteTime = (iso: string, locale = 'en'): string => absoluteFormatter(locale).format(new Date(iso));
 
 // Event times are shown in campus time, whatever the viewer's device says.
 // Pinning the zone is NOT enough for server/browser agreement: each runtime ships its own copy of the

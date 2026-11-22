@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   Navbar,
   NavbarActions,
@@ -25,6 +26,7 @@ import {
 import { FooterLegal, FooterNav } from '@/components/ui/layout/Footer';
 import { useSession } from '@/components/providers/SessionProvider';
 import { SearchPalette } from '@/components/search/SearchPalette';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { FOOTER_GROUPS, isFullScreenRoute } from '@/lib/navigation';
 import { mockNotifications } from '@/lib/mockData';
 import { AppNotification } from '@/types/notification';
@@ -42,6 +44,7 @@ export interface AppShellProps {
 // (search palette, notification feed) and reads the session. Pages render inside <main>.
 export const AppShell = ({ children, footer }: AppShellProps) => {
   const { session } = useSession();
+  const t = useTranslations('MobileNav');
 
   // Mock feed until the Phase 6 WebSocket layer owns it
   const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
@@ -80,6 +83,8 @@ export const AppShell = ({ children, footer }: AppShellProps) => {
         <NavbarLinks />
         <NavbarActions>
           <NavbarSearch onOpen={openSearch} />
+          {/* From sm up; on phones the bar is full (search, bell, avatar), so it lives in the drawer (DOCS.md §12.2). */}
+          <LanguageSwitcher className="hidden sm:block" />
           {/* Notifications are per user, and the phone navbar has no room for bell + "Log in" */}
           {session.status === 'signed-in' && (
             <NotificationPopover notifications={notifications} onMarkRead={markRead} onMarkAllRead={markAllRead}>
@@ -104,7 +109,7 @@ export const AppShell = ({ children, footer }: AppShellProps) => {
       <SearchPalette isOpen={isSearchOpen} onClose={closeSearch} />
       <MobileNavDrawer session={session}>
         <div className="space-y-4">
-          <FooterNav variant="compact" groups={DRAWER_FOOTER_GROUPS} aria-label="Campus links" />
+          <FooterNav variant="compact" groups={DRAWER_FOOTER_GROUPS} aria-label={t('campusLinks')} />
           <FooterLegal variant="compact" />
         </div>
       </MobileNavDrawer>

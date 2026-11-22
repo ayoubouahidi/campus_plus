@@ -2,12 +2,12 @@
 
 import React, { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { Club, EventItem } from '@/types/api';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal, ModalTitle } from '@/components/ui/Modal';
 import { NAV_ICONS, SearchIcon } from '@/components/ui/layout/navIcons';
 import { useCampusSearch } from '@/hooks/useCampusSearch';
-import { CATEGORY_LABELS } from '@/lib/events';
 
 /* --------------------------------- Types ---------------------------------- */
 
@@ -38,17 +38,14 @@ const toEventOption = (event: EventItem): PaletteOption => ({
 
 const toClubOption = (club: Club): PaletteOption => ({ kind: 'club', key: `club-${club.id}`, href: `/clubs/${club.slug}`, club });
 
-const describeResults = (count: number, hasQuery: boolean): string => {
-  if (!hasQuery) return '';
-  return count === 0 ? 'No results' : `${count} ${count === 1 ? 'result' : 'results'}`;
-};
-
 /* ------------------------------ SearchPalette ----------------------------- */
 
 // ⌘K palette (WAI-ARIA combobox with a listbox popup). Focus stays in the input; ↑ / ↓ move the active
 // option (aria-activedescendant), Enter opens it, Escape closes (Modal). Results come from useCampusSearch.
 export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
   const router = useRouter();
+  const t = useTranslations('Search');
+  const tCategory = useTranslations('Categories');
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
   const [query, setQuery] = useState('');
@@ -58,10 +55,10 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
   const hasQuery = query.trim().length > 0;
   const groups: PaletteGroup[] = hasQuery
     ? [
-        { id: `${baseId}-events`, label: 'Events', options: results.events.map(toEventOption) },
-        { id: `${baseId}-clubs`, label: 'Clubs', options: results.clubs.map(toClubOption) },
+        { id: `${baseId}-events`, label: t('events'), options: results.events.map(toEventOption) },
+        { id: `${baseId}-clubs`, label: t('clubs'), options: results.clubs.map(toClubOption) },
       ].filter((group) => group.options.length > 0)
-    : [{ id: `${baseId}-upcoming`, label: 'Coming up', options: suggestions.map(toEventOption) }];
+    : [{ id: `${baseId}-upcoming`, label: t('comingUp'), options: suggestions.map(toEventOption) }];
   const options = groups.flatMap((group) => group.options);
   const optionId = (index: number) => `${baseId}-option-${index}`;
   const active = Math.min(activeIndex, Math.max(options.length - 1, 0));
@@ -104,21 +101,21 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
 
   return (
     <Modal isOpen={isOpen} onClose={close} size="lg" position="top" className="overflow-hidden p-0!">
-      <ModalTitle className="sr-only">Search events and clubs</ModalTitle>
+      <ModalTitle className="sr-only">{t('title')}</ModalTitle>
 
       <div className="flex items-center gap-3 border-b border-slate-200/80 px-4 dark:border-slate-800">
         <SearchIcon className="h-5 w-5 shrink-0 text-slate-400" />
         <input
           type="text"
           role="combobox"
-          aria-label="Search events and clubs"
+          aria-label={t('title')}
           aria-expanded={options.length > 0}
           aria-controls={listboxId}
           aria-autocomplete="list"
           aria-activedescendant={options.length > 0 ? optionId(active) : undefined}
           autoComplete="off"
           spellCheck={false}
-          placeholder="Search events and clubs…"
+          placeholder={t('placeholder')}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -134,13 +131,13 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
 
       {/* Announces the result count while typing (the listbox itself isn't a live region). */}
       <p aria-live="polite" className="sr-only">
-        {describeResults(options.length, hasQuery)}
+        {hasQuery ? t('count', { count: options.length }) : ''}
       </p>
 
-      <div id={listboxId} role="listbox" aria-label="Search results" className="max-h-[60vh] overflow-y-auto p-2">
+      <div id={listboxId} role="listbox" aria-label={t('results')} className="max-h-[60vh] overflow-y-auto p-2">
         {hasQuery && options.length === 0 && (
           <p className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            No events or clubs match “{query.trim()}”.
+            {t('noMatch', { query: query.trim() })}
           </p>
         )}
 
@@ -184,7 +181,7 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
                           {option.event.title}
                         </span>
                         <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                          {option.event.club_name} · {option.event.location} · {CATEGORY_LABELS[option.event.category]}
+                          {option.event.club_name} · {option.event.location} · {tCategory(option.event.category)}
                         </span>
                       </span>
                     </>
@@ -196,7 +193,7 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
                           {option.club.name}
                         </span>
                         <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                          Club · {option.club.department_name}
+                          {t('club')} · {option.club.department_name}
                         </span>
                       </span>
                     </>

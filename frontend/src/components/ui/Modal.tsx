@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { FOCUSABLE_SELECTOR, trapTabKey } from '@/lib/focus';
 
 // Lets <ModalTitle> name the dialog (aria-labelledby) without the caller wiring ids.
@@ -134,37 +135,40 @@ export const ModalHeader = ({
   onClose,
   className = '',
   ...props
-}: ModalHeaderProps) => (
-  <div
-    className={`flex items-start justify-between gap-4 pb-4 ${className}`}
-    {...props}
-  >
-    <div className="space-y-1">{children}</div>
-    {onClose && (
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-      >
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+}: ModalHeaderProps) => {
+  const t = useTranslations('Common');
+  return (
+    <div
+      className={`flex items-start justify-between gap-4 pb-4 ${className}`}
+      {...props}
+    >
+      <div className="space-y-1">{children}</div>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('close')}
+          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
-      </button>
-    )}
-  </div>
-);
+          <svg
+            aria-hidden="true"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+};
 ModalHeader.displayName = 'ModalHeader';
 
 /* -------------------------------- ModalTitle ------------------------------- */

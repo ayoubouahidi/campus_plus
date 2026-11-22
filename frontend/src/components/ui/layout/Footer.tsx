@@ -1,21 +1,25 @@
 import React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { FOOTER_GROUPS, LEGAL_LINKS } from '@/lib/navigation';
 import { ExternalIcon } from '@/components/ui/layout/navIcons';
 import { Logo } from '@/components/ui/Logo';
 import { FooterLink, FooterLinkGroup } from '@/types/navigation';
 
-// No hooks, no browser APIs: a Server Component by default, so it ships no JavaScript.
+// No state, no browser APIs: a Server Component by default, so it ships no JavaScript. useTranslations (next-intl)
+// works in Server Components too, and in the drawer, where AppShell renders FooterNav/FooterLegal on the client.
 
 const footerLinkStyles =
   'inline-flex items-center gap-1 rounded text-sm text-slate-600 transition-colors duration-150 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-slate-400 dark:hover:text-violet-400';
 
 // Internal links use next/link (client-side navigation); external ones open a new tab and say so.
 const FooterLinkItem = ({ link }: { link: FooterLink }) => {
+  const t = useTranslations('Nav');
+  const tFooter = useTranslations('Footer');
   if (link.kind === 'internal') {
     return (
       <Link href={link.href} className={footerLinkStyles}>
-        {link.label}
+        {t(link.labelKey)}
       </Link>
     );
   }
@@ -24,7 +28,7 @@ const FooterLinkItem = ({ link }: { link: FooterLink }) => {
     <a href={link.href} target="_blank" rel="noopener noreferrer" className={footerLinkStyles}>
       {link.label}
       <ExternalIcon className="h-3.5 w-3.5" />
-      <span className="sr-only"> (opens in a new tab)</span>
+      <span className="sr-only"> {tFooter('newTab')}</span>
     </a>
   );
 };
@@ -54,14 +58,15 @@ Footer.displayName = 'Footer';
 export type FooterBrandProps = React.HTMLAttributes<HTMLDivElement>;
 
 export const FooterBrand = React.forwardRef<HTMLDivElement, FooterBrandProps>(
-  ({ className = '', ...props }, ref) => (
-    <div ref={ref} className={`max-w-sm space-y-3 ${className}`} {...props}>
-      <Logo className="h-12" />
-      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-        Events, clubs and RSVPs for students of 1337 Coding School and EMINES (UM6P), all in one place.
-      </p>
-    </div>
-  )
+  ({ className = '', ...props }, ref) => {
+    const t = useTranslations('Footer');
+    return (
+      <div ref={ref} className={`max-w-sm space-y-3 ${className}`} {...props}>
+        <Logo className="h-12" />
+        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('tagline')}</p>
+      </div>
+    );
+  }
 );
 
 FooterBrand.displayName = 'FooterBrand';
@@ -101,12 +106,14 @@ export interface FooterNavProps extends React.HTMLAttributes<HTMLElement> {
 export const FooterNav = React.forwardRef<HTMLElement, FooterNavProps>(
   ({ variant = 'full', groups = FOOTER_GROUPS, className = '', ...props }, ref) => {
     const GroupTitle = footerGroupTitleLevel[variant];
+    const t = useTranslations('Nav');
+    const tFooter = useTranslations('Footer');
 
     return (
-      <nav ref={ref} aria-label="Footer" className={`${footerNavLayoutStyles[variant]} ${className}`} {...props}>
+      <nav ref={ref} aria-label={tFooter('nav')} className={`${footerNavLayoutStyles[variant]} ${className}`} {...props}>
         {groups.map((group) => (
           <div key={group.id}>
-            <GroupTitle className={footerGroupTitleStyles[variant]}>{group.title}</GroupTitle>
+            <GroupTitle className={footerGroupTitleStyles[variant]}>{t(group.titleKey)}</GroupTitle>
             <ul className={footerListStyles[variant]}>
               {group.links.map((link) => (
                 <li key={link.href}>
@@ -145,31 +152,33 @@ export interface FooterLegalProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const FooterLegal = React.forwardRef<HTMLDivElement, FooterLegalProps>(
-  ({ variant = 'full', className = '', ...props }, ref) => (
-    <div
-      ref={ref}
-      className={`text-xs text-slate-500 dark:text-slate-400 ${footerLegalStyles[variant]} ${className}`}
-      {...props}
-    >
-      <p>
-        © {new Date().getFullYear()} Campus Hub. Made by students, for students.
-      </p>
-      {/* Its own landmark, so screen-reader users find "Legal" in the landmarks list on every page. */}
-      <nav aria-label="Legal" className={footerLegalNavStyles[variant]}>
-        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {LEGAL_LINKS.map((link) => (
-            <li key={link.href}>
-              <Link href={link.href} className={footerLegalLinkStyles}>
-                {link.label}
-              </Link>
-            </li>
-          ))}
-          {variant === 'full' && <li aria-hidden="true">·</li>}
-          {variant === 'full' && <li>1337 Coding School × EMINES · UM6P</li>}
-        </ul>
-      </nav>
-    </div>
-  )
+  ({ variant = 'full', className = '', ...props }, ref) => {
+    const t = useTranslations('Footer');
+    const tNav = useTranslations('Nav');
+    return (
+      <div
+        ref={ref}
+        className={`text-xs text-slate-500 dark:text-slate-400 ${footerLegalStyles[variant]} ${className}`}
+        {...props}
+      >
+        <p>{t('copyright', { year: String(new Date().getFullYear()) })}</p>
+        {/* Its own landmark, so screen-reader users find "Legal" in the landmarks list on every page. */}
+        <nav aria-label={t('legal')} className={footerLegalNavStyles[variant]}>
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {LEGAL_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={footerLegalLinkStyles}>
+                  {tNav(link.labelKey)}
+                </Link>
+              </li>
+            ))}
+            {variant === 'full' && <li aria-hidden="true">·</li>}
+            {variant === 'full' && <li>1337 Coding School × EMINES · UM6P</li>}
+          </ul>
+        </nav>
+      </div>
+    );
+  }
 );
 
 FooterLegal.displayName = 'FooterLegal';

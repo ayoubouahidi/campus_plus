@@ -5,8 +5,10 @@ down:
 	docker compose down
 
 # Frontend with live reload: mounts ./frontend into the container (docker-compose.dev.yml).
+# --renew-anon-volumes: node_modules lives in an anonymous volume; without it a rebuilt image (new dependency)
+# would keep the old volume and fail with "Module not found" (frontend DOCS.md §12.1).
 dev:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --renew-anon-volumes
 
 lint:
 	docker compose exec frontend npx eslint .

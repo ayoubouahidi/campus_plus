@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 
 /* --------------------------------- Types ---------------------------------- */
 
@@ -69,7 +70,7 @@ export const ToastProvider = ({ children }: ToastProviderProps) => {
       <div
         aria-live="polite"
         aria-atomic="true"
-        className="fixed bottom-[calc(4rem+1px+env(safe-area-inset-bottom)+1rem)] right-4 z-50 flex w-full max-w-sm flex-col gap-2 pointer-events-none px-4 sm:px-0 md:bottom-4"
+        className="fixed bottom-[calc(4rem+1px+env(safe-area-inset-bottom)+1rem)] end-4 z-50 flex w-full max-w-sm flex-col gap-2 pointer-events-none px-4 sm:px-0 md:bottom-4"
       >
         {toasts.map((toast) => (
           <ToastItem
@@ -133,6 +134,7 @@ const toastVariantConfig: Record<
 };
 
 export const ToastItem = ({ toast, onDismiss }: ToastItemProps) => {
+  const t = useTranslations('Common');
   const { title, description, variant = 'info', duration = 4000 } = toast;
   const config = toastVariantConfig[variant];
 
@@ -154,7 +156,7 @@ export const ToastItem = ({ toast, onDismiss }: ToastItemProps) => {
     >
       <div className="pt-0.5">{config.icon}</div>
 
-      <div className="flex-1 space-y-1 text-left">
+      <div className="flex-1 space-y-1 text-start">
         <h4 className="text-sm font-semibold leading-none text-slate-900 dark:text-slate-100">
           {title}
         </h4>
@@ -168,8 +170,8 @@ export const ToastItem = ({ toast, onDismiss }: ToastItemProps) => {
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss notification"
-        className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        aria-label={t('dismissNotification')}
+        className="-me-1 -mt-1 shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -1,3 +1,9 @@
+import type { Messages } from '@/i18n/messages/en';
+
+// A page name in the `Nav` messages (Step 12.2): config stays plain data, each component translates it with
+// useTranslations('Nav'). A key that doesn't exist in en.ts is a compile error.
+export type NavLabelKey = keyof Messages['Nav'];
+
 // Every route the app is allowed to link to (mirrors DOCS.md §1.3).
 // Dynamic segments use template literals, so a typo like '/club/robotics' fails at
 // compile time instead of 404ing at runtime.
@@ -23,7 +29,7 @@ export type NavIconName = 'discover' | 'calendar' | 'clubs' | 'profile';
 export type NavMatchStrategy = 'exact' | 'prefix';
 
 export interface NavItem {
-  label: string;
+  labelKey: NavLabelKey;
   href: AppRoute;
   icon: NavIconName;
   match: NavMatchStrategy;
@@ -32,13 +38,14 @@ export interface NavItem {
 }
 
 // Footer links can leave the app (institution sites), so they carry an explicit kind:
-// internal links stay type-checked against AppRoute, external ones must be https.
+// internal links stay type-checked against AppRoute, external ones must be https. Internal links are our
+// pages (translated label); external ones are institution names, the same in every language.
 export type FooterLink =
-  | { kind: 'internal'; label: string; href: AppRoute }
+  | { kind: 'internal'; labelKey: NavLabelKey; href: AppRoute }
   | { kind: 'external'; label: string; href: `https://${string}` };
 
 export interface FooterLinkGroup {
   id: 'explore' | 'campuses'; // stable key for filtering (e.g. the drawer skips 'explore')
-  title: string;
+  titleKey: NavLabelKey;
   links: readonly FooterLink[];
 }

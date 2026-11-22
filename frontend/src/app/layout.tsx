@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_Arabic } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
+import { LOCALE_INFO } from "@/i18n/config";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AppShell } from "@/components/ui/layout/AppShell";
@@ -16,6 +19,13 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Arabic pages only (globals.css: html:lang(ar)). Not preloaded: English and French pages never download it.
+const notoSansArabic = Noto_Sans_Arabic({
+  variable: "--font-arabic",
+  subsets: ["arabic"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -46,35 +56,42 @@ export default async function RootLayout({
   // shows the right navbar ("Log in" or the avatar), with no flash. Reading cookies makes every page
   // render per request (they already did: connection() in each page). DOCS.md §7.6.
   const session = await getSessionState();
+  // The student's language (cookie, or the browser's on a first visit: src/i18n/request.ts). dir="rtl" for
+  // Arabic mirrors the whole layout; lang picks fonts, hyphenation and the screen reader's voice. DOCS.md §12.1.
+  const locale = await getLocale();
 
   return (
     // suppressHydrationWarning: browsers and extensions add attributes to <html> before React loads
     // (e.g. Chrome on Android adds __gcrremoteframetoken). It ignores attribute differences on this one
     // tag only; mismatches inside the page are still reported.
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang={locale}
+      dir={LOCALE_INFO[locale].dir}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSansArabic.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         {/* Fixed, behind everything (z-index -1), decorative. Rendered once: its SVG ids are global. */}
         <CampusBackground intensity={BACKGROUND_INTENSITY} />
-        <ToastProvider>
-          <SessionProvider initialSession={session}>
-            {/* Footer is built here, on the server, and passed through the client shell as a slot */}
-            <AppShell
-              footer={
-                <Footer>
-                  <FooterBrand />
-                  <FooterNav />
-                  <FooterLegal />
-                </Footer>
-              }
-            >
-              {children}
-            </AppShell>
-          </SessionProvider>
-        </ToastProvider>
+        {/* Gives Client Components the locale, messages and time zone of this request (useTranslations). */}
+        <NextIntlClientProvider>
+          <ToastProvider>
+            <SessionProvider initialSession={session}>
+              {/* Footer is built here, on the server, and passed through the client shell as a slot */}
+              <AppShell
+                footer={
+                  <Footer>
+                    <FooterBrand />
+                    <FooterNav />
+                    <FooterLegal />
+                  </Footer>
+                }
+              >
+                {children}
+              </AppShell>
+            </SessionProvider>
+          </ToastProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

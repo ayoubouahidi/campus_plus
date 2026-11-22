@@ -105,7 +105,7 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
         {/* Status Indicator Dot */}
         {status && (
           <span
-            className={`absolute bottom-0 right-0 rounded-full ring-white dark:ring-slate-900 ${statusStyles[status]} ${statusSizeStyles[size]}`}
+            className={`absolute bottom-0 end-0 rounded-full ring-white dark:ring-slate-900 ${statusStyles[status]} ${statusSizeStyles[size]}`}
             aria-hidden="true"
           />
         )}

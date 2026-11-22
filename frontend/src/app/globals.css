@@ -1,13 +1,32 @@
 @import "tailwindcss";
 
+/* Arabic pages (DOCS.md §12.1): Noto Sans Arabic (layout.tsx, --font-arabic) first, the usual system fonts
+   after it for Latin text and digits. */
+@layer base {
+  html:lang(ar) {
+    font-family: var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
 /* Overlay entrance animations: `animate-drawer-in`, `animate-fade-in` */
 @theme {
   --animate-drawer-in: drawer-in 200ms ease-out;
+  /* Arabic (dir="rtl"): the drawer sits on the right, so it slides in from the right (DOCS.md §12.2). */
+  --animate-drawer-in-rtl: drawer-in-rtl 200ms ease-out;
   --animate-fade-in: fade-in 200ms ease-out;
 
   @keyframes drawer-in {
     from {
       transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes drawer-in-rtl {
+    from {
+      transform: translateX(100%);
     }
     to {
       transform: translateX(0);

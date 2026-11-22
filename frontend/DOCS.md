@@ -105,7 +105,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
 | 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6), 5.4 `/profile` + guard + logout (§7.7–7.8) |
 | 6     | Real-time WebSockets                  | ⏳             |
-| 7     | i18n (Arabic RTL) & live API          | ⏳             |
+| 7     | i18n (Arabic RTL) & live API          | 🚧 Languages started (§12, 2026-11-21); live API waits for the merge (TEAM_NEEDS §1c) |
 
 **Phase 2 tasks**
 
@@ -3801,4 +3801,162 @@ interface RegisterPanelProps extends HTMLAttributes<HTMLDivElement> { next: stri
 **Usage:** `<Link href={registerHref(next)}>Create an account</Link>`; `<LoginPanel … notice={registered ? '…' : null}>`.
 
 **Verified (2026-11-21):** `/auth/login?next=/calendar` 200 with the email form and a link to `/auth/register?next=%2Fcalendar`; `/auth/register?next=/calendar` 200 with the form and a link back to `/auth/login?next=%2Fcalendar`; `/auth/login?registered=1` shows the notice; `/test` back to "nothing under test"; `tsc` passes; ESLint no new findings; no server errors.
+
+---
+
+## 12. Languages: English, French, Arabic (RTL) (Phase 7, 2026-11-21)
+
+Two accessibility modules of the subject: **≥ 3 languages with a switcher** (all user-facing text translated) and **RTL** (complete mirroring for Arabic, switching LTR ↔ RTL without breaking anything): 1 point each. English is the reference; French and Arabic are full translations. Event titles, club names and descriptions are **data** (written by clubs in the dashboard) and are shown as written; everything the site itself says is translated.
+
+| Step | What | Status |
+|---|---|---|
+| 12.1 | Setup: next-intl, language from a cookie, `<html lang dir>`, Arabic font, `LanguageSwitcher` | ✅ validated 2026-11-21 (switcher placed in 12.2) |
+| 12.2 | Shell: navbar (switcher in it), mobile tab bar + drawer, footer, search palette, notifications, toasts, modal close; RTL fixes found there (drawer side and slide, `Input`/`Select`/`Toast`/`Avatar` physical classes) | ✅ validated 2026-11-22 |
+| 12.3 | Feed, event cards, event page, RSVP, attendees | ⏳ |
+| 12.4 | Calendar (weekday names, month titles, agenda) | ⏳ |
+| 12.5 | Clubs directory and club pages | ⏳ |
+| 12.6 | Login, sign-up (validation and error messages), profile | ⏳ |
+| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), `lib/time.ts` and the other formatters on `Intl` with the active locale | ⏳ |
+| 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ⏳ |
+
+### 12.1 i18n setup and `LanguageSwitcher` (Step 12.1, 2026-11-21)
+
+**Files:** `src/i18n/config.ts` (locales, `LOCALE_INFO`, `matchLocale`), `src/i18n/request.ts` (next-intl request config), `src/i18n/actions.ts` (Server Action `setLocale`), `src/i18n/global.d.ts` (typed keys), `src/i18n/messages/{en,fr,ar}.ts`, `src/components/ui/LanguageSwitcher.tsx`, `src/components/ui/layout/navIcons.tsx` (`GlobeIcon`), `next.config.ts` (plugin), `src/app/layout.tsx` (`lang`, `dir`, provider, Arabic font), `src/app/globals.css` (`html:lang(ar)` font), `package.json` (`next-intl` **4.14.9**, pinned). Test: `src/app/test/page.tsx`.
+**Status:** ✅ Validated on `/test` (2026-11-21). The layout part (`lang`, `dir`, font) is live on every page; the switcher went into the navbar in 12.2.
+
+**Business purpose.** Campus Hub serves 1337 (Benguerir) and EMINES (UM6P): students read French and Arabic as much as English. A student picks a language once (navbar, Step 12.2) and the whole site follows, on every page and every visit; in Arabic the layout mirrors, as Arabic readers expect.
+
+**How it works, step by step (read this first).**
+
+1. **The student opens any page.** Before rendering, next-intl calls `src/i18n/request.ts` (registered in `next.config.ts` by the plugin). It decides the language:
+   - the `NEXT_LOCALE` cookie if it holds `en`, `fr` or `ar`;
+   - otherwise the browser's `Accept-Language` header (`matchLocale` in `config.ts`);
+   - otherwise English.
+   It then loads **only that language's file** (`messages/fr.ts` for French) and sets the time zone to campus time.
+2. **The root layout** (`src/app/layout.tsx`) asks `getLocale()` and writes `<html lang="fr" dir="ltr">` (Arabic: `lang="ar" dir="rtl"`). `dir="rtl"` alone mirrors the whole page, because our classes are logical (`ms-`, `ps-`, `text-start`…, see 12.8).
+3. **Pages and components ask for text by key** instead of writing English:
+   - Server Component: `const t = await getTranslations('Events'); t('count', { count: 3 })`;
+   - Client Component: `const t = useTranslations('Events')` (works because the layout wraps the app in `<NextIntlClientProvider>`, which passes the same language and messages to the browser).
+   `t` looks the key up in the loaded file: `"3 events"`, `"3 événements"` or `"3 فعاليات"`.
+4. **The student changes language** in `LanguageSwitcher`. It calls the Server Action `setLocale('ar')` (`src/i18n/actions.ts`), which only writes the cookie. Next.js re-renders the current page on the server (step 1 now finds `ar` in the cookie) and sends it back in the same request: the text changes and `dir` becomes `rtl`, no reload.
+5. **Next visits:** the cookie (1 year) is sent with every request, so step 1 picks the same language on every page.
+
+**Where things live.**
+
+| File | Role |
+|---|---|
+| `src/i18n/config.ts` | The list of languages (`LOCALES`), their names and direction (`LOCALE_INFO`), the browser-language matcher. No Next.js code: usable everywhere. |
+| `src/i18n/request.ts` | Runs on each request: picks the language, loads its messages, sets the time zone. |
+| `src/i18n/actions.ts` | `setLocale`: saves the choice in the cookie. |
+| `src/i18n/messages/en.ts` | **All English texts**, grouped by namespace (`Events`, `LanguageSwitcher`, later `Navbar`, `Calendar`…). The reference. |
+| `src/i18n/messages/fr.ts`, `ar.ts` | Same keys, translated. `satisfies Messages` = the build fails if a key is missing or extra. |
+| `src/i18n/global.d.ts` | Tells TypeScript the keys, so a typo in `t('…')` is a compile error. |
+| `src/components/ui/LanguageSwitcher.tsx` | The globe button + menu. |
+
+**Adding or translating a text (the routine for Steps 12.2–12.7).**
+1. In the component, replace `'Search events…'` with `t('search')` (`useTranslations('Navbar')` / `getTranslations('Navbar')`).
+2. Add `Navbar: { search: 'Search events…' }` to `en.ts`.
+3. `make typecheck` now fails: `fr.ts` and `ar.ts` are missing `Navbar.search`. Add `'Rechercher des événements…'` and `'ابحث عن الفعاليات…'`. It passes.
+4. Values inside a text: `'Hello {name}'` → `t('hello', { name })`. Counts: `{count, plural, …}` (Arabic needs `zero one two few many other`).
+
+**Core concepts & decisions.**
+- **No locale in the URL.** The language is the `NEXT_LOCALE` cookie (httpOnly, 1 year, `SameSite=Lax`), or on a first visit the browser's `Accept-Language` (`matchLocale`: by `q` weight, only the language part, `fr-CA` → `fr`, nothing usable → `en`). An invalid cookie value is ignored. URLs stay `/events/…` in every language, so links shared between students work whatever their language.
+- **next-intl in "without i18n routing" mode.** `src/i18n/request.ts` (`getRequestConfig`) gives each request its locale, its messages (lazy `import()`, only one language loaded) and the time zone **`Africa/Casablanca`** (same on server and browser: dates never differ at hydration). Server Components use `getTranslations` / `getFormatter`; Client Components `useTranslations` / `useFormatter`, fed by `<NextIntlClientProvider>` in the root layout (it inherits locale, messages and time zone from the server).
+- **`<html lang={locale} dir={LOCALE_INFO[locale].dir}>`.** `dir="rtl"` mirrors everything written with logical classes (`ms-`, `ps-`, `start-`, `end-`, `text-start`, `border-s-4`), which the codebase has used since Phase 2 for this reason; `rtl:-scale-x-100` flips arrows. `lang` selects the font, the screen reader's voice and hyphenation.
+- **Messages as TypeScript, not JSON.** `en.ts` is the reference and defines `type Messages`; `fr.ts` and `ar.ts` end with `satisfies Messages`, so a **missing or extra key fails `tsc`**. `global.d.ts` registers `Messages` and `Locale` with next-intl (`AppConfig`): `t('Events.cuont')` doesn't compile. This is how we prove "every string has 3 translations" at the evaluation.
+- **ICU messages.** `{count, plural, =0 {…} one {…} other {…}}`. Arabic has **six** plural forms (zero/one/two/few 3–10/many 11–99/other) and each has its own wording (`فعالية واحدة`, `فعاليتان`, `3 فعاليات`, `11 فعالية`). Replaces hand-written helpers like `formatEventCount` (English-only) in later steps.
+- **Arabic font: Noto Sans Arabic** via `next/font` (self-hosted at build, no request to Google from the browser), `preload: false` and only applied by `html:lang(ar)` in `globals.css`: English and French pages never download it. Latin words and digits inside Arabic text fall back to the system font.
+- **`setLocale` Server Action.** Validates the value with `isLocale`, sets the cookie. Called from a Server Action, Next.js returns the re-rendered page in the same round trip: the new language and direction appear **without a reload and without losing scroll or open state** in the shell.
+- **`LanguageSwitcher` = WAI-ARIA menu button.** `<button aria-haspopup="menu" aria-expanded aria-controls>` + `role="menu"` of `menuitemradio` (`aria-checked` on the current one). Each name is written in its own language ("Français", "العربية") with `lang` on the item so a screen reader pronounces it correctly. Keys: Enter/Space/↓ open on the current language, ↑ on the last; ↑ ↓ Home End move (roving `tabIndex=-1` items); Esc closes and returns focus to the button; Tab closes and moves on; a click outside closes. While the new page loads the globe spins (`aria-busy`, `motion-reduce` respected). The menu is anchored with `end-0`, so it opens toward the inside of the screen in both directions.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| next-intl | Our own dictionary + `Intl.PluralRules` | Works in Server **and** Client Components with one API, ICU plurals/selects, date and number formatting tied to the locale and time zone, typed keys. A home-made layer would re-implement all of that and still need plural parsing for Arabic. |
+| Cookie, no `/fr/…` URLs | `[locale]` route segment + middleware | A route segment means moving every page under `app/[locale]/`, a middleware next to Auth.js, and rewriting every link and redirect (`loginHref`, `safeNextPath`). SEO per language is not a need for a campus site. The cookie keeps every URL and every test we already have. |
+| Messages in `.ts` with `satisfies` | JSON files | Same content, but the compiler checks that all three languages have exactly the same keys. JSON would need a separate script. |
+| Menu button | Native `<select>` | A `<select>` would be simpler, but it can't show the check mark or the per-item `lang`, looks different on every OS, and doesn't fit the navbar's icon buttons. The menu-button pattern is fully specified by WAI-ARIA, so it stays accessible. |
+| Pin 4.14.9 | Latest 4.15.3 | 4.15.x was released this week (Nov 11–19); 4.14.9 (Oct 2) has had time to be checked. Same API. |
+
+**Contract.**
+```ts
+// src/i18n/config.ts
+export const LOCALES = ['en', 'fr', 'ar'] as const;
+export type Locale = 'en' | 'fr' | 'ar';
+export const LOCALE_INFO: Record<Locale, { name: string; short: string; dir: 'ltr' | 'rtl' }>;
+export const isLocale: (value: unknown) => value is Locale;
+export const matchLocale: (acceptLanguage: string | null | undefined) => Locale;
+// src/i18n/actions.ts ('use server')
+export async function setLocale(locale: string): Promise<void>;
+// src/components/ui/LanguageSwitcher.tsx
+interface LanguageSwitcherProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'compact' | 'full'; // default 'compact': globe + "EN"; 'full': globe + "English"
+}
+```
+
+**Usage.**
+```tsx
+// Server Component
+const t = await getTranslations('Events');
+<p>{t('count', { count: 3 })}</p>           // "3 events" / "3 événements" / "3 فعاليات"
+// Client Component
+const t = useTranslations('Events');
+// Anywhere in the shell
+<LanguageSwitcher />                        // or variant="full"
+// New text: add the key to en.ts, then fr.ts and ar.ts (tsc fails until both have it)
+```
+
+**Verified (2026-11-21, server HTML with curl).** No cookie → `<html lang="en" dir="ltr">`; `NEXT_LOCALE=fr` → `lang="fr"`, "Aucun événement / 1 événement / 2 événements", "vendredi 13 novembre 2026 à 17:00"; `NEXT_LOCALE=ar` → `lang="ar" dir="rtl"`, the six Arabic forms, "الجمعة، 13 نوفمبر 2026 في 5:00 م"; `NEXT_LOCALE=xx` → English; no cookie + `Accept-Language: fr-FR,…` → French. `tsc` passes; ESLint: the same 6 old findings, none new. In the browser (to check on `/test`): switching without reload, keyboard, screen reader, mirroring.
+
+**Gotcha.** `next.config.ts` changed (next-intl plugin): run `docker compose restart frontend` after pulling, or the dev server keeps the old config. New dependency: `make up` / `make dev` rebuild the image with it (`npm install` in the Dockerfile). `make dev` now passes `--renew-anon-volumes`: `node_modules` is an anonymous volume (`docker-compose.dev.yml`) and without the flag Docker keeps the old one after a rebuild → "Module not found: next-intl". In a running container, `docker compose exec frontend npm install` does the same.
+
+### 12.2 The shell in three languages, switcher in the navbar (Step 12.2, 2026-11-21)
+
+**Files:** `src/i18n/messages/{en,fr,ar}.ts` (namespaces `Nav`, `Navbar`, `MobileNav`, `Footer`, `Notifications`, `Search`, `Categories`, `Common`), `src/types/navigation.ts` (`NavLabelKey`, `labelKey` / `titleKey`), `src/lib/navigation.ts`, `src/components/ui/layout/{Navbar,MobileNav,Footer,NotificationPopover,AppShell}.tsx`, `src/components/search/SearchPalette.tsx`, `src/components/ui/{Modal,Toast,Input,Select,Avatar,LanguageSwitcher}.tsx`, `src/lib/time.ts` (locale parameter), `src/app/globals.css` (`drawer-in-rtl`). Test: `src/app/test/page.tsx` + `ToastDemo.tsx`.
+**Status:** ✅ Validated on `/test` (2026-11-22). Live in the shell, so it is on every page and there is nothing to move later.
+
+**Business purpose.** The parts a student sees on every page now follow the chosen language, and the switcher is where people look for it: the navbar (from 640 px) and the phone menu.
+
+**Core concepts & decisions.**
+- **Config keeps keys, not words.** `NavItem.label: string` became `labelKey: NavLabelKey` (`keyof Messages['Nav']`), same for footer group titles and `LEGAL_LINKS`. `lib/navigation.ts` stays plain data (server-safe, no hook); each component translates with `useTranslations('Nav')(item.labelKey)`. A wrong key doesn't compile. External footer links keep a plain `label`: institution names (1337 Coding School, EMINES, UM6P) are the same in every language.
+- **`useTranslations` in Server Components too.** `Footer`, `FooterBrand`, `FooterLegal` have no `'use client'` and still call `useTranslations` (next-intl supports it in non-async Server Components). The same components also render inside the client drawer: one code path for both.
+- **Data vs. UI text.** Notification titles/bodies, event titles, club and department names are data and stay as written. Only the frame is translated: "New notification: {title}", "Club · {department}". Categories are a fixed list of ours, so they get their own `Categories` namespace (`t(event.category)`); the search palette uses it now, the feed in 12.3.
+- **Plurals and counts through ICU:** bell label (`=0` → just "Notifications"), "N unread", "N results", "N new notifications": each with the six Arabic forms.
+- **Dates:** `formatRelativeTime(iso, now, locale)` / `formatAbsoluteTime(iso, locale)` take the language (`useLocale()`), with one cached `Intl` formatter per language. "just now" was an English string: it is now `Intl`'s own word for 0 s ("now", "maintenant", "الآن").
+- **Switcher placement.** `NavbarActions` shows `<LanguageSwitcher className="hidden sm:block" />` next to search. Below 640 px the bar is already full (burger, logo, search, bell, avatar), so the phone drawer gets `<LanguageSwitcher variant="full" />` under the account block.
+- **RTL fixes in the shell and primitives** (physical → logical): skip link `left-4` → `start-4`; `NavbarActions`/kbd `ml-auto` → `ms-auto`; burger `-ml-2` → `-ms-2`; drawer `left-0 border-r` → `start-0 border-e`, close `-mr-2` → `-me-2`; bell badge `-right-0.5` → `-end-0.5`; notification panel `sm:right-0` → `sm:end-0`; toast viewport `right-4` → `end-4`, text `text-left` → `text-start`, close `-mr-1` → `-me-1`; `Input`/`Select` `text-left`, `left-0 pl-3`, `pl-10`/`pr-10`, `right-0 pr-3` → `text-start`, `start-0 ps-3`, `ps-10`/`pe-10`, `end-0 pe-3`; `Avatar` status dot `right-0` → `end-0`. `Input`'s props keep their names `leftIcon`/`rightIcon` (renaming would touch every form) but now mean the start/end side.
+- **Drawer animation in Arabic.** `translateX` doesn't follow `dir`, so `drawer-in` (from -100%) would slide a right-side drawer in from the wrong edge. A second keyframe `drawer-in-rtl` (from +100%) is applied with `rtl:animate-drawer-in-rtl`; `rtl:motion-reduce:animate-none` keeps reduced motion working (the `rtl:` rule comes later in the CSS than plain `motion-reduce:`).
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| `labelKey` in the nav config | Translated labels built in a hook (`useNavItems()`) | The config stays plain data shared by server and client, and the active-route logic (`isNavItemActive`) doesn't change. A hook would force every reader to be a client component. |
+| Switcher in navbar (sm+) and drawer (phones) | Footer only | The footer is at the bottom of long pages; a student who lands on an Arabic page by mistake needs the switch at the top. |
+| Second keyframe for RTL | One keyframe using `translate: calc(-100% * var(--dir))` | Two plain keyframes are easier to read and need no custom property set per direction. |
+| Keep `leftIcon`/`rightIcon` prop names | Rename to `startIcon`/`endIcon` | Same behaviour, no churn in every form; the comment in DOCS covers the meaning. Could be renamed in a later cleanup. |
+
+**Contract.**
+```ts
+// src/types/navigation.ts
+export type NavLabelKey = keyof Messages['Nav']; // 'discover' | 'calendar' | 'clubs' | 'profile' | 'login' | 'explore' | 'campuses' | 'privacy' | 'terms'
+interface NavItem { labelKey: NavLabelKey; href: AppRoute; icon: NavIconName; match: NavMatchStrategy; aliases?: readonly string[] }
+type FooterLink = { kind: 'internal'; labelKey: NavLabelKey; href: AppRoute } | { kind: 'external'; label: string; href: `https://${string}` };
+interface FooterLinkGroup { id: 'explore' | 'campuses'; titleKey: NavLabelKey; links: readonly FooterLink[] }
+// src/lib/time.ts
+formatRelativeTime(iso: string, now: number, locale = 'en'): string;
+formatAbsoluteTime(iso: string, locale = 'en'): string;
+```
+
+**Usage.**
+```tsx
+const t = useTranslations('Nav');
+{PUBLIC_NAV.map((item) => <Link key={item.href} href={item.href}>{t(item.labelKey)}</Link>)}
+
+const locale = useLocale();
+<time title={formatAbsoluteTime(iso, locale)}>{formatRelativeTime(iso, now, locale)}</time>
+```
+
+**Verified (2026-11-21, server HTML with curl on `/clubs`).** `NEXT_LOCALE=fr`: "Aller au contenu", links Découvrir / Calendrier / Clubs, "Ouvrir le menu", "Rechercher des événements et des clubs", switcher "Langue : Français", footer Explorer / Campus, the French tagline and "© 2026 Campus Hub. Fait par des étudiants, pour les étudiants.", landmarks "Principale", "Pied de page", "Mentions légales". `NEXT_LOCALE=ar`: `dir="rtl"`, اكتشف / التقويم / الأندية, "انتقل إلى المحتوى", "اللغة: العربية", Arabic footer and landmarks. English unchanged. `@keyframes drawer-in-rtl` and the `rtl:animate-drawer-in-rtl` rule are in the CSS. `tsc` passes; ESLint: the same 6 old findings (line numbers moved), none new. No server errors. In the browser (checklist on `/test`): drawer side, panel side, toasts, keyboard, screen reader.
 

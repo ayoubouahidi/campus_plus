@@ -3,11 +3,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { LOGIN_NAV_ITEM, PROFILE_NAV_ITEM, PUBLIC_NAV, isNavItemActive } from '@/lib/navigation';
 import { trapTabKey } from '@/lib/focus';
 import { useMergedRef } from '@/lib/refs';
 import { CloseIcon, MenuIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SessionState, SessionStatus } from '@/types/session';
@@ -44,13 +46,15 @@ export interface MobileTabBarProps extends React.HTMLAttributes<HTMLElement> {
 export const MobileTabBar = React.forwardRef<HTMLElement, MobileTabBarProps>(
   ({ sessionStatus, className = '', ...props }, ref) => {
     const pathname = usePathname();
+    const t = useTranslations('Nav');
+    const tNavbar = useTranslations('Navbar');
     const account = accountTab[sessionStatus];
     const tabs = account ? [...PUBLIC_NAV, account] : PUBLIC_NAV;
 
     return (
       <nav
         ref={ref}
-        aria-label="Main"
+        aria-label={tNavbar('main')}
         className={`fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden dark:border-slate-800 dark:bg-slate-950/90 ${className}`}
         {...props}
       >
@@ -71,7 +75,7 @@ export const MobileTabBar = React.forwardRef<HTMLElement, MobileTabBarProps>(
                   >
                     <Icon className="h-5 w-5" />
                   </span>
-                  <span className={`text-[11px] leading-none ${tabLabelStyles[tabState]}`}>{item.label}</span>
+                  <span className={`text-[11px] leading-none ${tabLabelStyles[tabState]}`}>{t(item.labelKey)}</span>
                 </Link>
               </li>
             );
@@ -170,12 +174,13 @@ export const MobileNavTrigger = React.forwardRef<HTMLButtonElement, MobileNavTri
   ({ onClick, className = '', ...props }, ref) => {
     const { isOpen, open, drawerId, triggerRef } = useMobileNav();
     const setTriggerRef = useMergedRef(ref, triggerRef);
+    const t = useTranslations('MobileNav');
 
     return (
       <button
         ref={setTriggerRef}
         type="button"
-        aria-label="Open menu"
+        aria-label={t('openMenu')}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         // Only point at the drawer while it exists in the DOM
@@ -184,7 +189,7 @@ export const MobileNavTrigger = React.forwardRef<HTMLButtonElement, MobileNavTri
           onClick?.(event);
           if (!event.defaultPrevented) open();
         }}
-        className={`-ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 md:hidden dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${className}`}
+        className={`-ms-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 md:hidden dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${className}`}
         {...props}
       >
         <MenuIcon className="h-5 w-5" />
@@ -225,6 +230,9 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
   ({ session, children, className = '', onKeyDown, ...props }, ref) => {
     const { isOpen, close, drawerId, triggerRef } = useMobileNav();
     const pathname = usePathname();
+    const t = useTranslations('MobileNav');
+    const tNav = useTranslations('Nav');
+    const tNavbar = useTranslations('Navbar');
     const titleId = useId();
     const [mounted, setMounted] = useState(false);
     const drawerRef = useRef<HTMLDivElement>(null);
@@ -292,25 +300,25 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
           aria-modal="true"
           aria-labelledby={titleId}
           onKeyDown={handleKeyDown}
-          className={`animate-drawer-in motion-reduce:animate-none absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto border-r border-slate-200/80 bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl dark:border-slate-800 dark:bg-slate-900 ${className}`}
+          className={`animate-drawer-in rtl:animate-drawer-in-rtl motion-reduce:animate-none rtl:motion-reduce:animate-none absolute inset-y-0 start-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto border-e border-slate-200/80 bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl dark:border-slate-800 dark:bg-slate-900 ${className}`}
           {...props}
         >
           <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 px-4 dark:border-slate-800">
             <h2 id={titleId} className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Menu
+              {t('menu')}
             </h2>
             <button
               ref={closeButtonRef}
               type="button"
-              aria-label="Close menu"
+              aria-label={t('closeMenu')}
               onClick={closeAndRestoreFocus}
-              className={`-mr-2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${linkFocusRing}`}
+              className={`-me-2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${linkFocusRing}`}
             >
               <CloseIcon className="h-5 w-5" />
             </button>
           </div>
 
-          <nav aria-label="Pages" className="px-3 py-4">
+          <nav aria-label={t('pages')} className="px-3 py-4">
             <ul className="space-y-1">
               {PUBLIC_NAV.map((item) => {
                 const linkState: TabState = isNavItemActive(item, pathname) ? 'active' : 'idle';
@@ -325,7 +333,7 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
                       className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors duration-150 ${linkFocusRing} ${drawerLinkStyles[linkState]}`}
                     >
                       <Icon className="h-5 w-5" />
-                      {item.label}
+                      {tNav(item.labelKey)}
                     </Link>
                   </li>
                 );
@@ -341,7 +349,7 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
                   <Skeleton variant="rounded" height={10} width="60%" />
                   <Skeleton variant="rounded" height={10} width="80%" />
                 </div>
-                <span className="sr-only">Loading account</span>
+                <span className="sr-only">{tNavbar('loadingAccount')}</span>
               </div>
             )}
 
@@ -352,7 +360,7 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
                 onClick={close}
                 className={`flex h-10 items-center justify-center rounded-lg text-sm font-semibold transition-colors duration-150 ${linkFocusRing} ${accountLinkStyles.primary}`}
               >
-                Log in
+                {tNav('login')}
               </Link>
             )}
 
@@ -372,11 +380,16 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{session.user.full_name}</span>
                   <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                    {PROFILE_NAV_ITEM.label} · {session.user.email}
+                    {tNav('profile')} · {session.user.email}
                   </span>
                 </span>
               </Link>
             )}
+          </div>
+
+          {/* The navbar only has room for the language switcher from sm up; on phones it lives here. */}
+          <div className="border-t border-slate-200/80 px-4 py-4 dark:border-slate-800">
+            <LanguageSwitcher variant="full" />
           </div>
 
           {children && (

@@ -11,6 +11,7 @@ import React, {
   useState,
 } from 'react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { BellIcon, IconBase, NavIconProps } from '@/components/ui/layout/navIcons';
 import { trapTabKey } from '@/lib/focus';
 import { useMergedRef } from '@/lib/refs';
@@ -61,12 +62,11 @@ interface Announcement {
   text: string;
 }
 
-const describeArrivals = (arrived: readonly AppNotification[]) =>
-  arrived.length === 1 ? `New notification: ${arrived[0].title}` : `${arrived.length} new notifications`;
 
 // `relative` wrapper: the panel is positioned against it from sm up.
 export const NotificationPopover = React.forwardRef<HTMLDivElement, NotificationPopoverProps>(
   ({ notifications, onMarkRead, onMarkAllRead, children, className = '', ...props }, ref) => {
+    const t = useTranslations('Notifications');
     const [isOpen, setIsOpen] = useState(false);
     const [announcement, setAnnouncement] = useState<Announcement | null>(null);
     const seenIdsRef = useRef<Set<string> | null>(null);
@@ -92,8 +92,11 @@ export const NotificationPopover = React.forwardRef<HTMLDivElement, Notification
 
       const arrived = notifications.filter((notification) => !notification.is_read && !seenIds.has(notification.id));
       if (arrived.length === 0) return;
-      setAnnouncement((previous) => ({ id: (previous?.id ?? 0) + 1, text: describeArrivals(arrived) }));
-    }, [notifications]);
+      // The title is the notification's own text (data); only the frame around it is translated.
+      const text =
+        arrived.length === 1 ? t('arrivedOne', { title: arrived[0].title }) : t('arrivedMany', { count: arrived.length });
+      setAnnouncement((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+    }, [notifications, t]);
 
     const value = useMemo(
       () => ({
@@ -147,9 +150,10 @@ export const NotificationTrigger = React.forwardRef<HTMLButtonElement, Notificat
   ({ onClick, className = '', ...props }, ref) => {
     const { isOpen, toggle, panelId, triggerRef, unreadCount } = useNotificationPopover();
     const setTriggerRef = useMergedRef(ref, triggerRef);
+    const t = useTranslations('Notifications');
 
     // The badge is visual only, so the count lives in the accessible name.
-    const label = unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications';
+    const label = t('trigger', { count: unreadCount });
 
     return (
       <button
@@ -171,7 +175,7 @@ export const NotificationTrigger = React.forwardRef<HTMLButtonElement, Notificat
         {unreadCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-950"
+            className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-950"
           >
             {formatUnreadCount(unreadCount)}
           </span>
@@ -253,6 +257,8 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
       onMarkRead,
       onMarkAllRead,
     } = useNotificationPopover();
+    const t = useTranslations('Notifications');
+    const locale = useLocale();
     const [mounted, setMounted] = useState(false);
     const [now, setNow] = useState(() => Date.now());
     const panelRef = useRef<HTMLDivElement>(null);
@@ -326,15 +332,15 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`fixed inset-x-4 top-[4.5rem] z-50 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl focus:outline-none sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 dark:border-slate-800 dark:bg-slate-900 ${className}`}
+        className={`fixed inset-x-4 top-[4.5rem] z-50 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl focus:outline-none sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-96 dark:border-slate-800 dark:bg-slate-900 ${className}`}
         {...props}
       >
         <div className="flex items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 dark:border-slate-800">
           <div>
             <h2 id={titleId} className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Notifications
+              {t('title')}
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{unreadCount} unread</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{t('unread', { count: unreadCount })}</p>
           </div>
           {onMarkAllRead && unreadCount > 0 && (
             <button
@@ -342,7 +348,7 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
               onClick={handleMarkAllRead}
               className="rounded-md px-2 py-1 text-xs font-semibold text-violet-700 transition-colors duration-150 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400 dark:hover:bg-violet-500/10"
             >
-              Mark all as read
+              {t('markAllRead')}
             </button>
           )}
         </div>
@@ -353,10 +359,8 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
               <BellIcon className="h-6 w-6" />
             </span>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">You&apos;re all caught up</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                New events and changes to events you follow will show up here.
-              </p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('emptyTitle')}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('emptyBody')}</p>
             </div>
           </div>
         ) : (
@@ -383,16 +387,16 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
                     </span>
                     <span className="min-w-0 flex-1 space-y-0.5">
                       <span className={`block text-sm ${itemTitleStyles[readState]}`}>
-                        {!notification.is_read && <span className="sr-only">Unread: </span>}
+                        {!notification.is_read && <span className="sr-only">{t('unreadPrefix')}</span>}
                         {notification.title}
                       </span>
                       <span className="block text-sm text-slate-500 dark:text-slate-400">{notification.body}</span>
                       <time
                         dateTime={notification.created_at}
-                        title={formatAbsoluteTime(notification.created_at)}
+                        title={formatAbsoluteTime(notification.created_at, locale)}
                         className="block text-xs text-slate-400 dark:text-slate-500"
                       >
-                        {formatRelativeTime(notification.created_at, now)}
+                        {formatRelativeTime(notification.created_at, now, locale)}
                       </time>
                     </span>
                     {/* Unread dot; the state is spoken through the sr-only prefix instead */}
