@@ -4323,7 +4323,7 @@ The backend was merged on branch `Ahmed` (PR #4, `e04d4a3`: Ahmed's API + Ayoub'
 | Step | Scope | Status |
 | --- | --- | --- |
 | 14.1 | Raw types, mappers, API client, server token reader, data functions with the dev mock fallback; every server page switched to them | ✅ validated 2026-11-22 |
-| 14.2 | Run branch `Ahmed`'s Django locally, set `BACKEND_URL`, check every page against real data | ⏳ |
+| 14.2 | Run branch `Ahmed`'s Django locally, set `BACKEND_URL`, check every page against real data | ✅ validated 2026-11-22 |
 | 14.3 | RSVP and attendees for real: server action with the token, rollback on failure, "Event full" (409), "Cancelled" badge | ⏳ |
 | 14.4 | Search (⌘K) and notifications off the mocks (they run in the browser: a route handler or the realtime feed) | ⏳ |
 
@@ -4377,3 +4377,34 @@ const events = await listEvents({ upcoming: true }, token);
 ```
 
 **Verified (2026-11-22).** Without `BACKEND_URL`: all routes render as before (titles and content checked; `/test` reports "Mocks: 6 events and 6 clubs"). `/test` runs the mappers on the API_SPEC.md examples: event ids "3"/"2", attendee "20", status and capacity kept; edge event: `club_id ""`, `description ""`, "Workshops" → "EventsOrganization" with `[api] event 4: unknown category "Workshops"` in the server log; club without a slug → `null`; user id "42", `avatar_url null`, `club_id "2"`. `tsc` passes; ESLint: the same 6 old findings (a function named `useMocks` was read as a React hook: renamed `mocksOnly`). Against real Django: Step 14.2.
+
+### 14.2 The student site against the real backend (Step 14.2, 2026-11-22)
+
+**Files:** none in the repo changed (the test setup lives outside it, below). DOCS only.
+**Status:** ✅ Validated (2026-11-22) against branch `Ahmed` at `e04d4a3`.
+
+**Business purpose.** Prove that the mapping layer (14.1) shows Django's real data on every page, signed out and signed in, before the merge, so the merge is "set `BACKEND_URL`".
+
+**How to run it again (local only, nothing committed).**
+1. `git worktree add --detach <dir> origin/Ahmed` (a second checkout; `git worktree remove <dir>` deletes it).
+2. In `<dir>`: `.env` from `.env.example` with fresh random `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`; a `docker-compose.override.yml` adding `ahmed-web` to `DJANGO_ALLOWED_HOSTS` (Django rejects unknown `Host` headers).
+3. `docker compose -p campusbe up -d --build db redis web` (own project name, no published ports; their `frontend` and `nginx` are not started). Migrations run on start (`infrastructure/entrypoint.sh`).
+4. Seed: a shell script creating 1337 only: 1 department, 4 clubs (president Anas Bennani), 5 events relative to now (multi-day upcoming, past, **cancelled**, one with `capacity: 2` already full), 8 RSVPs, test users `student@1337.ma`, `board@1337.ma`, `peer0–3@1337.ma` (local password).
+5. Wire the two stacks: `docker network connect --alias ahmed-web transcendence_default campusbe-web-1`, then recreate only our frontend with `BACKEND_URL=http://ahmed-web:8000 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --no-deps frontend`.
+   - **Gotcha:** the alias goes on **their `web` joining our network**, not on our frontend joining theirs (that names the frontend `ahmed-web`, and every call is refused).
+   - **Gotcha:** a `.env.local` can't set `BACKEND_URL` here: our compose file passes `BACKEND_URL: ${BACKEND_URL:-}`, an empty value Next won't override.
+6. Back to mocks: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --no-deps frontend` (without the variable); `docker compose -p campusbe down -v` removes their stack and its data.
+
+**Results.**
+- **Signed out:** `/` shows Django's 4 upcoming events (the past one excluded) with real counts ("4 going", "2 going", "No RSVPs yet") and "Log in to RSVP"; `/clubs` 4 clubs with real upcoming counts; `/clubs/leet-dev` "Since November 2026", the president's name, upcoming events; `/events/1` and `/events/4` render; `/events/99999` and the old mock id `/events/evt_hackathon_ai` show "Event not found" (Django 404 → `notFound()`; non-numeric ids never reach Django); `/auth/register` lists Django's department and clubs.
+- **Signed in** (through Auth.js's email provider, real password check by Django): session user id `"1"` (numeric id mapped to a string); the hackathon card says "Going"; the event page "You, Hamza El Amrani, and 2 others", "You're going", "4 going" (the student isn't counted twice); `/profile` Going = Edge AI Hackathon, Went to = Lighting Masterclass, stats 1 upcoming · 1 attended, date tile "NOV 18".
+- **Django down** (`docker stop campusbe-web-1`): `/`, `/clubs`, `/events/1` show the translated error page with "Try again" and an error code; nothing falls back to mocks. Pages recover as soon as Django is back.
+- **Errors in the log:** one `ECONNREFUSED` while the alias was on the wrong container (gotcha above), none after.
+
+**Found, for the next steps.**
+- **Cancelled events look normal** (the basketball final is in the feed with no badge) → 14.3: "Cancelled" badge, RSVP disabled.
+- **RSVP buttons don't call Django yet**: they still only change the screen (optimistic, Phase 5 behaviour) → 14.3: server action with the token, rollback on error, "Event full" on 409.
+- **Club contact card shows the name only**: Django doesn't send email/phone yet (TEAM_NEEDS BE1).
+- **Notification bell** still shows the 3 mock notifications, and ⌘K search the mock events → 14.4.
+- **Images:** not tested yet (the seed has no flyers/logos); the `web:8000` host problem is TEAM_NEEDS BE4.
+- Their compose names the backend `web`, like the old backend in ours. In the merged compose there is only one, so `BACKEND_URL=http://web:8000` (BE6).
