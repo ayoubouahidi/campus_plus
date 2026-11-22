@@ -27,7 +27,8 @@ const FooterLinkItem = ({ link }: { link: FooterLink }) => {
   return (
     <a href={link.href} target="_blank" rel="noopener noreferrer" className={footerLinkStyles}>
       {link.label}
-      <ExternalIcon className="h-3.5 w-3.5" />
+      {/* The "out" arrow points toward the reading direction's end: mirrored in Arabic. */}
+      <ExternalIcon className="h-3.5 w-3.5 rtl:-scale-x-100" />
       <span className="sr-only"> {tFooter('newTab')}</span>
     </a>
   );

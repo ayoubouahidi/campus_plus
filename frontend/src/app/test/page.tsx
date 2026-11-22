@@ -41,7 +41,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.7, legal pages, error and 404 pages, tab titles in EN / FR / AR</p>
+        <p className="font-semibold">Test page: Step 12.8, final Arabic (RTL) pass over the whole site</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,52 +118,81 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Pages to open (Step 12.7 is live on them)</h3>
+          <h3 className="font-semibold">Every page, in العربية (switch above first)</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             <li>
-              <Link href="/privacy" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Privacy Policy
+              <Link href="/" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Feed
               </Link>
             </li>
             <li>
-              <Link href="/privacy#cookies" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Privacy: cookies table
+              <Link href="/calendar" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Calendar
+              </Link>
+            </li>
+            <li>
+              <Link href="/calendar?date=2026-11-14&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Week view
+              </Link>
+            </li>
+            <li>
+              <Link href="/clubs" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Clubs
+              </Link>
+            </li>
+            <li>
+              <Link href="/clubs/leet-dev" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                A club
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/evt_hackathon_ai" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                An event
+              </Link>
+            </li>
+            <li>
+              <Link href="/auth/login" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Login
+              </Link>
+            </li>
+            <li>
+              <Link href="/auth/register" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Sign-up
+              </Link>
+            </li>
+            <li>
+              <Link href="/profile" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Profile
+              </Link>
+            </li>
+            <li>
+              <Link href="/privacy" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Privacy
               </Link>
             </li>
             <li>
               <Link href="/terms" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Terms of Service
+                Terms
               </Link>
             </li>
             <li>
               <Link href="/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Unknown page (404)
-              </Link>
-            </li>
-            <li>
-              <Link href="/events/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Unknown event
-              </Link>
-            </li>
-            <li>
-              <Link href="/clubs/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Unknown club
+                404
               </Link>
             </li>
           </ul>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.7), in Français then العربية</h3>
+          <h3 className="font-semibold">What to check (Step 12.8), at phone width and at desktop width</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Privacy and Terms: the whole text is in the chosen language (title, &quot;En bref&quot;, every section, lists, the cookies table, links). &quot;Mise à jour le 20 novembre 2026&quot; / &quot;آخر تحديث: 20 نونبر 2026&quot;, &quot;Sur cette page&quot;, &quot;Voir aussi&quot;. Table-of-contents links jump to the right section (anchors are the same in every language).</li>
-            <li>Arabic legal pages: text and list bullets on the right, the cookies table reads right to left (headers aligned right), the contact email reads left to right, the table of contents sits on the right from 1024px.</li>
-            <li><strong>Please read the French and Arabic legal texts once</strong> (or ask a teammate who writes Arabic well): they are translations of the English reference, which stays the version that counts.</li>
-            <li>Browser tab titles, page by page: &quot;Calendrier | Campus Hub&quot;, &quot;التقويم | Campus Hub&quot;, &quot;Connexion | Campus Hub&quot;; the feed shows &quot;Campus Hub | Clubs et événements&quot;; event and club pages show their own name.</li>
-            <li>404 pages (links above): body and tab title translated (&quot;Page introuvable&quot;, &quot;Événement introuvable&quot;, &quot;النادي غير موجود&quot;).</li>
-            <li>Error page: to see it, temporarily throw in a page (e.g. add <code>throw new Error(&apos;test&apos;)</code> at the top of app/clubs/page.tsx), open /clubs, check &quot;Un problème est survenu&quot;, &quot;Réessayer&quot;, &quot;Code d’erreur&quot;, then remove the line.</li>
-            <li>Loading screens (slow network in DevTools): the hidden &quot;Chargement…&quot; labels are in the language (screen reader).</li>
-            <li>Still English on purpose: the whole-app crash page (global-error, outside the layout, no access to the language) and the dev login button.</li>
+            <li>Each page reads right to left: headings, text and lists start on the right; nothing is stuck on the left by mistake; no horizontal scroll on a phone.</li>
+            <li>Arrows point the reading way: back links (→ in Arabic), calendar ‹ ›, profile row chevrons and &quot;Discover events&quot; arrow, logout icon, the footer&apos;s &quot;opens in a new tab&quot; icon.</li>
+            <li>Keyboard: ← / → move the right way in the calendar grid and in tabs; Tab order follows the visual order (right to left).</li>
+            <li>Left-to-right islands stay readable: emails, phone numbers (+212 6 …), @login, cookie names, times like 16:00.</li>
+            <li>No English left except names (Campus Hub, 1337 Coding School, 42 Intra), event and club data, cookie names, the &quot;Ctrl&quot; key, and the developers-only dev login button. Signed in: notifications, RSVP buttons and toasts, the profile.</li>
+            <li>Then once in Français: no English sentence anywhere.</li>
+            <li>Dark mode, both languages: nothing changes but the colours.</li>
           </ul>
         </div>
       </section>

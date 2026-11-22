@@ -70,7 +70,10 @@ const GoingEmpty = () => {
       <p className="mt-5 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('goingEmptyTitle')}</p>
       <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-400">{t('goingEmptyBody')}</p>
       <Link href="/" className={`mt-6 ${DISCOVER_LINK}`}>
-        <span aria-hidden="true" className="rtl:-scale-x-100">→</span>
+        {/* inline-block: a transform has no effect on an inline span, so the arrow wouldn't flip in Arabic. */}
+        <span aria-hidden="true" className="inline-block rtl:-scale-x-100">
+          →
+        </span>
         {tEvent('discover')}
       </Link>
     </div>

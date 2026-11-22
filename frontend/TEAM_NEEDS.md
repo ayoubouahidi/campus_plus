@@ -293,8 +293,8 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | User Mgmt Major: advanced permissions (user CRUD, roles, views per role) | 2 | ⚠️ Ayoub: roles defined, superadmin user CRUD needed |
 | User Mgmt Major: organization system (clubs: create/edit/delete, add/remove members) | 2 | ⚠️ Ayoub dashboard (mock data) + Ahmed |
 | Web Minor: file upload & management (types, validation, preview, progress, delete) | 1 | ⚠️ flyers/logos/avatars, nothing built |
-| A11y Minor: RTL (Arabic) | 1 | ⏳ Phase 7 |
-| A11y Minor: ≥3 languages + switcher | 1 | ⏳ Phase 7 (needs French too) |
+| A11y Minor: RTL (Arabic) | 1 | ✅ **Student site done (2026-11-22, DOCS §12):** `dir="rtl"` in Arabic, every layout uses logical sides, mirrored drawer, icons and arrow keys. ⚠️ Ayoub's dashboard is a separate app: if evaluators open it, it has no RTL yet |
+| A11y Minor: ≥3 languages + switcher | 1 | ✅ **Student site done (2026-11-22, DOCS §12):** English, French, Arabic, switcher in the navbar and phone menu, choice kept in a cookie, every page and message translated (274 messages × 3), dates in each language. ⚠️ Same dashboard caveat: decide whether the dashboard needs languages too, or whether we present the module on the student site only |
 | Web Major: public API (API key, rate limiting, docs, GET/POST/PUT/DELETE) | 2 | ⚠️ Swagger docs exist; no API key, no throttling |
 | A11y Major: WCAG 2.1 AA | 2 | Possible (student site built with ARIA), risky: whole app incl. dashboard must pass |
 

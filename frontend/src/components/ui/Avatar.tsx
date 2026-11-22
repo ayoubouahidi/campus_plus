@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 export type AvatarStatus = 'online' | 'offline' | 'busy' | 'away';
@@ -60,10 +61,11 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
     ref
   ) => {
     const [hasError, setHasError] = useState(false);
+    const t = useTranslations('Common');
 
     // Derived states
     const initials = getInitials(name);
-    const accessibleAlt = alt || name || 'Avatar';
+    const accessibleAlt = alt || name || t('avatar'); // last resort, in the visitor's language (Step 12.8)
     const showImage = Boolean(src) && !hasError;
 
     return (

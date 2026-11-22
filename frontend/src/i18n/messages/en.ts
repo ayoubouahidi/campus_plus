@@ -76,6 +76,7 @@ const en = {
   },
   // Shared by the ui/ primitives.
   Common: {
+    avatar: 'Profile picture',
     close: 'Close',
     dismissNotification: 'Dismiss notification',
   },

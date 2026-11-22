@@ -72,6 +72,7 @@ const fr = {
     EventsOrganization: 'Événementiel',
   },
   Common: {
+    avatar: 'Photo de profil',
     close: 'Fermer',
     dismissNotification: 'Fermer la notification',
   },

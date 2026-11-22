@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind scans every non-ignored file for class names, Markdown included. The docs quote classes and
+   fragments of them ("[&…]:border-l"), which once produced invalid CSS and broke every page (DOCS.md §12.8).
+   Classes only live in src/, so the docs are left out. */
+@source not "../../*.md";
+
 /* Arabic pages (DOCS.md §12.1): Noto Sans Arabic (layout.tsx, --font-arabic) first, the usual system fonts
    after it for Latin text and digits. */
 @layer base {

@@ -76,6 +76,7 @@ const ar = {
     EventsOrganization: 'تنظيم الفعاليات',
   },
   Common: {
+    avatar: 'صورة الملف الشخصي',
     close: 'إغلاق',
     dismissNotification: 'إغلاق الإشعار',
   },

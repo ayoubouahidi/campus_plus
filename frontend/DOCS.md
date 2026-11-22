@@ -105,7 +105,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
 | 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6), 5.4 `/profile` + guard + logout (§7.7–7.8) |
 | 6     | Real-time WebSockets                  | ⏳             |
-| 7     | i18n (Arabic RTL) & live API          | 🚧 Languages started (§12, 2026-11-21); live API waits for the merge (TEAM_NEEDS §1c) |
+| 7     | i18n (Arabic RTL) & live API          | ✅ Languages done (§12, EN / FR / AR + RTL, 2026-11-22); live API waits for the merge (TEAM_NEEDS §1c) |
 
 **Phase 2 tasks**
 
@@ -3817,7 +3817,7 @@ Two accessibility modules of the subject: **≥ 3 languages with a switcher** (a
 | 12.5 | Clubs directory and club pages; "since" month in the active language | ✅ validated 2026-11-22 |
 | 12.6 | Login, sign-up (validation and error messages as keys), logout, the rest of `/profile` (stats, tabs, date tiles) | ✅ validated 2026-11-22 |
 | 12.7 | Privacy / Terms full text in FR and AR, legal page frame, error and 404 pages, tab titles (`title.template`), `locale` required on every formatter, 404 status question answered | ✅ validated 2026-11-22 |
-| 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ⏳ |
+| 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ✅ validated 2026-11-22 |
 
 ### 12.1 i18n setup and `LanguageSwitcher` (Step 12.1, 2026-11-21)
 
@@ -4283,3 +4283,35 @@ export default async function PrivacyPage() {
 **Verified (2026-11-22).** Full HTML of 14 pages (`/`, `/calendar`, `/clubs`, three club pages, three event pages, `/auth/login`, `/auth/register`, `/privacy`, `/terms`, `/nope`) in EN, FR and AR: no "EMINES" or "UM6P" anywhere (after renaming the login photo). `/clubs` lists LEET Business, LEET Dev, Leet Frame, LEET Music, LEET Sports, Student Events Committee. `tsc` passes; ESLint: the same 6 old findings.
 
 **Team follow-up:** TEAM_NEEDS §1d (Ahmed: seed only the 1337 department; Ayoub: dashboard data and refusing non-1337 accounts).
+
+### 12.8 Final RTL audit and "no English left" check (Step 12.8, 2026-11-22)
+
+**Files:** `src/components/profile/ProfileActivity.tsx`, `src/components/ui/layout/Footer.tsx`, `src/components/ui/Avatar.tsx`, `src/i18n/messages/{en,fr,ar}.ts` (`Common.avatar`), `TEAM_NEEDS.md` §5.2 (modules), `src/app/test/page.tsx`.
+**Status:** ✅ Validated (2026-11-22). Closes the languages work (§12.1–12.8).
+
+**Business purpose.** Two subject modules (A11y Minor "RTL" and A11y Minor "≥ 3 languages", 1 point each) are judged by clicking through the site in Arabic and French. This step looks for what earlier steps could have missed, across every page at once.
+
+**How the audit was done (repeatable before the evaluation).**
+1. **Physical classes.** `grep` over `src/` for `ml- mr- pl- pr- left- right- border-l/r rounded-l/r text-left/right translate-x bg-gradient-to-l/r`, prefixed or not, including arbitrary variants (`[&:not(:first-child)]:border-l`). Result: none left in Tailwind classes. The remaining hits are flex `justify-start/end` (already follows `dir`), the profile banner's `bg-gradient-to-r rtl:bg-gradient-to-l` (12.4b), and words in text or variable names. CSS files: only the drawer keyframes (two versions since 12.2) and the background's symmetric `left: 0; right: 0`.
+2. **Directional icons.** Every chevron and arrow (`m15 18-6-6 6-6`, `m9 18 6-6-6-6`, `→`, `←`, `LogoutIcon`, `ChevronIcon`, `ExternalIcon`) checked for `rtl:-scale-x-100`. **Two fixes:** the profile's "Discover events" `→` had the class on an inline `<span>`, where a CSS transform does nothing, so it never flipped (now `inline-block`); the footer's external-link icon wasn't mirrored (RTL convention mirrors "open in new"). Arrow keys: `Tabs` and the calendar grid already swap ← / → in RTL.
+3. **Latin text on Arabic pages.** A script fetched 14 routes with `NEXT_LOCALE=ar` and listed every text node and `aria-label` / `title` / `placeholder` / `alt` containing a Latin word. Everything left is a name (Campus Hub, 1337 Coding School, 42 Intra, 42 Network), data (event and club text from the clubs), a technical identifier (cookie names, HTTPS, CNDP), the "Ctrl" key, or the developers-only dev login button.
+4. **Signed-in and client-only text** (toasts, notifications, RSVP states, form errors): `grep` for English literals in JSX props, JSX text and template strings. Only `global-error.tsx` (English on purpose, §12.7) and one fallback: `Avatar`'s alt text "Avatar" when no name is given, now `Common.avatar`.
+5. **Message files.** All 274 keys exist in `fr.ts` and `ar.ts` (also enforced by `satisfies Messages`). Values identical to English: French words that are the same (Clubs, Menu, Pages, Notifications, Contact, Admin, Tech, Business) and word-free templates (`{month} {year}`, `{start} – {end}`).
+
+**Known limits (written down, not bugs).**
+- Data stays in the language it was written in (event titles, descriptions, club names): decided in 12.1.
+- Messages Django writes itself stay as Django wrote them (§12.6).
+- `global-error.tsx` is English (§12.7).
+- The organizer dashboard (Ayoub, separate app) has no languages or RTL. For the two modules, the team decides whether to present them on the student site only (TEAM_NEEDS §5.2).
+- Very old browsers could print Arabic-Indic digits in client-side counts (§12.4 notes); current browsers print 0–9.
+
+**Tradeoffs.**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| `grep` + server-HTML script, then a guided browser pass | An automated visual test suite (Playwright screenshots in RTL) | No test runner in the project yet; the scripts above take a minute to re-run and catch the classes of mistakes we actually made. Worth adding with the CI work. |
+| Mirror the external-link icon | Leave it pointing top-right | RTL guidelines (Material, Apple) mirror "open in new" icons, as the reading "forward" direction is left. |
+
+**Verified (2026-11-22).** The four searches above; `tsc` passes; ESLint: the same 6 old findings. In the browser: checklist on `/test` (each page in Arabic at phone and desktop width, then French, then dark mode).
+
+**Gotcha found while writing this entry: Tailwind reads the docs.** Tailwind v4 scans every file that git doesn't ignore for class names, `.md` files included. This entry first quoted a class fragment with an ellipsis (`[&` + `…]:border-l`); Tailwind turned it into a CSS rule with "…" in the selector, Next's CSS parser rejected the whole stylesheet, and every page answered 500 until the text was changed. Fix: `@source not "../../*.md";` in `globals.css` (Tailwind ≥ 4.1), so `DOCS.md`, `ARCHITECTURE.md`, `TEAM_NEEDS.md`, `CLAUDE.md` and `AGENTS.md` are never scanned. Classes only live in `src/`.
