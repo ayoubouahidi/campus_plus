@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { auth, getSessionState, signOut } from '@/auth';
 import { ProfileView } from '@/components/profile/ProfileView';
+import { clearRealtimeCookie } from '@/app/realtime/actions';
 import { getMyEvents } from '@/lib/events';
 import { getBackendToken } from '@/lib/api/token';
 import { listEvents } from '@/lib/data';
@@ -18,6 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
 // Log out, then land on Discover (a signed-out visitor can't stay on /profile).
 async function logout() {
   'use server';
+  await clearRealtimeCookie(); // the WebSocket credential goes with the session (Step 15.1)
   await signOut({ redirectTo: '/' });
 }
 

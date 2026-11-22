@@ -104,7 +104,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 3     | Public event feed (`/`)               | ✅ Done (2026-11-02): live at `/` (§5.9). Steps 3.1, 3.2, 3.4, 3.5, 3.6; 3.3 hero dropped (§5.5); loading skeleton moved to Phase 7 (§5.8) |
 | 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
 | 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6), 5.4 `/profile` + guard + logout (§7.7–7.8) |
-| 6     | Real-time WebSockets                  | ⏳             |
+| 6     | Real-time WebSockets                  | 🚧 Started (§15, 2026-11-22): connection, credential cookie, reconnect; pages next |
 | 7     | i18n (Arabic RTL) & live API          | ✅ Languages done (§12, 2026-11-22). 🚧 Live API started (§14): mapping layer + data functions, pages read Django when `BACKEND_URL` is set |
 
 **Phase 2 tasks**
@@ -4493,3 +4493,91 @@ getInitialNotifications(): AppNotification[]; // mocks in dev without Django, ot
 ```
 
 **Verified (2026-11-22, local Django from §14.2).** `/test` shows what `loadSearchData()` returns from Django: the 5 seeded events and 4 clubs; attendee names sent `false`, "Going" flags sent `false`, club contacts sent `false`; the bell's starting feed: 0. `tsc` passes; ESLint: the same 6 old findings (two new "unused variable" warnings from a destructuring were removed). The palette in the browser (loading text, results, the one-minute reuse, the unavailable text with Django stopped): checklist on `/test`.
+
+## 15. Real-time (Phase 6, 2026-11-22)
+
+Backend side: Ahmed's WebSocket on branch `Ahmed` (`/ws/calendar/`, `POST /api/realtime/token/`), described in his `docs/ahmed/REALTIME_FRONTEND_HANDOFF.md`. Notifications wait for Ahmed's design choice (TEAM_NEEDS BE8).
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 15.1 | Credential cookie (`ws_access`), one WebSocket per signed-in tab, acknowledgment, 4401 refresh, backoff, message parsing | ✅ validated 2026-11-22 |
+| 15.2 | Pages apply live messages (feed, calendar, event page, club page), keeping RSVP state; reload on `resync` | ⏳ |
+| 15.3 | Notifications from Ahmed's chosen design (BE8) | ⏳ waiting for Ahmed |
+
+### 15.1 The realtime connection (Step 15.1, 2026-11-22)
+
+**Files:** `src/app/realtime/actions.ts` (new: `connectRealtime`, `clearRealtimeCookie`), `src/lib/realtime.ts` (new: `WS_COOKIE`, `WS_PATH`, `CLOSE_AUTH`, `LiveMessage`, `parseLiveMessage`, `mergeLiveEvent`, `reconnectDelay`), `src/components/providers/RealtimeProvider.tsx` (new: `RealtimeProvider`, `useRealtime`, `useLiveMessages`), `src/app/layout.tsx` (provider around the shell), `src/app/profile/page.tsx` (logout clears the cookie). Test: `src/app/test/RealtimeMonitor.tsx`, `src/app/test/page.tsx`. TEAM_NEEDS BE8 (notifications question), BE9 (doc fix).
+**Status:** ✅ Validated (2026-11-22). Mouad's browser log on `/test`: `resync` 7:27:32 PM, then `created` #9 "Live Demo Night @ Cluster 3" 7:27:41, `updated` #9 "@ Agora Hall" 7:27:46, `deleted` #9 7:27:51 (the board member's create / move / delete, 5 s apart).
+
+**Business purpose.** When a board member publishes, changes or cancels an event on the dashboard, students who have the site open should see it without reloading (subject module "real-time features", 2 pts). This step opens and keeps the live channel; 15.2 makes the pages use it.
+
+**Core concepts & decisions.**
+- **The credential never reaches JavaScript.** `connectRealtime()` (server action) asks Django for a 5-minute SimpleJWT with the student's DRF token and stores it as the `ws_access` cookie: `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/ws/` (only sent on the WebSocket handshake), `Max-Age` 5 s shorter than the token. The browser sends it automatically when it opens `wss://<site>/ws/calendar/`; nginx forwards `/ws/` to Django with the upgrade headers. No token in the URL, in `localStorage` or in logs (handoff requirements).
+- **One socket per signed-in tab, in the shell.** `RealtimeProvider` sits around `AppShell` in the root layout, so navigating between pages keeps the same connection. Signed out (or the dev mocks): no socket, status `off`. Pages subscribe with `useLiveMessages(listener)`; the provider maps every message once (`parseLiveMessage` → the same `toEventItem` mapper as REST).
+- **"Live" means acknowledged.** Status goes `connecting` → `live` only on Django's `connection_established`, which also emits `resync`: Django keeps no history, so whatever happened while disconnected is gone; listeners reload from the API on `resync` (15.2).
+- **Reconnect rules** (from the handoff): close `4401` (credential missing or expired, every 5 minutes in practice) → new cookie and reconnect at once, at most once per 10 s so a server that keeps refusing doesn't cause a loop; any other close → retry after 1 s, 2 s, 4 s… up to 30 s, ±30 % jitter (`reconnectDelay`), so a Django restart doesn't get every browser back in the same second. `unavailable` = couldn't get a credential, retried the same way.
+- **Live messages never carry RSVP state we can trust.** Broadcasts are public (one group for everyone). They do include `rsvps_count` / `has_user_rsvpd` / `attendees_preview` (the handoff says they don't: TEAM_NEEDS BE9), but always with anonymous values. `mergeLiveEvent(current, incoming)` keeps our copy's RSVP fields; `LiveMessage` marks created/updated events `rsvpUnknown: true` so 15.2 can't forget.
+- **Logout** deletes the cookie. The open socket itself stays valid until its JWT expires (≤ 5 min): Django has no revocation (handoff, "known limitations"); it only receives public event data.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| httpOnly cookie set by a server action | Pass the JWT to the browser and put it in the URL or a header | Required by Ahmed's backend (cookie only in JWT mode) and keeps the credential out of reach of any script. |
+| Socket in the root layout | Each page opens its own | One connection per tab instead of one per navigation; no reconnect between pages. |
+| Signed-in students only | Live updates for visitors too | Django's WebSocket requires a user. Visitors still get fresh data on every page load. |
+| Resync by reloading from the API | Trust the socket to be complete | Redis/Channels delivery is transient (no replay): the REST API is the source of truth. |
+| Exponential backoff with jitter | Fixed retry interval | Spreads reconnects after an outage; bounded at 30 s. |
+
+**Contract.**
+```ts
+// src/app/realtime/actions.ts ('use server')
+connectRealtime(): Promise<{ ok: true; expiresIn: number } | { ok: false; reason: 'signed-out' | 'disabled' | 'unavailable' }>;
+clearRealtimeCookie(): Promise<void>;
+// src/lib/realtime.ts
+type LiveMessage = { type: 'created' | 'updated'; event: EventItem; rsvpUnknown: true } | { type: 'deleted'; id: string };
+parseLiveMessage(text): LiveMessage | 'established' | null;
+mergeLiveEvent(current: EventItem | undefined, incoming: EventItem): EventItem; // keeps our RSVP fields
+reconnectDelay(attempt: number): number; // ms
+// src/components/providers/RealtimeProvider.tsx
+type RealtimeStatus = 'off' | 'connecting' | 'live' | 'reconnecting' | 'unavailable';
+useRealtime(): { status: RealtimeStatus; subscribe(listener): () => void };
+useLiveMessages(listener: (signal: LiveMessage | { type: 'resync' }) => void): void;
+```
+
+**Usage.**
+```tsx
+useLiveMessages((signal) => {
+  if (signal.type === 'resync') router.refresh();
+  else if (signal.type === 'deleted') removeEvent(signal.id);
+  else upsertEvent((current) => mergeLiveEvent(current, signal.event));
+});
+```
+
+**Verified (2026-11-22, branch `Ahmed`'s Django, local stack §14.2).**
+- `connectRealtime` called over HTTP as the browser would, with the seeded student's session → `{ ok: true, expiresIn: 300 }` and `Set-Cookie: ws_access=…; Path=/ws/; Max-Age=295; Secure; HttpOnly; SameSite=strict`.
+- A WebSocket with that cookie → first message `{"type":"connection_established","message":"Subscribed to calendar updates"}`.
+- The board member (with a `ClubBoardAssignment` to LEET Dev: Django refuses event writes without one, 403) created, updated (new place) and deleted an event over REST → the student's socket received `event_created` (#6, Cluster 3), `event_updated` (#6, Agora Hall), `event_deleted` (#6), in order.
+- Through nginx (`https://localhost/ws/calendar/`, the browser's route): valid cookie → **101**; invalid cookie → **403**; valid cookie from another origin → **403**.
+- `tsc` passes; ESLint: the same 6 old findings.
+
+**Local test wiring (in addition to §14.2).** For the browser to reach Ahmed's Django through our nginx, our old `web` container is stopped and Ahmed's `web` joins our network under the names `web` and `ahmed-web`:
+`docker stop transcendence-web-1 && docker network disconnect transcendence_default campusbe-web-1 && docker network connect --alias ahmed-web --alias web transcendence_default campusbe-web-1 && docker compose restart nginx`.
+Undo: `docker network disconnect transcendence_default campusbe-web-1 && docker start transcendence-web-1 && docker compose restart nginx` (and §14.2's steps for the frontend).
+
+### 15.1b Typography: Geist applied (fix, 2026-11-22)
+
+**Files:** `src/app/globals.css` (`@theme inline` with `--font-sans` / `--font-mono`; Arabic font stack), `src/app/test/page.tsx` (14.1 mapper panel removed), `src/app/test/apiSamples.ts` (deleted).
+**Status:** ✅ Decided by Mouad ("make the decision"), 2026-11-22.
+
+**The problem.** Firefox warned that two preloaded fonts were "not used within a few seconds". `layout.tsx` loads Geist and Geist Mono with `next/font` (self-hosted, preloaded), but `globals.css` never mapped them to Tailwind's `--font-sans` / `--font-mono` (the two lines from the Next.js template were gone). So every page downloaded two font files and rendered in each device's system font (San Francisco, Segoe UI, Roboto…).
+
+**Decision: use Geist**, not remove it. Same look on every device; a defined typeface for the design system (subject module "custom design system": palette, **typography**, icons, components); already self-hosted, so no request to Google and no new download. Geist for text, Geist Mono for `font-mono` (codes, keyboard keys, `@login`). Arabic: Noto Sans Arabic first, then Geist for Latin words and digits inside Arabic text, then system fonts.
+
+**How.** `@theme inline { --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; --font-mono: var(--font-geist-mono), … }`. `inline` makes Tailwind write the `var()` where the font is used, so it resolves on `<html>`, where next/font's class defines the variable. Tailwind's base styles already apply `--font-sans` to the page (`--default-font-family`).
+
+**Tradeoff.** The whole site changes typeface (slightly different widths). Fallback metrics are adjusted by next/font (`adjustFontFallback`), so text doesn't jump when Geist arrives. Alternative (remove the fonts, keep system fonts): no visual change, but no typography of our own for the design-system module.
+
+**Also cleaned:** the `[api] event 4: unknown category "Workshops"` lines in the browser console came from the 14.1 mapper examples on `/test` (Next forwards server logs to the browser in dev). That panel and `apiSamples.ts` are removed; the mapper behaviour stays documented in §14.1. The Firefox notice "the execution of microtasks on this page was reordered" is Firefox's own and not caused by the site.
+
+**Verified.** Compiled CSS: `--default-font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif` (whole page), `.font-mono { font-family: var(--font-geist-mono), … }`, `html:lang(ar) { font-family: var(--font-arabic), var(--font-geist-sans), … }`. `tsc` passes; ESLint: the same 6 old findings. In the browser: no more "preloaded but not used" warning; the text is in Geist.

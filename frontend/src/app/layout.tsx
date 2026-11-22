@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { LOCALE_INFO } from "@/i18n/config";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SessionProvider } from "@/components/providers/SessionProvider";
+import { RealtimeProvider } from "@/components/providers/RealtimeProvider";
 import { AppShell } from "@/components/ui/layout/AppShell";
 import { CampusBackground } from "@/components/ui/layout/CampusBackground";
 import { Footer, FooterBrand, FooterLegal, FooterNav } from "@/components/ui/layout/Footer";
@@ -84,18 +85,21 @@ export default async function RootLayout({
           <ToastProvider>
             <SessionProvider initialSession={session}>
               {/* Footer is built here, on the server, and passed through the client shell as a slot */}
-              <AppShell
-                initialNotifications={getInitialNotifications()}
-                footer={
-                  <Footer>
-                    <FooterBrand />
-                    <FooterNav />
-                    <FooterLegal />
-                  </Footer>
-                }
-              >
-                {children}
-              </AppShell>
+              {/* One WebSocket per signed-in tab, shared by every page (Step 15.1). */}
+              <RealtimeProvider>
+                <AppShell
+                  initialNotifications={getInitialNotifications()}
+                  footer={
+                    <Footer>
+                      <FooterBrand />
+                      <FooterNav />
+                      <FooterLegal />
+                    </Footer>
+                  }
+                >
+                  {children}
+                </AppShell>
+              </RealtimeProvider>
             </SessionProvider>
           </ToastProvider>
         </NextIntlClientProvider>

@@ -6,10 +6,8 @@ import { DEV_LOGIN_ENABLED, getSessionState, signOut } from '@/auth';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { LOCALE_INFO } from '@/i18n/config';
 import { hasBackend } from '@/lib/api/client';
-import { toClub, toEventItem, toUser } from '@/lib/api/mappers';
-import { getInitialNotifications, listClubs, listEvents } from '@/lib/data';
-import { loadSearchData } from '@/app/search/actions';
-import { SAMPLE_CLUB, SAMPLE_CLUB_NO_SLUG, SAMPLE_EVENT_EDGE, SAMPLE_EVENT_SIGNED_IN, SAMPLE_USER } from './apiSamples';
+import { listClubs, listEvents } from '@/lib/data';
+import { RealtimeMonitor } from './RealtimeMonitor';
 import { SessionSwitcher } from './SessionSwitcher';
 
 // TEST PAGE (/test): where each new step is checked before it goes into the real pages.
@@ -38,15 +36,7 @@ export default async function TestPage() {
   const t = await getTranslations('Events');
   const format = await getFormatter();
   const sampleDate = new Date('2026-11-13T17:00:00Z'); // hackathon opening, a fixed date (no hydration drift)
-  const [liveEvents, liveClubs, searchData] = await Promise.all([listEvents(), listClubs(), loadSearchData()]);
-  const initialNotifications = getInitialNotifications();
-  const mapperCases = [
-    { label: 'Event (signed-in request)', raw: SAMPLE_EVENT_SIGNED_IN, mapped: toEventItem(SAMPLE_EVENT_SIGNED_IN) },
-    { label: 'Event (edge cases)', raw: SAMPLE_EVENT_EDGE, mapped: toEventItem(SAMPLE_EVENT_EDGE) },
-    { label: 'Club', raw: SAMPLE_CLUB, mapped: toClub(SAMPLE_CLUB) },
-    { label: 'Club without a slug', raw: SAMPLE_CLUB_NO_SLUG, mapped: toClub(SAMPLE_CLUB_NO_SLUG) },
-    { label: 'User (/api/me/)', raw: SAMPLE_USER, mapped: toUser(SAMPLE_USER) },
-  ];
+  const [liveEvents, liveClubs] = await Promise.all([listEvents(), listClubs()]);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -55,7 +45,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 14.4, search (⌘K) and the notification feed off the mocks</p>
+        <p className="font-semibold">Test page: Step 15.1, the realtime connection (WebSocket)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -143,41 +133,23 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Mappers on the API_SPEC.md examples (raw → mapped)</h3>
-          <div className="mt-2 grid gap-3 lg:grid-cols-2">
-            {mapperCases.map(({ label, raw, mapped }) => (
-              <details key={label} className="rounded-lg border border-slate-200/80 p-3 dark:border-slate-800">
-                <summary className="cursor-pointer font-medium">{label}</summary>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <pre dir="ltr" className="overflow-x-auto rounded bg-slate-50 p-2 text-xs dark:bg-slate-800">{JSON.stringify(raw, null, 2)}</pre>
-                  <pre dir="ltr" className="overflow-x-auto rounded bg-violet-50 p-2 text-xs dark:bg-violet-500/10">{JSON.stringify(mapped, null, 2)}</pre>
-                </div>
-              </details>
-            ))}
+          <h3 className="font-semibold">Live connection (sign in as student@1337.ma with the local Django)</h3>
+          <div className="mt-2">
+            <RealtimeMonitor />
           </div>
         </div>
 
         <div>
-          <h3 className="font-semibold">What the ⌘K palette receives (loadSearchData)</h3>
-          <dl className="mt-2 grid gap-1 sm:grid-cols-2">
-            <div><dt className="inline text-slate-500">Events: </dt><dd className="inline">{searchData.events.map((event) => event.title).join(' · ')}</dd></div>
-            <div><dt className="inline text-slate-500">Clubs: </dt><dd className="inline">{searchData.clubs.map((club) => club.name).join(' · ')}</dd></div>
-            <div><dt className="inline text-slate-500">Attendee names sent: </dt><dd className="inline font-mono">{String(searchData.events.some((event) => event.attendees_preview.length > 0))}</dd></div>
-            <div><dt className="inline text-slate-500">&quot;Going&quot; flags sent: </dt><dd className="inline font-mono">{String(searchData.events.some((event) => event.has_user_rsvpd))}</dd></div>
-            <div><dt className="inline text-slate-500">Club contacts sent: </dt><dd className="inline font-mono">{String(searchData.clubs.some((club) => 'president_email' in club || 'president_phone' in club))}</dd></div>
-            <div><dt className="inline text-slate-500">Bell&apos;s starting feed: </dt><dd className="inline">{initialNotifications.length} notification(s)</dd></div>
-          </dl>
-        </div>
-
-        <div>
-          <h3 className="font-semibold">What to check (Step 14.4)</h3>
+          <h3 className="font-semibold">What to check (Step 15.1)</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>The three &quot;sent&quot; lines above say <code>false</code>: search data never carries names, &quot;Going&quot; or contacts, even signed in.</li>
-            <li>With the local Django: ⌘K shows Django&apos;s events (&quot;Coming up&quot;: the hackathon, pair programming…); typing &quot;jam&quot;, &quot;leet&quot;, &quot;sport&quot;, &quot;musique&quot; finds them; Enter opens /events/&lt;number&gt;.</li>
-            <li>First open: &quot;Loading events and clubs…&quot; for a moment, then the list. Close and reopen within a minute: instant (no second request in the Network tab).</li>
-            <li>Stop Django, reload, open ⌘K: &quot;Search isn&apos;t available right now&quot;. Start Django, reopen: results come back.</li>
-            <li>Bell (signed in): with Django, no notifications (&quot;You&apos;re all caught up&quot;): nothing fake. Without Django (mocks): the 3 mock notifications as before.</li>
-            <li>French and Arabic: the loading and unavailable texts.</li>
+            <li>Signed out: status <code>off</code>, no WebSocket in DevTools → Network → WS.</li>
+            <li>Signed in: <code>connecting</code> then <code>live</code> within a second; the log shows <code>resync</code>. DevTools → Network → WS: one connection to <code>wss://localhost/ws/calendar/</code>, first frame <code>connection_established</code>.</li>
+            <li>DevTools → Application → Cookies: <code>ws_access</code> is HttpOnly, Secure, SameSite Strict, path <code>/ws/</code>, expires in ~5 minutes. <code>document.cookie</code> in the console does not show it.</li>
+            <li>Create, edit and delete an event as the board member (Django admin or the dashboard; or ask me to run the script): the log shows <code>created</code>, <code>updated</code> (new place) and <code>deleted</code> within a second, in two tabs at once.</li>
+            <li>Wait 5 minutes: Django closes with 4401, the status goes <code>reconnecting</code> then <code>live</code> again (a new <code>ws_access</code> cookie), and a new <code>resync</code> appears.</li>
+            <li>Stop Django (<code>docker stop campusbe-web-1</code>): <code>reconnecting</code>, retries spaced 1 s, 2 s, 4 s… (WS tab). Start it again: back to <code>live</code>.</li>
+            <li>Log out from /profile: the socket closes and the <code>ws_access</code> cookie is gone.</li>
+            <li>Without Django (mocks): status <code>off</code>, nothing breaks.</li>
           </ul>
         </div>
       </section>
