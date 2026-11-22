@@ -123,10 +123,22 @@ signup and 42 sync require a nonblank email. Roles are `STUDENT`,
 `core_data.UserMember` remains the club/department profile and links one-to-one
 to that identity. The agreed canonical location for `phone` is
 `UserMember.phone`, and Ahmed's `core_data.0007` adds that field. Ayoub's
-temporary `User.phone` and the current `/api/me/` update path still need an
-approved synchronization migration and API correction. Existing values will be
-copied only when the profile phone is blank; conflicting nonblank values must
-be resolved before migration.
+temporary `User.phone` is preserved for compatibility. Migration
+`core_data.0011` validates all populated account/profile pairs before copying
+an account phone into a blank canonical profile phone. Different nonblank
+values, or an account phone without a related profile, stop the migration
+without partial writes and require manual resolution. Its reverse operation is
+intentionally a no-op because a safe rollback cannot distinguish a backfilled
+value from a value that was already canonical.
+
+On a fresh database, `0011` normally runs before existing users are transferred
+and therefore cannot reconcile data that arrives later. The controlled transfer
+procedure must run `manage.py reconcile_profile_phones --dry-run` after account
+and profile rows exist, resolve every reported blocker, then run the same command
+with `--apply` inside the isolated rehearsal and again at the approved cutover.
+The operation is atomic and idempotent. Reports contain counts and record IDs
+only; phone values are never printed. Legacy `auth_user` rows are a separate
+schema and must not be treated as though they contain `accounts.User.phone`.
 
 `User.role` is the authorization role. `UserMember.role` is preserved profile
 data and is not an authorization source until an explicit mapping is approved.

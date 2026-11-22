@@ -336,10 +336,72 @@ class UserApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 409)
+        self.assertNotIn("+212600000001", str(response.data))
+        self.assertNotIn("+212600000002", str(response.data))
+        self.assertNotIn("+212600000003", str(response.data))
         member.refresh_from_db()
         self.user.refresh_from_db()
         self.assertEqual(member.phone, "+212600000001")
         self.assertEqual(self.user.phone, "+212600000002")
+
+    def test_me_does_not_discard_account_phone_when_profile_is_missing(self):
+        self.user.phone = "+212600000004"
+        self.user.save(update_fields=["phone"])
+
+        response = self.client.patch(
+            "/api/me/",
+            {"phone": "+212600000005"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone, "+212600000004")
+        self.assertFalse(UserMember.objects.filter(user=self.user).exists())
+        self.assertNotIn("+212600000004", str(response.data))
+        self.assertNotIn("+212600000005", str(response.data))
+
+    def test_me_requires_backfill_before_replacing_account_only_phone(self):
+        self.user.phone = "+212600000006"
+        self.user.save(update_fields=["phone"])
+        member = UserMember.objects.create(
+            user=self.user,
+            username=self.user.username,
+            phone="   ",
+        )
+
+        response = self.client.patch(
+            "/api/me/",
+            {"phone": "+212600000007"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.user.refresh_from_db()
+        member.refresh_from_db()
+        self.assertEqual(self.user.phone, "+212600000006")
+        self.assertEqual(member.phone, "   ")
+
+    def test_me_treats_whitespace_only_account_phone_as_blank(self):
+        self.user.phone = "   "
+        self.user.save(update_fields=["phone"])
+        member = UserMember.objects.create(
+            user=self.user,
+            username=self.user.username,
+            phone="+212600000008",
+        )
+
+        response = self.client.patch(
+            "/api/me/",
+            {"phone": "+212600000009"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        member.refresh_from_db()
+        self.assertEqual(self.user.phone, "+212600000009")
+        self.assertEqual(member.phone, "+212600000009")
 
     def test_logout_deletes_token(self):
         response = self.client.post("/api/auth/logout/")

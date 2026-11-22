@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 
 from core_data.models import UserMember
+from core_data.phone_reconciliation import PhonePairState, classify_phone_pair
 from dashboard.models import AuditLog
 from .serializers import (
     AuthSyncSerializer,
@@ -228,19 +229,34 @@ def me(request):
         requested_phone = serializer.validated_data["phone"]
         with transaction.atomic():
             user = User.objects.select_for_update().get(pk=request.user.pk)
-            member, _ = UserMember.objects.select_for_update().get_or_create(
-                user=user,
-                defaults={"username": user.username},
+            member = (
+                UserMember.objects.select_for_update()
+                .filter(user=user)
+                .first()
             )
-            if member.phone and user.phone and member.phone != user.phone:
+            phone_state = classify_phone_pair(
+                user.phone,
+                member.phone if member is not None else None,
+                member_exists=member is not None,
+            )
+            if phone_state in {
+                PhonePairState.ACCOUNT_ONLY,
+                PhonePairState.CONFLICT,
+                PhonePairState.ACCOUNT_WITHOUT_MEMBER,
+            }:
                 return Response(
                     {
                         "phone": (
-                            "Existing account and member phone values conflict; "
-                            "manual reconciliation is required."
+                            "Existing phone data must be reconciled before it "
+                            "can be updated."
                         )
                     },
                     status=status.HTTP_409_CONFLICT,
+                )
+            if member is None:
+                member = UserMember.objects.create(
+                    user=user,
+                    username=user.username,
                 )
             member.phone = requested_phone
             member.save(update_fields=["phone"])
