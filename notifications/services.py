@@ -7,6 +7,7 @@ from .models import Notification
 
 
 User = get_user_model()
+DELIVERY_EVENT_ID_UNSET = object()
 
 
 def notification_payload(notification):
@@ -35,6 +36,7 @@ class NotificationService:
         message,
         event=None,
         deduplication_key=None,
+        delivery_event_id=DELIVERY_EVENT_ID_UNSET,
     ):
         if not isinstance(recipient, User) or not recipient.pk:
             raise ValidationError("Recipient must be a persisted user.")
@@ -75,6 +77,8 @@ class NotificationService:
 
             if created:
                 payload = notification_payload(notification)
+                if delivery_event_id is not DELIVERY_EVENT_ID_UNSET:
+                    payload["data"]["event_id"] = delivery_event_id
                 transaction.on_commit(
                     lambda user_id=recipient.pk, data=payload: deliver_to_user(
                         user_id, data

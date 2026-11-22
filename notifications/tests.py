@@ -357,3 +357,135 @@ class NotificationTriggerTests(TestCase):
         self.assertEqual((first.status_code, second.status_code, cancel.status_code, repeated_cancel.status_code), (201, 200, 200, 200))
         self.assertEqual(Notification.objects.filter(recipient=self.member, notification_type=Notification.Type.RSVP_CONFIRMED).count(), 1)
         self.assertEqual(Notification.objects.filter(recipient=self.member, notification_type=Notification.Type.RSVP_CANCELLED).count(), 1)
+
+
+class EventDeletionNotificationTests(TestCase):
+    def setUp(self):
+        self.department = Department.objects.create(title="Event Delete Department")
+        self.admin = User.objects.create_superuser(
+            username="event-delete-admin",
+            password="test-password",
+        )
+        self.attendee = User.objects.create_user(
+            username="event-delete-attendee",
+            password="test-password",
+        )
+        self.unrelated = User.objects.create_user(
+            username="event-delete-unrelated",
+            password="test-password",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.admin)
+
+    def create_event_with_rsvp(self, status_value, *, attendee=None):
+        event = ClubEvent.objects.create(
+            name=f"Delete Me {status_value}",
+            parent_id=self.department,
+            status=status_value,
+        )
+        Rsvp.objects.create(
+            event=event,
+            user=attendee or self.attendee,
+        )
+        return event
+
+    def assert_active_deletion_notifies_attendee(self, status_value):
+        event = self.create_event_with_rsvp(status_value)
+        event_id = event.pk
+        event_name = event.name
+
+        with patch("notifications.services.deliver_to_user") as delivery, patch(
+            "core_data.views.broadcast_calendar_event"
+        ) as calendar_broadcast, self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(f"/api/club-events/{event_id}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ClubEvent.objects.filter(pk=event_id).exists())
+        self.assertFalse(Rsvp.objects.filter(event_id=event_id).exists())
+
+        notification = Notification.objects.get(recipient=self.attendee)
+        self.assertEqual(
+            notification.notification_type,
+            Notification.Type.EVENT_CANCELLED,
+        )
+        self.assertIn(event_name, notification.message)
+        self.assertIsNone(notification.event_id)
+        self.assertFalse(Notification.objects.filter(recipient=self.unrelated).exists())
+        delivery.assert_called_once()
+        self.assertIsNone(delivery.call_args.args[1]["data"]["event_id"])
+        calendar_broadcast.assert_called_once_with(
+            "event_deleted",
+            {"id": event_id},
+        )
+
+    def test_deleting_planned_event_notifies_rsvp_attendee(self):
+        self.assert_active_deletion_notifies_attendee("planned")
+
+    def test_deleting_ongoing_event_notifies_rsvp_attendee(self):
+        self.assert_active_deletion_notifies_attendee("ongoing")
+
+    def test_deleting_cancelled_event_creates_no_additional_notification(self):
+        event = self.create_event_with_rsvp("cancelled")
+        existing = Notification.objects.create(
+            recipient=self.attendee,
+            notification_type=Notification.Type.EVENT_CANCELLED,
+            title="Event cancelled",
+            message=f'"{event.name}" was cancelled.',
+            event=event,
+            deduplication_key=f"event-change:{event.pk}:cancelled",
+        )
+
+        response = self.client.delete(f"/api/club-events/{event.pk}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Notification.objects.filter(recipient=self.attendee).count(), 1)
+        existing.refresh_from_db()
+        self.assertIsNone(existing.event_id)
+
+    def test_deleting_completed_event_creates_no_notification(self):
+        event = self.create_event_with_rsvp("completed")
+
+        response = self.client.delete(f"/api/club-events/{event.pk}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_inactive_rsvp_attendee_is_not_notified(self):
+        self.attendee.is_active = False
+        self.attendee.save(update_fields=["is_active"])
+        event = self.create_event_with_rsvp("planned")
+
+        response = self.client.delete(f"/api/club-events/{event.pk}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_outer_rollback_preserves_event_and_sends_nothing(self):
+        event = self.create_event_with_rsvp("planned")
+
+        with patch("notifications.services.deliver_to_user") as delivery, patch(
+            "core_data.views.broadcast_calendar_event"
+        ) as calendar_broadcast:
+            with self.assertRaisesRegex(RuntimeError, "force rollback"):
+                with transaction.atomic():
+                    from core_data.views import ClubEventViewSet
+
+                    ClubEventViewSet().perform_destroy(event)
+                    raise RuntimeError("force rollback")
+
+        self.assertTrue(ClubEvent.objects.filter(pk=event.pk).exists())
+        self.assertTrue(Rsvp.objects.filter(event=event, user=self.attendee).exists())
+        self.assertFalse(Notification.objects.exists())
+        delivery.assert_not_called()
+        calendar_broadcast.assert_not_called()
+
+    def test_existing_delete_permission_still_rejects_unrelated_student(self):
+        event = self.create_event_with_rsvp("planned")
+        self.client.force_authenticate(self.unrelated)
+
+        response = self.client.delete(f"/api/club-events/{event.pk}/")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(ClubEvent.objects.filter(pk=event.pk).exists())
+        self.assertTrue(Rsvp.objects.filter(event=event).exists())
+        self.assertFalse(Notification.objects.exists())

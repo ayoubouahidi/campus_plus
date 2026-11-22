@@ -692,8 +692,40 @@ class ClubEventViewSet(viewsets.ModelViewSet):
 
     # [ahmed] Broadcast when an event is deleted.
     def perform_destroy(self, instance):
+        if isinstance(instance, ClubEvent):
+            with transaction.atomic():
+                # Use the current locked row so status and RSVP eligibility
+                # cannot be based on a stale pre-permission-check instance.
+                locked_event = ClubEvent.objects.select_for_update().get(
+                    pk=instance.pk,
+                )
+                return self._perform_destroy(locked_event)
+        # Preserve the lightweight hook contract used by broadcast unit tests.
+        return self._perform_destroy(instance)
+
+    def _perform_destroy(self, instance):
         # [ahmed] Keep the event ID before deleting it.
         event_id = instance.pk
+
+        if (
+            isinstance(instance, ClubEvent)
+            and instance.status in {"planned", "ongoing"}
+        ):
+            recipient_ids = list(
+                instance.rsvps.filter(user__is_active=True)
+                .values_list("user_id", flat=True)
+            )
+            NotificationService.create_for_users(
+                recipients=recipient_ids,
+                notification_type=Notification.Type.EVENT_CANCELLED,
+                title="Event removed",
+                message=(
+                    f'"{instance.name}" was removed and is no longer available.'
+                ),
+                event=instance,
+                deduplication_key=f"event-deleted:{event_id}",
+                delivery_event_id=None,
+            )
 
         # [ahmed] Delete the event from the database.
         instance.delete()
