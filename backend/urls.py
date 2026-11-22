@@ -33,6 +33,7 @@ from core_data.views import (
 )
 from backend.views import HealthLiveView, HealthView
 from realtime.views import RealtimeTokenView
+from notifications.views import NotificationViewSet
 
 
 router = DefaultRouter()
@@ -59,6 +60,12 @@ router.register(
     "clubs",
     ClubViewSet,
     basename="club",
+)
+
+router.register(
+    "notifications",
+    NotificationViewSet,
+    basename="notification",
 )
 
 

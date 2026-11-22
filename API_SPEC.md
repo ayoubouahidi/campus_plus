@@ -309,6 +309,119 @@ The legacy `POST /api/signup/` endpoint also exists and is documented in
 OpenAPI. It is not Ayoub's unfinished custom-user `/auth/sync`, `/api/me/`, and
 logout contract.
 
+## Personal notification API
+
+All endpoints in this section require the configured DRF authentication. They
+derive the recipient exclusively from `request.user`; there is no public create
+endpoint and no accepted `user_id` parameter.
+
+### List personal notifications
+
+`GET /api/notifications/` returns only the authenticated user's records, newest
+first, in the standard `{count, next, previous, results}` page envelope. The
+default page size is 20 and `page_size` accepts 1–100. `unread=true` returns
+unread records and `unread=false` returns read records.
+
+Each result has this shape:
+
+```json
+{
+  "id": 12,
+  "notification_type": "event_updated",
+  "title": "Event updated",
+  "message": "An event you registered for changed.",
+  "is_read": false,
+  "created_at": "2026-11-22T16:00:00Z",
+  "read_at": null,
+  "event_id": 24
+}
+```
+
+Supported types are `new_event`, `event_updated`, `event_cancelled`,
+`rsvp_confirmed`, `rsvp_cancelled`, and `club_announcement`. The announcement
+type is a safe integration point; automatic dashboard announcement fanout is
+not enabled because that publication flow is dashboard-owned.
+
+### Unread and read-state operations
+
+- `GET /api/notifications/unread-count/` returns `{"unread_count": 4}`.
+- `POST /api/notifications/{id}/read/` idempotently marks one owned record read
+  and returns that notification. Another user's ID returns 404.
+- `POST /api/notifications/read-all/` updates only the caller's unread records
+  and returns `{"updated_count": 3, "unread_count": 0}`. Existing `read_at`
+  values are preserved.
+
+Unsupported writes return 405. Anonymous requests return 401.
+
+## Personal notification WebSocket
+
+Connect to `/ws/notifications/` using the same origin validation and
+authentication stack as `/ws/calendar/`. In production JWT mode the browser
+sends the backend-issued access JWT only in the trusted `ws_access` cookie;
+query-string JWTs are rejected. The server derives the private group from the
+authenticated user ID, so clients cannot select a recipient or group.
+
+After acceptance the server sends:
+
+```json
+{"type":"connection_established","message":"Subscribed to personal notifications"}
+```
+
+followed by the authoritative-at-connect-time count:
+
+```json
+{"type":"notification.unread_count","data":{"unread_count":4}}
+```
+
+New records use:
+
+```json
+{
+  "type": "notification.created",
+  "data": {
+    "id": 12,
+    "notification_type": "event_updated",
+    "title": "Event updated",
+    "message": "An event you registered for changed.",
+    "is_read": false,
+    "created_at": "2026-11-22T16:00:00Z",
+    "event_id": 24
+  }
+}
+```
+
+Read operations may publish `notification.unread_count` to reconcile other open
+tabs. The socket is server-to-client only; use REST for state changes. JWT
+expiry closes with code 4401 and removes group membership, matching the calendar
+consumer lifecycle.
+
+PostgreSQL is authoritative and Redis delivery is best effort. On initial load,
+reload, or reconnect, fetch the REST list and unread count. Deduplicate live
+items by notification `id`. To avoid a fetch/message race, start the socket,
+buffer live messages while fetching REST state, then merge by ID and apply the
+newest count/state. A disconnected client loses live messages but not history.
+
+### Automatic recipient policy
+
+| Business action | Recipients | Duplicate rule |
+| --- | --- | --- |
+| New event with a Club | Active users linked through `UserMember.club_id` | Once per event/user |
+| Meaningful registered-event change | Active RSVP users | Once per saved change/user |
+| Status transition to cancelled | Active RSVP users | Cancellation-specific alert |
+| First successful RSVP | Registering user | Once per RSVP row |
+| Successful RSVP cancellation | Cancelling user | Once per deleted RSVP row |
+| Dashboard announcement | Not automatically enabled | Dashboard integration pending owner approval |
+
+All notification rows are created inside the business transaction and live
+messages are scheduled with `transaction.on_commit()`. Failed transactions send
+nothing. Redis failures are logged without payload or recipient details and do
+not roll back persistent history. Event deletion sets `event_id` to null so the
+text history remains serializable without a dangling relationship.
+
+Fanout is synchronous and appropriate for the current Club membership scale.
+Large future audiences would require an approved background worker; this feature
+does not introduce Celery or another queue implicitly.
+
 ## Explicitly unavailable features
 
 The schema intentionally does not claim the following:
