@@ -4325,7 +4325,7 @@ The backend was merged on branch `Ahmed` (PR #4, `e04d4a3`: Ahmed's API + Ayoub'
 | 14.1 | Raw types, mappers, API client, server token reader, data functions with the dev mock fallback; every server page switched to them | ✅ validated 2026-11-22 |
 | 14.2 | Run branch `Ahmed`'s Django locally, set `BACKEND_URL`, check every page against real data | ✅ validated 2026-11-22 |
 | 14.3 | RSVP and attendees for real: server action with the token, rollback on failure, "Event full" (409), "Cancelled" badge | ✅ validated 2026-11-22 |
-| 14.4 | Search (⌘K) and notifications off the mocks (they run in the browser: a route handler or the realtime feed) | ⏳ |
+| 14.4 | Search (⌘K) and notifications off the mocks (they run in the browser: a route handler or the realtime feed) | ✅ validated 2026-11-22 |
 
 ### 14.1 Raw types, mappers, client and data functions (Step 14.1, 2026-11-22)
 
@@ -4457,3 +4457,39 @@ const onRsvpToggle = useRsvp(useCallback<UpdateEvent>(
 ```
 
 **Verified (2026-11-22, against branch `Ahmed`'s Django from §14.2).** The server action called over HTTP exactly as the browser does (`Next-Action` header, seeded student's session): RSVP to event 2 → `{ ok: true, state: { rsvps_count: 1, has_user_rsvpd: true } }`; again → same (Django idempotent); cancel → `rsvps_count: 0`; full event 5 → `{ ok: false, error: 'full', rsvps_count: 2 }`; unknown event → `not-found`; no session → `signed-out`; Django's count afterwards: 0 (state restored). Pages: signed out, the cancelled final has its badge in the feed; signed in, Pair Programming Night shows "Full", `/events/5` "This event is full · No places left", `/events/1` "146 places left", `/events/4` "Cancelled" + "This event was cancelled" and no count. `tsc` passes; ESLint: the same 6 old findings. In the browser (checklist on `/test`): the optimistic flip, the toasts, rollback with Django stopped, French and Arabic.
+
+### 14.4 Search (⌘K) and the notification feed off the mocks (Step 14.4, 2026-11-22)
+
+**Files:** `src/app/search/actions.ts` (new, `loadSearchData`), `src/hooks/useCampusSearch.ts`, `src/components/search/SearchPalette.tsx`, `src/lib/data.ts` (`getInitialNotifications`), `src/components/ui/layout/AppShell.tsx` (`initialNotifications` prop), `src/app/layout.tsx`, `src/i18n/messages/{en,fr,ar}.ts` (`Search.loading`, `Search.unavailable`). Test: `src/app/test/page.tsx`.
+**Status:** ✅ Validated (2026-11-22). After this step, no page or shell part imports `lib/mockData.ts` in the browser any more; only `lib/data.ts` (server) and the dev logins do.
+
+**Business purpose.** Search must find the events and clubs that really exist, and the bell must never show invented notifications to real students.
+
+**Core concepts & decisions.**
+- **Search data through a server action, ranking unchanged.** The palette runs in the browser, which can't reach Django's internal address. `loadSearchData()` (`'use server'`) reads every event and club through `lib/data.ts` (Django, or the mocks in dev) and returns them; `useCampusSearch` keeps ranking them with `lib/search.ts` exactly as before (same rules, same languages). One load when the palette first opens, shared by the tab and reused for 60 s (reopening is instant; a new event appears at the next open after a minute); a failed load is forgotten so the next open retries.
+- **Search data is public data only.** Whoever asks, events go through `forSignedOutVisitor` (no attendee names, no "Going") and clubs lose `president_email` / `president_phone`. The palette shows neither, so neither is put in the browser.
+- **Palette states:** while loading, "Loading events and clubs…"; if the load failed, "Search isn't available right now. Try again in a moment." (both `role="status"`), instead of a misleading "No events or clubs match".
+- **Notifications: the server decides the starting feed.** Django has no notifications endpoint: in this design the feed is built from realtime messages (Phase 6, `docs/ahmed/REALTIME_FRONTEND_HANDOFF.md` on branch `Ahmed`). `getInitialNotifications()` returns the mocks only in development without Django (the popover stays testable) and `[]` otherwise, and never throws (the root layout calls it). `AppShell` takes it as `initialNotifications` instead of importing the mocks.
+- **Gotcha (again): a new folder under `src/app/` needs `docker compose restart frontend`.** `src/app/search/` wasn't seen by the running dev server ("Module not found: '@/app/search/actions'") until a restart (same as §12.1). A restart keeps the container's `BACKEND_URL` and its network links (§14.2).
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Load everything once, rank in the browser | Ask Django on each keystroke (`?search=`) | Instant results while typing, the same ranking as before, one request per minute. Fine at campus size (tens to hundreds of events); revisit with a debounced `?search=` if the lists grow into thousands. |
+| Server action | A route handler `GET /api/search` | nginx sends `/api/` to Django (`infrastructure/nginx/nginx.conf`), so a Next route there would need an nginx exception; a server action needs no route. |
+| Public data only in search | Search with the student's token | The palette never shows RSVP state or contacts; sending them would only widen what sits in the browser. |
+| Empty feed with Django | Keep the mock notifications until Phase 6 | Invented notifications in front of real students are worse than an empty, honest bell. |
+
+**Contract.**
+```ts
+// src/app/search/actions.ts ('use server')
+loadSearchData(): Promise<{ events: EventItem[]; clubs: Club[] }>; // public view of every event and club
+// src/hooks/useCampusSearch.ts
+useCampusSearch(query): { results: SearchResults; suggestions: EventItem[]; status: 'loading' | 'ready' | 'error' };
+// src/lib/data.ts
+getInitialNotifications(): AppNotification[]; // mocks in dev without Django, otherwise []
+// AppShell: new required prop initialNotifications: AppNotification[]
+```
+
+**Verified (2026-11-22, local Django from §14.2).** `/test` shows what `loadSearchData()` returns from Django: the 5 seeded events and 4 clubs; attendee names sent `false`, "Going" flags sent `false`, club contacts sent `false`; the bell's starting feed: 0. `tsc` passes; ESLint: the same 6 old findings (two new "unused variable" warnings from a destructuring were removed). The palette in the browser (loading text, results, the one-minute reuse, the unavailable text with Django stopped): checklist on `/test`.

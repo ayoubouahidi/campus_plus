@@ -1,20 +1,59 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { mockClubs, mockEvents } from '@/lib/mockData';
+import { loadSearchData } from '@/app/search/actions';
 import { getSearchSuggestions, searchCampus, type SearchResults } from '@/lib/search';
-import type { EventItem } from '@/types/api';
+import type { Club, EventItem } from '@/types/api';
 
-// The palette's only data source. Today: synchronous filtering of the mocks. Phase 7: debounce the query
-// (useDebouncedValue) and fetch GET /api/search?q=…, keeping this return shape so the palette doesn't change.
-// Runs in the browser only (the palette mounts after it opens), so Date.now() here never meets hydration.
+type SearchData = { events: EventItem[]; clubs: Club[] };
+
+// One shared load for the whole tab, reused for a minute: reopening the palette is instant, and a new event
+// published meanwhile shows up at the next open after that. A failed load is forgotten, so the next open
+// retries instead of keeping an empty palette.
+const FRESH_FOR_MS = 60_000;
+let cached: { at: number; promise: Promise<SearchData> } | null = null;
+
+const getSearchData = (): Promise<SearchData> => {
+  if (!cached || Date.now() - cached.at > FRESH_FOR_MS) {
+    const promise = loadSearchData();
+    cached = { at: Date.now(), promise };
+    promise.catch(() => {
+      if (cached?.promise === promise) cached = null;
+    });
+  }
+  return cached.promise;
+};
+
+const EMPTY: SearchData = { events: [], clubs: [] };
+
+// The palette's data source (Step 14.4): events and clubs from Django (or the mocks in dev) through the
+// loadSearchData server action, ranked here with lib/search.ts. Runs in the browser only (the palette mounts
+// after it opens), so Date.now() here never meets hydration.
 // Categories also match in the active language (Step 12.3): "musique" finds Music events in French.
-export const useCampusSearch = (query: string): { results: SearchResults; suggestions: EventItem[] } => {
+export const useCampusSearch = (
+  query: string
+): { results: SearchResults; suggestions: EventItem[]; status: 'loading' | 'ready' | 'error' } => {
   const tCategory = useTranslations('Categories');
+  const [data, setData] = useState<SearchData | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getSearchData().then(
+      (loaded) => active && setData(loaded),
+      () => active && setFailed(true)
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return useMemo(() => {
     const now = Date.now();
+    const source = data ?? EMPTY;
     return {
-      results: searchCampus(query, { events: mockEvents, clubs: mockClubs }, now, (category) => tCategory(category)),
-      suggestions: getSearchSuggestions(mockEvents, now),
+      results: searchCampus(query, source, now, (category) => tCategory(category)),
+      suggestions: getSearchSuggestions(source.events, now),
+      status: data ? 'ready' : failed ? 'error' : 'loading',
     };
-  }, [query, tCategory]);
+  }, [query, tCategory, data, failed]);
 };

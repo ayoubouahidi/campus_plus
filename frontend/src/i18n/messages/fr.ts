@@ -52,6 +52,8 @@ const fr = {
     arrivedMany: '{count, plural, one {# nouvelle notification} other {# nouvelles notifications}}',
   },
   Search: {
+    loading: 'Chargement des événements et des clubs…',
+    unavailable: 'La recherche n’est pas disponible pour le moment. Réessayez dans un instant.',
     title: 'Rechercher des événements et des clubs',
     placeholder: 'Rechercher des événements et des clubs…',
     results: 'Résultats de la recherche',

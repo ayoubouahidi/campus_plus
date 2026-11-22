@@ -50,7 +50,7 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
   const listboxId = `${baseId}-listbox`;
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
-  const { results, suggestions } = useCampusSearch(query);
+  const { results, suggestions, status } = useCampusSearch(query);
 
   const hasQuery = query.trim().length > 0;
   const groups: PaletteGroup[] = hasQuery
@@ -135,7 +135,13 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
       </p>
 
       <div id={listboxId} role="listbox" aria-label={t('results')} className="max-h-[60vh] overflow-y-auto p-2">
-        {hasQuery && options.length === 0 && (
+        {/* While the data loads (first open) or if it couldn't load, say so instead of "no match". */}
+        {status !== 'ready' && (
+          <p role="status" className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            {t(status === 'loading' ? 'loading' : 'unavailable')}
+          </p>
+        )}
+        {status === 'ready' && hasQuery && options.length === 0 && (
           <p className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
             {t('noMatch', { query: query.trim() })}
           </p>

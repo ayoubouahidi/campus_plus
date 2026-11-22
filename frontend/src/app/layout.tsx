@@ -9,6 +9,7 @@ import { AppShell } from "@/components/ui/layout/AppShell";
 import { CampusBackground } from "@/components/ui/layout/CampusBackground";
 import { Footer, FooterBrand, FooterLegal, FooterNav } from "@/components/ui/layout/Footer";
 import { getSessionState } from "@/auth";
+import { getInitialNotifications } from "@/lib/data";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -84,6 +85,7 @@ export default async function RootLayout({
             <SessionProvider initialSession={session}>
               {/* Footer is built here, on the server, and passed through the client shell as a slot */}
               <AppShell
+                initialNotifications={getInitialNotifications()}
                 footer={
                   <Footer>
                     <FooterBrand />

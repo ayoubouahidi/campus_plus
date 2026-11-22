@@ -28,7 +28,6 @@ import { useSession } from '@/components/providers/SessionProvider';
 import { SearchPalette } from '@/components/search/SearchPalette';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { FOOTER_GROUPS, isFullScreenRoute } from '@/lib/navigation';
-import { mockNotifications } from '@/lib/mockData';
 import { AppNotification } from '@/types/notification';
 
 // The drawer already lists the Explore pages at the top, so it only repeats the external links.
@@ -38,16 +37,19 @@ export interface AppShellProps {
   children: React.ReactNode;
   // Rendered by the (server) root layout and passed in, so the page footer stays a Server Component.
   footer: React.ReactNode;
+  // Starting feed, decided on the server (Step 14.4): the mocks in dev without Django, [] with Django (no
+  // notifications API: Phase 6 fills the feed from the realtime WebSocket).
+  initialNotifications: AppNotification[];
 }
 
 // The one client component that wires the shell together: it owns the state the parts share
 // (search palette, notification feed) and reads the session. Pages render inside <main>.
-export const AppShell = ({ children, footer }: AppShellProps) => {
+export const AppShell = ({ children, footer, initialNotifications }: AppShellProps) => {
   const { session } = useSession();
   const t = useTranslations('MobileNav');
 
-  // Mock feed until the Phase 6 WebSocket layer owns it
-  const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
+  // Phase 6: the WebSocket layer adds to this feed.
+  const [notifications, setNotifications] = useState<AppNotification[]>(initialNotifications);
 
   const markRead = useCallback((id: string) => {
     setNotifications((current) =>

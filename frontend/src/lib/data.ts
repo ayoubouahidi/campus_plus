@@ -3,7 +3,8 @@ import type { AttendeePreview, Club, Department, EventItem } from '@/types/api';
 import { ApiError, apiFetch, apiFetchAll, hasBackend, ApiUnavailable } from '@/lib/api/client';
 import { toAttendee, toClub, toClubs, toDepartment, toEventItem } from '@/lib/api/mappers';
 import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawPage, RawRsvpState } from '@/lib/api/raw';
-import { getMockAttendees, mockClubs, mockDepartments, mockEvents } from '@/lib/mockData';
+import { getMockAttendees, mockClubs, mockDepartments, mockEvents, mockNotifications } from '@/lib/mockData';
+import type { AppNotification } from '@/types/notification';
 
 // Where server pages get their data (Step 14.1, DOCS.md §14). One function per need; each one:
 //  - with BACKEND_URL: calls Django (lib/api/client.ts) and maps the answer (lib/api/mappers.ts);
@@ -96,6 +97,14 @@ export const getClub = cache(async (slug: string, token: string | null = null): 
     throw error;
   }
 });
+
+/* ------------------------------ Notifications ----------------------------- */
+
+// The bell's starting feed (Step 14.4). Django has no notifications endpoint: the feed is built from realtime
+// events in Phase 6. Until then: the mocks in dev without Django (to keep the popover testable), otherwise
+// empty, never fake notifications in front of real students. Never throws (read by the root layout).
+export const getInitialNotifications = (): AppNotification[] =>
+  !hasBackend() && process.env.NODE_ENV !== 'production' ? mockNotifications : [];
 
 /* ------------------------------- Departments ------------------------------ */
 

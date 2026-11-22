@@ -54,6 +54,8 @@ const en = {
     arrivedMany: '{count, plural, other {# new notifications}}',
   },
   Search: {
+    loading: 'Loading events and clubs…',
+    unavailable: 'Search isn’t available right now. Try again in a moment.',
     title: 'Search events and clubs',
     placeholder: 'Search events and clubs…',
     results: 'Search results',
