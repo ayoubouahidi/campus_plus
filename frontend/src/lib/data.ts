@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type { AttendeePreview, Club, Department, EventItem } from '@/types/api';
 import { ApiError, apiFetch, apiFetchAll, hasBackend, ApiUnavailable } from '@/lib/api/client';
 import { toAttendee, toClub, toClubs, toDepartment, toEventItem } from '@/lib/api/mappers';
-import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawPage } from '@/lib/api/raw';
+import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawPage, RawRsvpState } from '@/lib/api/raw';
 import { getMockAttendees, mockClubs, mockDepartments, mockEvents } from '@/lib/mockData';
 
 // Where server pages get their data (Step 14.1, DOCS.md §14). One function per need; each one:
@@ -13,7 +13,7 @@ import { getMockAttendees, mockClubs, mockDepartments, mockEvents } from '@/lib/
 // Pass `token` (getBackendToken) when the visitor is signed in: Django then fills has_user_rsvpd and the
 // attendee previews. Server only.
 
-const mocksOnly = (): boolean => {
+export const mocksOnly = (): boolean => {
   if (hasBackend()) return false;
   if (process.env.NODE_ENV === 'production') throw new ApiUnavailable('(any)', new Error('BACKEND_URL is not set'));
   return true;
@@ -62,6 +62,20 @@ export const getAttendees = async (event: EventItem, token: string | null): Prom
   if (!token) return [];
   const page = await apiFetch<RawPage<RawAttendee>>(`/api/club-events/${event.id}/attendees/?page_size=100`, { token });
   return page.results.map(toAttendee);
+};
+
+// RSVP or cancel (Step 14.3). POST and DELETE are idempotent on Django's side. Throws ApiError (401 signed out,
+// 404 unknown event, 409 full: body carries the current count) or ApiUnavailable; the server action sorts them.
+export const setRsvp = async (
+  eventId: string,
+  going: boolean,
+  token: string
+): Promise<{ rsvps_count: number; has_user_rsvpd: boolean }> => {
+  const state = await apiFetch<RawRsvpState>(`/api/club-events/${encodeURIComponent(eventId)}/rsvp/`, {
+    method: going ? 'POST' : 'DELETE',
+    token,
+  });
+  return { rsvps_count: state.rsvps_count, has_user_rsvpd: state.has_user_rsvpd };
 };
 
 /* ---------------------------------- Clubs -------------------------------- */

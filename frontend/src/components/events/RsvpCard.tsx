@@ -8,6 +8,7 @@ import type { SessionStatus } from '@/types/session';
 import { Button } from '@/components/ui/Button';
 import { CheckIcon } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
+import { isCancelled, isFull, spotsLeft } from '@/lib/rsvp';
 
 /* --------------------------------- Types ---------------------------------- */
 
@@ -23,21 +24,26 @@ export interface RsvpCardProps extends Omit<React.HTMLAttributes<HTMLElement>, '
 /* ---------------------------------- State --------------------------------- */
 
 // Everything the card can show, resolved once, then looked up in tables (no nested ternaries in JSX).
-type RsvpState = 'ended' | 'loading' | 'signedOut' | 'going' | 'notGoing';
+// Step 14.3: 'cancelled' wins over everything (nothing to join); 'full' only for someone not going yet.
+type RsvpState = 'cancelled' | 'ended' | 'loading' | 'signedOut' | 'going' | 'full' | 'notGoing';
 
 const getRsvpState = (event: EventItem, hasEnded: boolean, session: SessionStatus): RsvpState => {
+  if (isCancelled(event)) return 'cancelled';
   if (hasEnded) return 'ended';
   if (session === 'loading') return 'loading';
   if (session === 'signed-out') return 'signedOut';
-  return event.has_user_rsvpd ? 'going' : 'notGoing';
+  if (event.has_user_rsvpd) return 'going';
+  return isFull(event) ? 'full' : 'notGoing';
 };
 
 // The status line above the count (a key of the Rsvp messages); null = no status line.
-const STATUS: Record<RsvpState, { key: 'ended' | 'youreGoing'; tone: string } | null> = {
+const STATUS: Record<RsvpState, { key: 'ended' | 'youreGoing' | 'cancelledStatus' | 'fullStatus'; tone: string } | null> = {
+  cancelled: { key: 'cancelledStatus', tone: 'text-rose-700 dark:text-rose-400' },
   ended: { key: 'ended', tone: 'text-slate-700 dark:text-slate-300' },
   loading: null,
   signedOut: null,
   going: { key: 'youreGoing', tone: 'text-emerald-700 dark:text-emerald-400' },
+  full: { key: 'fullStatus', tone: 'text-amber-700 dark:text-amber-400' },
   notGoing: null,
 };
 
@@ -57,10 +63,13 @@ export const RsvpCard = React.forwardRef<HTMLElement, RsvpCardProps>(
     const { session } = useSession();
     const state = getRsvpState(event, hasEnded, session.status);
     const status = STATUS[state];
+    const places = spotsLeft(event);
     const t = useTranslations('Rsvp');
 
     const actions: Record<RsvpState, React.ReactNode> = {
+      cancelled: null,
       ended: null,
+      full: null,
       loading: (
         <Button isLoading disabled>
           {t('rsvp')}
@@ -100,7 +109,16 @@ export const RsvpCard = React.forwardRef<HTMLElement, RsvpCardProps>(
                 {t(status.key)}
               </p>
             )}
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t(state === 'ended' ? 'countEnded' : 'countUpcoming', { count: event.rsvps_count })}</p>
+            {/* No count on a cancelled event: "Be the first to RSVP" would invite something impossible. */}
+            {state !== 'cancelled' && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {t(state === 'ended' ? 'countEnded' : 'countUpcoming', { count: event.rsvps_count })}
+              </p>
+            )}
+            {/* Places left, while it can still change (not for ended or cancelled events). */}
+            {places !== null && state !== 'ended' && state !== 'cancelled' && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('spotsLeft', { count: places })}</p>
+            )}
           </div>
 
           {actions[state] && <div className="shrink-0 lg:[&>*]:w-full">{actions[state]}</div>}

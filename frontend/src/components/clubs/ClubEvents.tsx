@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
 import { EventGrid } from '@/components/events/EventGrid';
 import { PastEventList } from '@/components/events/PastEventList';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NAV_ICONS } from '@/components/ui/layout/navIcons';
-import { useRsvpToast } from '@/hooks/useRsvpToast';
-import { toggleRsvp } from '@/lib/events';
+import { useRsvp, type UpdateEvent } from '@/hooks/useRsvp';
 import type { EventSchedule } from '@/lib/time';
 
 export interface ClubEventsProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -26,14 +25,15 @@ const CalendarIcon = NAV_ICONS.calendar;
 export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
   ({ upcoming, past, schedules, className = '', ...props }, ref) => {
     const [events, setEvents] = useState(upcoming);
-    const announceRsvp = useRsvpToast();
     const t = useTranslations('Clubs');
 
-    // Optimistic (Phase 7 sends the request). Toast decided outside the state updater.
-    const handleRsvpToggle = (before: EventItem) => {
-      setEvents((current) => current.map((item) => (item.id === before.id ? toggleRsvp(item) : item)));
-      announceRsvp(before);
-    };
+    // Saved in Django, optimistic with rollback (useRsvp, Step 14.3).
+    const handleRsvpToggle = useRsvp(
+      useCallback<UpdateEvent>(
+        (id, change) => setEvents((current) => current.map((item) => (item.id === id ? change(item) : item))),
+        []
+      )
+    );
 
     return (
       <div ref={ref} className={`space-y-12 ${className}`} {...props}>

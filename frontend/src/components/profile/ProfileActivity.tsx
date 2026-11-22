@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
 import { EventGrid } from '@/components/events/EventGrid';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { useRsvpToast } from '@/hooks/useRsvpToast';
-import { toggleRsvp } from '@/lib/events';
+import { useRsvp, type UpdateEvent } from '@/hooks/useRsvp';
 import type { DateTile, EventSchedule } from '@/lib/time';
 import { AttendedEventList } from './AttendedEventList';
 import { StatCalendarIcon, StatCheckIcon, StatClubIcon } from './profileIcons';
@@ -115,16 +114,18 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
       setEvents(upcoming);
     }
     const [tab, setTab] = useState('going');
-    const announceRsvp = useRsvpToast();
     const t = useTranslations('Profile');
 
     const goingCount = events.filter((event) => event.has_user_rsvpd).length;
     const recent = past.slice(0, RECENT_LIMIT);
 
-    const handleRsvpToggle = (before: EventItem) => {
-      setEvents((current) => current.map((item) => (item.id === before.id ? toggleRsvp(item) : item)));
-      announceRsvp(before);
-    };
+    // Saved in Django, optimistic with rollback (useRsvp, Step 14.3).
+    const handleRsvpToggle = useRsvp(
+      useCallback<UpdateEvent>(
+        (id, change) => setEvents((current) => current.map((item) => (item.id === id ? change(item) : item))),
+        []
+      )
+    );
 
     return (
       <div ref={ref} className={`space-y-6 ${className}`} {...props}>

@@ -53,7 +53,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 14.1, the API mapping layer (Django → student site types)</p>
+        <p className="font-semibold">Test page: Step 14.3, RSVP saved in Django, Full and Cancelled events</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -156,14 +156,53 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 14.1)</h3>
+          <h3 className="font-semibold">With the local Django (DOCS §14.2), log in as student@1337.ma</h3>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            <li>
+              <Link href="/events/1" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Hackathon (places left)
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/2" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Jam session (no RSVP yet)
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/5" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Pair Programming (full)
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/4" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Basketball (cancelled)
+              </Link>
+            </li>
+            <li>
+              <Link href="/profile" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Profile
+              </Link>
+            </li>
+            <li>
+              <Link href="/" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Feed
+              </Link>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="font-semibold">What to check (Step 14.3)</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Every page looks exactly as before (feed, calendar, clubs, a club, an event, sign-up, /profile signed in): in dev they still read the mocks, now through lib/data.ts.</li>
-            <li>Mapped event: ids are strings (&quot;3&quot;, &quot;2&quot;), dates unchanged, attendee id &quot;20&quot;, status and capacity kept.</li>
-            <li>Edge event: club_id &quot;&quot;, description &quot;&quot;, unknown category &quot;Workshops&quot; → &quot;EventsOrganization&quot; (a warning in the server log), cancelled kept.</li>
-            <li>Club: logo &quot;&quot;, no president_email / president_phone keys (Django doesn&apos;t send them yet, TEAM_NEEDS BE1). Club without a slug → null (dropped from lists).</li>
-            <li>User: id &quot;42&quot;, avatar_url null, club_id &quot;2&quot;, role BOARD_MEMBER.</li>
-            <li>Against the real backend: next step (run branch Ahmed&apos;s Django locally and set BACKEND_URL).</li>
+            <li>RSVP on the jam session: the button turns &quot;Going&quot; at once, the toast says &quot;You&apos;re going&quot;, the count is Django&apos;s. Reload: it stays (saved). Cancel: back to &quot;RSVP&quot;, reload: still cancelled.</li>
+            <li>Same from the event page, a club page and /profile: one behaviour everywhere.</li>
+            <li>Pair Programming Night (capacity 2, already 2): card shows a disabled &quot;Full&quot;; event page &quot;This event is full&quot;, &quot;No places left&quot;, no button.</li>
+            <li>Hackathon: &quot;146 places left&quot; under the count, changes after RSVP / cancel.</li>
+            <li>Basketball final (cancelled): red &quot;Cancelled&quot; badge on the card, the event page and in the calendar agenda; no RSVP button, no count, &quot;This event was cancelled&quot;.</li>
+            <li>Failure: stop Django (<code>docker stop campusbe-web-1</code>), click RSVP: the button flips, then goes back, red toast &quot;Your RSVP wasn&apos;t saved&quot;. Start it again (<code>docker start campusbe-web-1</code>).</li>
+            <li>Double-click fast on RSVP: only one request (the second click is ignored while the first runs).</li>
+            <li>French and Arabic: Complet / مكتمل, Annulé / ملغاة, places left with plurals, the error toasts.</li>
+            <li>Without Django (mocks): RSVP still works on screen as before, nothing is saved.</li>
           </ul>
         </div>
       </section>

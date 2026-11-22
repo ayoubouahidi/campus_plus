@@ -6,6 +6,7 @@ import { CardBanner } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
 import type { EventDateDetails } from '@/lib/calendar';
+import { isCancelled } from '@/lib/rsvp';
 import { flyerFallbackStyles } from './eventStyles';
 
 /* --------------------------------- Types ---------------------------------- */
@@ -33,6 +34,7 @@ export const EventDetails = React.forwardRef<HTMLElement, EventDetailsProps>(
   ({ event, club, dateDetails, className = '', ...props }, ref) => {
     const t = useTranslations('EventPage');
     const tCategory = useTranslations('Categories');
+    const tRsvp = useTranslations('Rsvp');
     return (
       <article ref={ref} aria-labelledby="event-title" className={`space-y-6 ${className}`} {...props}>
         <CardBanner
@@ -49,7 +51,10 @@ export const EventDetails = React.forwardRef<HTMLElement, EventDetailsProps>(
         />
 
         <header className="space-y-3">
-          <Badge variant={event.category}>{tCategory(event.category)}</Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={event.category}>{tCategory(event.category)}</Badge>
+            {isCancelled(event) && <Badge variant="danger">{tRsvp('cancelled')}</Badge>}
+          </div>
           <h1
             id="event-title"
             className="text-2xl font-bold tracking-tight text-balance text-slate-900 sm:text-3xl dark:text-slate-100"

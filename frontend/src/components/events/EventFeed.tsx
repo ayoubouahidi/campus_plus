@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { EventItem } from '@/types/api';
 import { CategoryFilter } from '@/components/events/CategoryFilter';
@@ -9,8 +9,8 @@ import { FeedToolbar } from '@/components/events/FeedToolbar';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NAV_ICONS } from '@/components/ui/layout/navIcons';
-import { useRsvpToast } from '@/hooks/useRsvpToast';
-import { DEFAULT_EVENT_FILTERS, EventFilters, filterEvents, toggleRsvp } from '@/lib/events';
+import { useRsvp, type UpdateEvent } from '@/hooks/useRsvp';
+import { DEFAULT_EVENT_FILTERS, EventFilters, filterEvents } from '@/lib/events';
 import { EventSchedule } from '@/lib/time';
 
 export interface EventFeedProps {
@@ -26,17 +26,17 @@ const CalendarIcon = NAV_ICONS.calendar;
 export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
   const [events, setEvents] = useState<EventItem[]>(initialEvents);
   const [filters, setFilters] = useState<EventFilters>(DEFAULT_EVENT_FILTERS);
-  const announceRsvp = useRsvpToast();
   const t = useTranslations('Feed');
 
   const visibleEvents = filterEvents(events, filters);
 
-  // Optimistic RSVP (Phase 7 sends the request and rolls back on failure). `event` is the card's current
-  // object, so the toast is decided here, outside the state updater (updaters run twice in Strict Mode).
-  const handleRsvpToggle = (event: EventItem) => {
-    setEvents((current) => current.map((item) => (item.id === event.id ? toggleRsvp(item) : item)));
-    announceRsvp(event);
-  };
+  // Saved in Django, optimistic with rollback and the toast (useRsvp, Step 14.3).
+  const handleRsvpToggle = useRsvp(
+    useCallback<UpdateEvent>(
+      (id, change) => setEvents((current) => current.map((item) => (item.id === id ? change(item) : item))),
+      []
+    )
+  );
 
   return (
     <div className="space-y-8">

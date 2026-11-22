@@ -111,6 +111,18 @@ const ar = {
       '{count, plural, =0 {لم يسجّل أحد حضوره} one {حضر شخص واحد} two {حضر شخصان} few {حضر # أشخاص} many {حضر # شخصًا} other {حضر # شخص}}',
     toastGoing: 'أنت مسجَّل للحضور',
     toastCancelled: 'تم إلغاء الحضور',
+    full: 'مكتمل',
+    fullStatus: 'هذه الفعالية مكتملة',
+    cancelled: 'ملغاة',
+    cancelledStatus: 'أُلغيت هذه الفعالية',
+    spotsLeft:
+      '{count, plural, =0 {لم تبقَ أي أماكن} one {بقي مكان واحد} two {بقي مكانان} few {بقيت # أماكن} many {بقي # مكانًا} other {بقي # مكان}}',
+    errors: {
+      full: { title: 'هذه الفعالية مكتملة', description: 'أخذ شخص آخر آخر مكان قبلك بقليل.' },
+      'signed-out': { title: 'يرجى تسجيل الدخول مجددًا', description: 'انتهت جلستك. سجّل الدخول ثم أعد المحاولة.' },
+      'not-found': { title: 'هذه الفعالية لم تعد موجودة', description: 'ربما حذفها المنظِّم.' },
+      unavailable: { title: 'لم يُحفظ تسجيل حضورك', description: 'حدث خلل من جهتنا. حاول مرة أخرى بعد قليل.' },
+    },
   },
   Attendees: {
     headingUpcoming: 'من سيحضر',

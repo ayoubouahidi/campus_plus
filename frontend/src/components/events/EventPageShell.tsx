@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { AttendeePreview, EventItem } from '@/types/api';
-import { useRsvpToast } from '@/hooks/useRsvpToast';
-import { toggleRsvp } from '@/lib/events';
+import { useRsvp, type UpdateEvent } from '@/hooks/useRsvp';
 import { AttendeesSection } from './AttendeesSection';
 import { RsvpCard } from './RsvpCard';
 
@@ -20,13 +19,8 @@ export interface EventPageShellProps {
 // card, and lays out content (left) + RSVP (right from lg, a bottom bar below).
 export const EventPageShell = ({ initialEvent, hasEnded, attendees, children }: EventPageShellProps) => {
   const [event, setEvent] = useState(initialEvent);
-  const announceRsvp = useRsvpToast();
-
-  // Optimistic (Phase 7 sends the request and rolls back on failure). Toast decided outside the updater.
-  const handleRsvpToggle = (before: EventItem) => {
-    setEvent(toggleRsvp);
-    announceRsvp(before);
-  };
+  // Saved in Django, optimistic with rollback (useRsvp, Step 14.3). One event here, so `id` is always ours.
+  const handleRsvpToggle = useRsvp(useCallback<UpdateEvent>((_id, change) => setEvent(change), []));
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">

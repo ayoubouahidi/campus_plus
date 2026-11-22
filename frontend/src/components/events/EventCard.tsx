@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { CheckIcon, MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
 import { loginHref } from '@/lib/login';
+import { isCancelled, isFull } from '@/lib/rsvp';
 import type { SessionStatus } from '@/types/session';
 import { EventSchedule } from '@/lib/time';
 import { flyerFallbackStyles } from './eventStyles';
@@ -35,12 +36,16 @@ const CalendarIcon = NAV_ICONS.calendar;
 
 // What the RSVP slot shows. Only signed-in students can RSVP (DOCS.md §9.4): signed out, the slot is a link to
 // the login page that comes back to this event; while the session loads, a disabled button (no flash).
-type CardRsvpState = 'loading' | 'signedOut' | 'going' | 'notGoing';
+// Step 14.3: a cancelled event has no RSVP slot (its badge says why); a full one shows a disabled "Full" to
+// anyone not already going (someone going can still cancel).
+type CardRsvpState = 'cancelled' | 'loading' | 'signedOut' | 'going' | 'full' | 'notGoing';
 
-const getCardRsvpState = (status: SessionStatus, isGoing: boolean): CardRsvpState => {
+const getCardRsvpState = (status: SessionStatus, event: EventItem): CardRsvpState => {
+  if (isCancelled(event)) return 'cancelled';
   if (status === 'loading') return 'loading';
   if (status === 'signed-out') return 'signedOut';
-  return isGoing ? 'going' : 'notGoing';
+  if (event.has_user_rsvpd) return 'going';
+  return isFull(event) ? 'full' : 'notGoing';
 };
 
 // Mirrors Button's primary/sm styles: "Log in to RSVP" navigates, so it is a link. relative z-10 keeps it
@@ -50,12 +55,11 @@ const loginLinkStyles =
 
 export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
   ({ event, schedule, onRsvpToggle, headingLevel = 'h3', imageLoading, className = '', ...props }, ref) => {
-    const isGoing = event.has_user_rsvpd;
     // Faces and names are for signed-in students only (DOCS.md §9.3). The server already sends signed-out
     // visitors an empty preview; this also covers the session loading and the /test switcher.
     const { session } = useSession();
     const attendees = session.status === 'signed-in' ? event.attendees_preview : [];
-    const rsvpState = getCardRsvpState(session.status, isGoing);
+    const rsvpState = getCardRsvpState(session.status, event);
     const t = useTranslations('Rsvp');
     const tCategory = useTranslations('Categories');
 
@@ -75,6 +79,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
         <div className="flex-1 space-y-2 p-5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Badge variant={event.category}>{tCategory(event.category)}</Badge>
+            {isCancelled(event) && <Badge variant="danger">{t('cancelled')}</Badge>}
             <time dateTime={event.start_time} className="text-xs font-semibold text-violet-600 dark:text-violet-400">
               {schedule.day} · {schedule.time}
             </time>
@@ -140,6 +145,7 @@ const rsvpActions = (
   // Six "RSVP" buttons are indistinguishable in a screen reader's button list without the title.
   const toTitle = <span className="sr-only">{t('srTitle', { title: event.title })}</span>;
   const actions: Record<CardRsvpState, React.ReactNode> = {
+    cancelled: null,
     loading: (
       <Button size="sm" disabled className="relative z-10 shrink-0">
         {t('rsvp')}
@@ -162,6 +168,12 @@ const rsvpActions = (
       >
         {t('going')}
         <span className="sr-only">{t('srCancel', { title: event.title })}</span>
+      </Button>
+    ),
+    full: (
+      <Button size="sm" variant="secondary" disabled className="relative z-10 shrink-0">
+        {t('full')}
+        {toTitle}
       </Button>
     ),
     notGoing: (

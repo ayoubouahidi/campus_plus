@@ -4324,7 +4324,7 @@ The backend was merged on branch `Ahmed` (PR #4, `e04d4a3`: Ahmed's API + Ayoub'
 | --- | --- | --- |
 | 14.1 | Raw types, mappers, API client, server token reader, data functions with the dev mock fallback; every server page switched to them | ✅ validated 2026-11-22 |
 | 14.2 | Run branch `Ahmed`'s Django locally, set `BACKEND_URL`, check every page against real data | ✅ validated 2026-11-22 |
-| 14.3 | RSVP and attendees for real: server action with the token, rollback on failure, "Event full" (409), "Cancelled" badge | ⏳ |
+| 14.3 | RSVP and attendees for real: server action with the token, rollback on failure, "Event full" (409), "Cancelled" badge | ✅ validated 2026-11-22 |
 | 14.4 | Search (⌘K) and notifications off the mocks (they run in the browser: a route handler or the realtime feed) | ⏳ |
 
 ### 14.1 Raw types, mappers, client and data functions (Step 14.1, 2026-11-22)
@@ -4408,3 +4408,52 @@ const events = await listEvents({ upcoming: true }, token);
 - **Notification bell** still shows the 3 mock notifications, and ⌘K search the mock events → 14.4.
 - **Images:** not tested yet (the seed has no flyers/logos); the `web:8000` host problem is TEAM_NEEDS BE4.
 - Their compose names the backend `web`, like the old backend in ours. In the merged compose there is only one, so `BACKEND_URL=http://web:8000` (BE6).
+
+### 14.3 RSVP saved in Django, "Full" and "Cancelled" events (Step 14.3, 2026-11-22)
+
+**Files:** `src/app/events/actions.ts` (new, `rsvpAction`), `src/lib/rsvp.ts` (new: `RsvpResult`, `RsvpError`, `isCancelled`, `isFull`, `spotsLeft`), `src/hooks/useRsvp.ts` (new), `src/lib/data.ts` (`setRsvp`, `mocksOnly` exported), `src/components/events/{EventFeed,EventPageShell,EventCard,RsvpCard,EventDetails}.tsx`, `src/components/clubs/ClubEvents.tsx`, `src/components/profile/ProfileActivity.tsx`, `src/components/calendar/DayAgenda.tsx`, `src/i18n/messages/{en,fr,ar}.ts` (`Rsvp.full`, `fullStatus`, `cancelled`, `cancelledStatus`, `spotsLeft`, `errors.*`). Test: `src/app/test/page.tsx`.
+**Status:** ✅ Validated (2026-11-22).
+
+**Business purpose.** RSVP is the main feature: a click must really reserve a place, survive a reload, be counted for the organizer, and say clearly when it can't (event full, session expired, server down). Students must also see at a glance that an event is cancelled or full before they plan around it.
+
+**Core concepts & decisions.**
+- **Server action, token stays on the server.** `rsvpAction(eventId, going)` (`'use server'`) checks the session, reads the Django token from the encrypted cookie (`getBackendToken`), and calls `POST` / `DELETE /api/club-events/{id}/rsvp/`. It returns a plain `RsvpResult`, never throws for expected failures: `{ ok: true, state: { rsvps_count, has_user_rsvpd } }` or `{ ok: false, error: 'full' | 'signed-out' | 'not-found' | 'unavailable', rsvps_count? }`. HTTP → error kind is one table (`401/403 → signed-out`, `404 → not-found`, `409 → full`); Django's count from the 409 body is passed on.
+- **One hook for every place** (`useRsvp(update)`). The feed, the event page, club pages and `/profile` had four copies of "toggle + toast". Now each passes an `update(id, change)` for its own state and gets the same behaviour: optimistic flip → server action → on success Django's exact count replaces the guess and the toast plays; on failure the event goes back to how it was (with Django's count when sent, e.g. full) and a red toast explains (`Rsvp.errors.<kind>`). A second click on the same event while its request runs is ignored (a `Set` of pending ids in a ref), so no POST/DELETE race.
+- **Dev without Django:** the action answers `{ ok: true, state: null }`, the screen keeps its optimistic state, as before.
+- **States** (`lib/rsvp.ts`, used by cards, the RSVP card, the event page and the agenda):
+  - *Cancelled* (`status === 'cancelled'`) wins over everything: red "Cancelled" badge next to the category (card, event page, calendar agenda), no RSVP button, RSVP card says "This event was cancelled" and hides the count ("Be the first to RSVP" would invite the impossible).
+  - *Full* (`capacity` reached and the student isn't going): card shows a disabled "Full" (with the event title for screen readers), RSVP card "This event is full" and no button. Someone already going still sees "Cancel RSVP": they can free their place.
+  - *Places left* under the count when the event has a capacity ("146 places left", plural forms in every language), not for ended or cancelled events.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Server action calling Django | Browser calls Django's RSVP endpoint through nginx | The token would have to be readable by JavaScript; the server action keeps it in the httpOnly cookie. |
+| Optimistic + rollback | Wait for Django before changing the button | The click feels instant; failures are rare and visible (rollback + toast). |
+| Toast after success | Toast at click time (Phase 5 behaviour) | "You're going" is only said once it is true. |
+| Ignore clicks while pending | Disable the button | No extra prop through four components; the optimistic state already shows the new label. |
+| `isFull` false for someone going | Full = full for everyone | Otherwise a student in a full event couldn't cancel and free their place. |
+
+**Contract.**
+```ts
+// src/app/events/actions.ts ('use server')
+rsvpAction(eventId: string, going: boolean): Promise<RsvpResult>;
+// src/lib/rsvp.ts
+type RsvpError = 'full' | 'signed-out' | 'not-found' | 'unavailable';
+type RsvpResult = { ok: true; state: { rsvps_count: number; has_user_rsvpd: boolean } | null } | { ok: false; error: RsvpError; rsvps_count?: number };
+isCancelled(event): boolean; isFull(event): boolean; spotsLeft(event): number | null;
+// src/hooks/useRsvp.ts
+type UpdateEvent = (id: string, change: (event: EventItem) => EventItem) => void;
+useRsvp(update: UpdateEvent): (before: EventItem) => Promise<void>;
+```
+
+**Usage.**
+```tsx
+const [events, setEvents] = useState(initialEvents);
+const onRsvpToggle = useRsvp(useCallback<UpdateEvent>(
+  (id, change) => setEvents((list) => list.map((e) => (e.id === id ? change(e) : e))), []));
+<EventGrid events={events} onRsvpToggle={onRsvpToggle} … />
+```
+
+**Verified (2026-11-22, against branch `Ahmed`'s Django from §14.2).** The server action called over HTTP exactly as the browser does (`Next-Action` header, seeded student's session): RSVP to event 2 → `{ ok: true, state: { rsvps_count: 1, has_user_rsvpd: true } }`; again → same (Django idempotent); cancel → `rsvps_count: 0`; full event 5 → `{ ok: false, error: 'full', rsvps_count: 2 }`; unknown event → `not-found`; no session → `signed-out`; Django's count afterwards: 0 (state restored). Pages: signed out, the cancelled final has its badge in the feed; signed in, Pair Programming Night shows "Full", `/events/5` "This event is full · No places left", `/events/1` "146 places left", `/events/4` "Cancelled" + "This event was cancelled" and no count. `tsc` passes; ESLint: the same 6 old findings. In the browser (checklist on `/test`): the optimistic flip, the toasts, rollback with Django stopped, French and Arabic.

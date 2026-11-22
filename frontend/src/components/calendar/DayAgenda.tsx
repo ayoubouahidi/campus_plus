@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCalendarFormat } from '@/hooks/useCalendarFormat';
+import { isCancelled } from '@/lib/rsvp';
 import type { CalendarNames, DayKey, EventTimes } from '@/lib/calendar';
 import type { EventCategory, EventItem } from '@/types/api';
 
@@ -94,6 +95,7 @@ export const DayAgenda = React.forwardRef<HTMLElement, DayAgendaProps>(
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <Badge variant={event.category}>{tCategory(event.category)}</Badge>
+                    {isCancelled(event) && <Badge variant="danger">{tRsvp('cancelled')}</Badge>}
                     {event.has_user_rsvpd && (
                       <Badge variant="success" hasDot>
                         {tRsvp('going')}

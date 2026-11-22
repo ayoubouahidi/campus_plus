@@ -104,6 +104,17 @@ const fr = {
     countEnded: '{count, plural, =0 {Personne n’a participé} one {# participant} other {# participants}}',
     toastGoing: 'Vous participez',
     toastCancelled: 'Participation annulée',
+    full: 'Complet',
+    fullStatus: 'Cet événement est complet',
+    cancelled: 'Annulé',
+    cancelledStatus: 'Cet événement a été annulé',
+    spotsLeft: '{count, plural, =0 {Plus aucune place} one {# place restante} other {# places restantes}}',
+    errors: {
+      full: { title: 'Cet événement est complet', description: 'Quelqu’un a pris la dernière place juste avant vous.' },
+      'signed-out': { title: 'Reconnectez-vous', description: 'Votre session a expiré. Connectez-vous, puis réessayez.' },
+      'not-found': { title: 'Cet événement n’existe plus', description: 'L’organisateur l’a peut-être supprimé.' },
+      unavailable: { title: 'Votre participation n’a pas été enregistrée', description: 'Un problème est survenu de notre côté. Réessayez dans un instant.' },
+    },
   },
   Attendees: {
     headingUpcoming: 'Qui participe',
