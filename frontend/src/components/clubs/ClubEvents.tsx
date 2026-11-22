@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
 import { EventGrid } from '@/components/events/EventGrid';
 import { PastEventList } from '@/components/events/PastEventList';
@@ -26,6 +27,7 @@ export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
   ({ upcoming, past, schedules, className = '', ...props }, ref) => {
     const [events, setEvents] = useState(upcoming);
     const announceRsvp = useRsvpToast();
+    const t = useTranslations('Clubs');
 
     // Optimistic (Phase 7 sends the request). Toast decided outside the state updater.
     const handleRsvpToggle = (before: EventItem) => {
@@ -37,7 +39,7 @@ export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
       <div ref={ref} className={`space-y-12 ${className}`} {...props}>
         <section aria-labelledby="club-upcoming" className="space-y-4">
           <h2 id="club-upcoming" className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            Upcoming events{' '}
+            {t('upcoming')}{' '}
             <span className="font-normal text-slate-500 dark:text-slate-400">({events.length})</span>
           </h2>
           <EventGrid
@@ -50,8 +52,8 @@ export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
               <EmptyState
                 className="py-10"
                 icon={<CalendarIcon className="h-6 w-6" />}
-                title="Nothing scheduled right now"
-                description="This club hasn't announced its next event yet. Check back soon."
+                title={t('nothingTitle')}
+                description={t('nothingBody')}
               />
             }
           />
@@ -61,7 +63,7 @@ export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
         {past.length > 0 && (
           <section aria-labelledby="club-past" className="space-y-4">
             <h2 id="club-past" className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Past events{' '}
+              {t('past')}{' '}
               <span className="font-normal text-slate-500 dark:text-slate-400">({past.length})</span>
             </h2>
             <PastEventList events={past} schedules={schedules} />

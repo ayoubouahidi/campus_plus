@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getSessionState } from '@/auth';
 import { ClubEvents } from '@/components/clubs/ClubEvents';
 import { ClubHeader } from '@/components/clubs/ClubHeader';
@@ -46,6 +46,8 @@ export default async function ClubPage({ params }: ClubPageProps) {
   // Decided on the server: signed-out visitors never receive the president's contact details, not even in the
   // page data (DOCS.md §6.13). Same cached session read as the root layout (one cookie decode per request).
   const isSignedIn = (await getSessionState()).status === 'signed-in';
+  const locale = await getLocale();
+  const t = await getTranslations('Clubs');
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -57,12 +59,12 @@ export default async function ClubPage({ params }: ClubPageProps) {
         <IconBase className="h-4 w-4 rtl:-scale-x-100">
           <path d="m15 18-6-6 6-6" />
         </IconBase>
-        All clubs
+        {t('allClubs')}
       </Link>
 
       <ClubHeader
         club={club}
-        since={formatClubSince(club.created_at)}
+        since={formatClubSince(club.created_at, locale)}
         contact={isSignedIn ? getClubContact(club) : null}
       />
 
@@ -71,7 +73,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
         // Signed out: no attendee names, no "Going" (DOCS.md §9.3, §9.4).
         upcoming={eventsForVisitor(upcoming, isSignedIn)}
         past={eventsForVisitor(past, isSignedIn)}
-        schedules={getEventSchedules([...upcoming, ...past], await getLocale())}
+        schedules={getEventSchedules([...upcoming, ...past], locale)}
       />
     </div>
   );

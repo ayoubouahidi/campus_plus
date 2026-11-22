@@ -1,6 +1,6 @@
 import type { Club, EventItem } from '@/types/api';
 import { matchesCampus, splitEventsByTime, type CampusFilter } from '@/lib/events';
-import { CAMPUS_TIME_ZONE } from '@/lib/time';
+import { CAMPUS_TIME_ZONE, cachedFormatter } from '@/lib/time';
 
 // The president's contact details. Only for signed-in students: the page passes `null` to signed-out
 // visitors so the details never reach their browser (Phase 5: from the real session; the API must also
@@ -29,10 +29,6 @@ export const getUpcomingEventCounts = (events: EventItem[], now: number): Record
   return counts;
 };
 
-// "No upcoming events", "1 upcoming event", "3 upcoming events".
-export const formatUpcomingCount = (count: number): string =>
-  count === 0 ? 'No upcoming events' : `${count} upcoming ${count === 1 ? 'event' : 'events'}`;
-
 // Directory order: alphabetical, ignoring case and accents ("École" sorts with "E").
 export const sortClubsByName = (clubs: Club[]): Club[] =>
   [...clubs].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
@@ -41,13 +37,14 @@ export const sortClubsByName = (clubs: Club[]): Club[] =>
 export const filterClubsByCampus = (clubs: Club[], campus: CampusFilter): Club[] =>
   clubs.filter((club) => matchesCampus(club.department_name, campus));
 
-// "No clubs", "1 club", "6 clubs" (the directory's live result count).
-export const formatClubCount = (count: number): string =>
-  count === 0 ? 'No clubs' : `${count} ${count === 1 ? 'club' : 'clubs'}`;
-
-// "Since January 2026". Server only: formatting a moment in the campus time zone (DOCS.md §5.2).
-const sinceFormatter = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: CAMPUS_TIME_ZONE });
-export const formatClubSince = (createdAt: string): string => `Since ${sinceFormatter.format(Date.parse(createdAt))}`;
+// The month a club was created: "January 2026", "janvier 2026", "يناير 2026" (Step 12.5). The page wraps it in
+// Clubs.since ("Since {date}"). Server only: formatting a moment in the campus time zone (DOCS.md §5.2).
+// Counts ("3 clubs", "2 upcoming events") are ICU plurals in the Clubs messages.
+const sinceFormatter = cachedFormatter(
+  (tag) => new Intl.DateTimeFormat(tag, { month: 'long', year: 'numeric', timeZone: CAMPUS_TIME_ZONE })
+);
+export const formatClubSince = (createdAt: string, locale = 'en'): string =>
+  sinceFormatter(locale).format(Date.parse(createdAt));
 
 // "+212600000000" → "+212 6 00 00 00 00" (Moroccan grouping) for display only; tel: links keep the raw value.
 // Anything that isn't a +212 mobile/landline number is shown unchanged.

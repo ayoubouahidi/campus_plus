@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IconBase, LockIcon, type NavIconProps } from '@/components/ui/layout/navIcons';
@@ -57,6 +58,7 @@ export const ClubContactCard = React.forwardRef<HTMLElement, ClubContactCardProp
   ({ contact, clubSlug, className = '', ...props }, ref) => {
     const { session } = useSession();
     const state = getContactState(session.status, contact);
+    const t = useTranslations('Clubs');
 
     const body: Record<ContactState, React.ReactNode> = {
       loading: (
@@ -70,10 +72,10 @@ export const ClubContactCard = React.forwardRef<HTMLElement, ClubContactCardProp
         <div className="space-y-3">
           <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
             <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
-            Contact details are only shown to signed-in students.
+            {t('contactLocked')}
           </p>
           <Link href={`/auth/login?next=/clubs/${clubSlug}`} className={loginLinkStyles}>
-            Log in to see them
+            {t('contactLogin')}
           </Link>
         </div>
       ),
@@ -85,7 +87,7 @@ export const ClubContactCard = React.forwardRef<HTMLElement, ClubContactCardProp
               <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                 {contact.president_name}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">President</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('president')}</p>
             </div>
           </div>
           <ul className="space-y-2">
@@ -94,13 +96,16 @@ export const ClubContactCard = React.forwardRef<HTMLElement, ClubContactCardProp
               <li>
                 <a href={`mailto:${contact.president_email}`} className={contactLinkStyles}>
                   <MailIcon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{contact.president_email}</span>
+                  {/* dir="ltr" like the phone: an address stays left-to-right in Arabic pages. */}
+                  <span dir="ltr" className="truncate">
+                    {contact.president_email}
+                  </span>
                 </a>
               </li>
             )}
             {contact.president_phone && (
               <li>
-                {/* dir="ltr": a phone number stays left-to-right in Arabic pages (Phase 7). */}
+                {/* dir="ltr": a phone number stays left-to-right in Arabic pages ("+212 6 …", not "… 6 212+"). */}
                 <a href={`tel:${contact.president_phone}`} className={contactLinkStyles}>
                   <PhoneIcon className="h-4 w-4 shrink-0" />
                   <span dir="ltr">{formatPhone(contact.president_phone)}</span>
@@ -121,7 +126,7 @@ export const ClubContactCard = React.forwardRef<HTMLElement, ClubContactCardProp
         {...props}
       >
         <h2 id="club-contact" className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Contact
+          {t('contact')}
         </h2>
         {body[state]}
       </section>

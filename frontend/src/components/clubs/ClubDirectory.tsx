@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Club } from '@/types/api';
 import { CampusToggle } from '@/components/filters/CampusToggle';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NAV_ICONS } from '@/components/ui/layout/navIcons';
-import { filterClubsByCampus, formatClubCount } from '@/lib/clubs';
+import { filterClubsByCampus } from '@/lib/clubs';
 import type { CampusFilter } from '@/lib/events';
 import { ClubCard } from './ClubCard';
 
@@ -21,21 +22,22 @@ const ClubsIcon = NAV_ICONS.clubs;
 export const ClubDirectory = ({ clubs, upcomingCounts }: ClubDirectoryProps) => {
   const [campus, setCampus] = useState<CampusFilter>('all');
   const visible = filterClubsByCampus(clubs, campus);
+  const t = useTranslations('Clubs');
 
   return (
     <div className="space-y-8">
       <div className="space-y-4">
         <div className="flex items-baseline justify-between gap-4">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Clubs</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{t('title')}</h1>
           {/* Polite live region, as on the feed: "1 club" is read after the filter changes. */}
           <p aria-live="polite" className="shrink-0 text-sm text-slate-500 dark:text-slate-400">
-            {formatClubCount(visible.length)}
+            {t('count', { count: visible.length })}
           </p>
         </div>
         <p className="max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-          Student clubs at 1337 and EMINES. Open one to see who runs it and what&apos;s coming up.
+          {t('intro')}
         </p>
-        <search aria-label="Filter clubs" className="block">
+        <search aria-label={t('filters')} className="block">
           <CampusToggle value={campus} onChange={setCampus} />
         </search>
       </div>
@@ -43,11 +45,11 @@ export const ClubDirectory = ({ clubs, upcomingCounts }: ClubDirectoryProps) => 
       {visible.length === 0 ? (
         <EmptyState
           icon={<ClubsIcon className="h-6 w-6" />}
-          title="No clubs on this campus yet"
-          description="Clubs open to every school are listed under All."
+          title={t('emptyTitle')}
+          description={t('emptyBody')}
           action={
             <Button variant="secondary" onClick={() => setCampus('all')}>
-              Show all clubs
+              {t('showAll')}
             </Button>
           }
         />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { EventGridSkeleton } from '@/components/events/EventSkeletons';
 import { Card, CardFooter } from '@/components/ui/Card';
 import { Skeleton, SkeletonRegion } from '@/components/ui/Skeleton';
@@ -42,7 +43,7 @@ ClubCardSkeleton.displayName = 'ClubCardSkeleton';
 // Mirrors ClubDirectory: heading + count · intro text · campus toggle · grid. For app/clubs/loading.tsx.
 export const ClubDirectorySkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <SkeletonRegion ref={ref} label="Loading clubs" className={`space-y-8 ${className}`} {...props}>
+    <SkeletonRegion ref={ref} label={useTranslations('Clubs')('loading')} className={`space-y-8 ${className}`} {...props}>
       <div className="space-y-4" aria-hidden="true">
         <div className="flex items-center justify-between gap-4">
           <Skeleton className="h-8 w-24 rounded-lg" />
@@ -72,7 +73,7 @@ ClubDirectorySkeleton.displayName = 'ClubDirectorySkeleton';
 // For app/clubs/[slug]/loading.tsx.
 export const ClubPageSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <SkeletonRegion ref={ref} label="Loading club" className={className} {...props}>
+    <SkeletonRegion ref={ref} label={useTranslations('Clubs')('loadingClub')} className={className} {...props}>
       <div aria-hidden="true">
         <Skeleton className="mb-6 h-5 w-20 rounded" />
 

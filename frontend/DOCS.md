@@ -3814,9 +3814,9 @@ Two accessibility modules of the subject: **≥ 3 languages with a switcher** (a
 | 12.2 | Shell: navbar (switcher in it), mobile tab bar + drawer, footer, search palette, notifications, toasts, modal close; RTL fixes found there (drawer side and slide, `Input`/`Select`/`Toast`/`Avatar` physical classes) | ✅ validated 2026-11-22 |
 | 12.3 | Feed, event cards, event page, RSVP, attendees; event dates in the active language (Moroccan Arabic month names) | ✅ validated 2026-11-22 |
 | 12.4 | Calendar (weekday names, month and week titles, agenda, times); server-made names so the browser re-renders the same text | ✅ validated 2026-11-22 |
-| 12.5 | Clubs directory and club pages | ⏳ |
+| 12.5 | Clubs directory and club pages; "since" month in the active language | ✅ validated 2026-11-22 |
 | 12.6 | Login, sign-up (validation and error messages), profile | ⏳ |
-| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), the remaining `Intl` formatters on the active locale (calendar ones in 12.4; `formatDateTile`, `formatClubSince`) | ⏳ |
+| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), the remaining `Intl` formatters on the active locale (`formatDateTile` on /profile; calendar and club ones done in 12.4–12.5) | ⏳ |
 | 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ⏳ |
 
 ### 12.1 i18n setup and `LanguageSwitcher` (Step 12.1, 2026-11-21)
@@ -4110,3 +4110,42 @@ const format = useCalendarFormat(names);
 **Tradeoff.** `ROLE_LABELS` (a `Record<UserRole, string>`) became a nested message object `Profile.roles`, read with ``t(`roles.${user.role}`)``. next-intl types the template literal against the messages, so a new `UserRole` without a translation still fails `tsc`, as the `Record` did.
 
 **Verified.** `tsc` passes; ESLint: the same 6 old findings. The page needs a signed-in session, so the layout is checked in the browser: `/profile` in العربية, avatar on the right, name and chips beside it, buttons on the far left, banner text in Arabic on the left side of the banner.
+
+### 12.5 Clubs directory and club pages in three languages (Step 12.5, 2026-11-22)
+
+**Files:** `src/i18n/messages/{en,fr,ar}.ts` (namespace `Clubs`), `src/lib/clubs.ts` (`formatClubSince(createdAt, locale)` returns the month only; `formatUpcomingCount` and `formatClubCount` removed), `src/components/clubs/{ClubDirectory,ClubCard,ClubHeader,ClubContactCard,ClubEvents,ClubSkeletons}.tsx`, `src/app/clubs/[slug]/{page,not-found}.tsx`, `src/components/events/PastEventList.tsx` (Arabic date column). Test: `src/app/test/page.tsx` (links + checklist).
+**Status:** ✅ Validated on `/test` (2026-11-22). Live on `/clubs` and `/clubs/[slug]`.
+
+**Business purpose.** Students find clubs to join and contact their presidents here. The directory, each club's page and the contact card now speak the student's language; club names and descriptions stay as the clubs wrote them.
+
+**Core concepts & decisions.**
+- **Counts through ICU plurals:** directory count (`Clubs.count`, Arabic: نادٍ واحد / ناديان / 6 أندية / 11 ناديًا), card footers (`Clubs.upcomingCount`). The two English-only helpers in `lib/clubs.ts` are gone.
+- **"Since" date split in two.** `formatClubSince(createdAt, locale)` (server, campus time zone, `cachedFormatter`) returns only "janvier 2026" / "يناير 2026"; the sentence around it is `Clubs.since` ("Since {date}", "Depuis {date}", "منذ {date}"). Word order belongs to the messages, the date to `Intl`, same split as the calendar.
+- **Contact details stay left to right.** The president's email now gets `dir="ltr"` like the phone already had, so an address or "+212 6 …" is never reordered inside an Arabic sentence.
+- **Arabic date column in past-event lists.** `Intl`'s short Arabic date spells the whole weekday ("الجمعة، 13 نونبر"), wider than the fixed `w-24` column built for "Fri, Nov 13". The column is `rtl:w-32` in Arabic, so dates stay on one line and titles still line up (used by club pages and, later, /profile).
+- **Shared pieces reused:** the campus toggle (translated in 12.3), event cards and RSVP (12.3), `EventPage.discover` on the club 404.
+- **Layout already mirrored:** club headers and cards use `self-start`, `gap`, flex and grid, and the back arrow had `rtl:-scale-x-100`, so nothing else moved in Arabic. The banner placeholder's gradient direction is left as is (decorative; 12.8 audit).
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| `formatClubSince` returns the month, the message adds "Since" | Return the whole sentence from `lib/clubs.ts` | `lib/` stays free of UI words; the sentence is translated where all other UI text is. |
+| `rtl:w-32` on the date column | `whitespace-nowrap` with automatic width | A fixed column keeps titles aligned row to row; only Arabic needs more room. |
+| Directory sort stays `localeCompare(…, 'en')` | Sort with the visitor's language | Club names are data written in Latin script; the order should not change when the visitor switches language. |
+
+**Contract.**
+```ts
+// src/lib/clubs.ts
+formatClubSince(createdAt: string, locale = 'en'): string; // "January 2026", server only
+// ClubHeader's `since` prop is now the month alone; the component renders t('since', { date: since }).
+```
+
+**Usage.**
+```tsx
+// app/clubs/[slug]/page.tsx (server)
+const locale = await getLocale();
+<ClubHeader club={club} since={formatClubSince(club.created_at, locale)} contact={…} />
+```
+
+**Verified (2026-11-22, server HTML fetched inside the container).** `/clubs`: "6 clubs" / "6 clubs" / "6 أندية", intro sentence, "Filter clubs" / "Filtrer les clubs" / "تصفية الأندية", card footers "1 upcoming event" / "1 événement à venir" / "فعالية قادمة واحدة". `/clubs/leet-dev`: "All clubs" / "Tous les clubs" / "كل الأندية", "Since January 2026" / "Depuis janvier 2026" / "منذ يناير 2026", About / À propos / نبذة, contact lock text and login link, "Upcoming events" / "Événements à venir" / "الفعاليات القادمة", empty state, "Past events" with "Fri, Nov 13" / "ven. 13 nov." / "الجمعة، 13 نونبر". `/clubs/nope` in Arabic: "النادي غير موجود", "تصفّح الأندية", "اكتشف الفعاليات". `tsc` passes; ESLint: the same 6 old findings.

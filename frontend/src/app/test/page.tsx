@@ -41,7 +41,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.4, the calendar in EN / FR / AR</p>
+        <p className="font-semibold">Test page: Step 12.5, the clubs directory and club pages in EN / FR / AR</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,48 +118,43 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Pages to open (Step 12.4 is live on /calendar)</h3>
+          <h3 className="font-semibold">Pages to open (Step 12.5 is live on them)</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             <li>
-              <Link href="/calendar?date=2026-11-14" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Month (November 2026)
+              <Link href="/clubs" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Clubs directory
               </Link>
             </li>
             <li>
-              <Link href="/calendar?date=2026-11-14&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Week with the 3-day hackathon
+              <Link href="/clubs/leet-dev" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Club with past events
               </Link>
             </li>
             <li>
-              <Link href="/calendar?date=2026-12-01&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Week across two months
+              <Link href="/clubs/leet-frame" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Another club
               </Link>
             </li>
             <li>
-              <Link href="/calendar?date=2026-12-29&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Week across two years
-              </Link>
-            </li>
-            <li>
-              <Link href="/calendar" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Today
+              <Link href="/clubs/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Unknown club (404)
               </Link>
             </li>
           </ul>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.4), in Français then العربية</h3>
+          <h3 className="font-semibold">What to check (Step 12.5), in Français then العربية</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Header: title &quot;novembre 2026&quot; / &quot;نونبر 2026&quot; (Moroccan month names), &quot;Aujourd’hui&quot;, Mois / Semaine tabs; the arrows&apos; names (hover or screen reader): &quot;Mois précédent&quot;, &quot;Semaine suivante&quot;…</li>
-            <li>Week titles: &quot;9 – 15 nov. 2026&quot;, across months &quot;30 nov. – 6 déc. 2026&quot;, across years &quot;28 déc. 2026 – 3 janv. 2027&quot;; Arabic &quot;9 – 15 نونبر 2026&quot;.</li>
-            <li>Weekday headers start on Monday: lun. mar. mer.… In Arabic, full names from 640px wide (الاثنين…) and one letter on phones (ن ث ر خ ج س ح); hover shows the full name.</li>
-            <li>Agenda: day heading &quot;samedi 14 novembre&quot; / &quot;السبت، 14 نونبر&quot;, the count, the hackathon&apos;s times per day: &quot;Dès 8:00&quot;, &quot;Toute la journée&quot;, &quot;Jusqu’à 17:00&quot; (24-hour in French and Arabic), category badge, &quot;J’y vais&quot; badge when signed in and going. An empty day: &quot;Rien ce jour-là&quot;.</li>
-            <li>Week view (from 768px): each chip shows the translated time; more than 4 events on a day shows &quot;+N autres&quot;.</li>
-            <li><strong>Click around</strong> (next/previous month and week, Today, other days, switch Month/Week): titles and labels stay in the chosen language. Open the browser console: <strong>no hydration warning</strong> after a reload in each language.</li>
-            <li>Arabic layout: the grid reads right to left (Monday on the right), the cell separators sit between the days (no double line on the left edge), ← and → arrows point the right way, keyboard ← / → move one day in the reading direction.</li>
-            <li>Screen reader: a day button reads &quot;jeudi 5 novembre, 1 événement&quot;; the grid is named after the month or week; the page heading is &quot;Calendrier&quot;.</li>
-            <li>Still English (next steps): clubs pages, login, profile, legal pages, page titles in the browser tab.</li>
+            <li>Directory: heading, count (&quot;6 clubs&quot;, &quot;6 أندية&quot;), intro sentence, campus toggle (&quot;Tous&quot;), each card&apos;s footer (&quot;1 événement à venir&quot;, &quot;لا توجد فعاليات قادمة&quot;). Club names, departments and descriptions stay as written.</li>
+            <li>Pick a campus with no clubs (if any): empty state and &quot;Voir tous les clubs&quot; translated.</li>
+            <li>Club page: back link &quot;Tous les clubs&quot; / &quot;كل الأندية&quot; (arrow points back: right in Arabic), &quot;Depuis janvier 2026&quot; / &quot;منذ يناير 2026&quot;, &quot;À propos&quot;, Contact card, &quot;Événements à venir&quot; / &quot;Événements passés&quot;, the empty upcoming state.</li>
+            <li>Contact card signed out: lock line + &quot;Se connecter pour les voir&quot;. Signed in (session switcher above): &quot;Président&quot;; in Arabic the email and the phone (&quot;+212 6 …&quot;) still read left to right.</li>
+            <li>Past events list: dates in the language (&quot;ven. 13 nov.&quot;, &quot;الجمعة، 13 نونبر&quot;) on one line, titles lined up; in Arabic the date column sits on the right.</li>
+            <li>Arabic layout: the logo overlaps the banner on the right, name beside it; card logos on the right; the contact card is on the left of About from 1024px.</li>
+            <li>Unknown club: &quot;Club introuvable&quot;, &quot;Parcourir les clubs&quot;, &quot;Découvrir les événements&quot;.</li>
+            <li>Screen reader: loading label (&quot;Chargement des clubs&quot;), the count is announced after a campus change, the filter landmark is named.</li>
+            <li>Still English (next steps): login, sign-up, the rest of /profile, legal pages, page titles in the browser tab.</li>
           </ul>
         </div>
       </section>
