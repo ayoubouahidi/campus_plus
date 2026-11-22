@@ -3,8 +3,9 @@ from datetime import datetime, time, timezone as datetime_timezone
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_slug
-from django.db import transaction
-from django.db.models import Count, F, Q
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
@@ -21,20 +22,28 @@ from drf_spectacular.utils import (
 )
 from rest_framework import filters, serializers, status, viewsets
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
-from .models import Club, ClubEvent, Department, UserMember
+from accounts.models import ClubBoardAssignment
+from accounts.permissions import IsSuperAdmin
+from .models import Club, ClubEvent, Department, Rsvp, UserMember
 from .serializers import (
     ClubEventSerializer,
     ClubSerializer,
     DepartmentSerializer,
+    AttendeeSerializer,
+    PaginatedAttendeeSerializer,
+    RsvpStatusSerializer,
     SignupSerializer,
     UserMemberSerializer,
 )
+
+
+User = get_user_model()
 
 
 VALIDATION_ERROR_RESPONSE = OpenApiResponse(
@@ -49,6 +58,59 @@ VALIDATION_ERROR_RESPONSE = OpenApiResponse(
     },
     description='A query parameter is duplicate, empty, malformed, or unsupported.',
 )
+
+
+# Shared calendar broadcasts are public. Keep this allowlist separate from the
+# request-aware API serializer so future private fields do not become public by
+# accident.
+PUBLIC_EVENT_BROADCAST_FIELDS = frozenset({
+    'id',
+    'title',
+    'name',
+    'description',
+    'parent_id',
+    'club',
+    'club_id',
+    'club_name',
+    'club_slug',
+    'parent',
+    'department_name',
+    'department_slug',
+    'flyer_url',
+    'starts_at',
+    'ends_at',
+    'start_time',
+    'end_time',
+    'location',
+    'category',
+    'status',
+    'capacity',
+    'created_at',
+    'updated_at',
+    # RSVP totals are public aggregate data, unlike attendee identities and
+    # the requesting user's RSVP status.
+    'rsvps_count',
+})
+
+
+def public_event_broadcast_data(serializer_data):
+    """Return the public-safe projection for the shared calendar group."""
+    serialized_data = dict(serializer_data)
+    event_data = {
+        key: value
+        for key, value in serialized_data.items()
+        if key in PUBLIC_EVENT_BROADCAST_FIELDS
+    }
+
+    # Preserve the future event response shape without publishing the caller's
+    # personal state or any attendee identity.
+    if 'has_user_rsvpd' in serialized_data:
+        event_data['has_user_rsvpd'] = False
+    if 'attendees_preview' in serialized_data:
+        event_data['attendees_preview'] = []
+
+    return event_data
+
 
 EVENT_LIST_PARAMETERS = [
     OpenApiParameter(
@@ -139,6 +201,12 @@ class ClubEventPagination(PageNumberPagination):
                 ),
             })
         return page_size
+
+
+class AttendeePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class ClubEventFilterBackend(filters.BaseFilterBackend):
@@ -269,37 +337,44 @@ class ClubEventFilterBackend(filters.BaseFilterBackend):
 
 
 class CanCreateClubEvent(BasePermission):
-    message = 'Only an admin or the club head can create an event.'
+    message = 'Only a superadmin or an assigned club board member can create events.'
 
     def has_permission(self, request, view):
-        if request.user and request.user.is_staff:
+        if IsSuperAdmin().has_permission(request, view):
             return True
 
         club_id = request.data.get('club')
-        if not request.user or not request.user.is_authenticated or not club_id:
+        if (
+            not request.user
+            or not request.user.is_authenticated
+            or getattr(request.user, 'role', None) != 'BOARD_MEMBER'
+            or not club_id
+        ):
             return False
 
-        return Club.objects.filter(
-            pk=club_id,
-            head__user=request.user,
+        return ClubBoardAssignment.objects.filter(
+            user=request.user,
+            club_id=club_id,
         ).exists()
 
 # [ahmed] Protect changes to existing club events.
 class CanModifyClubEvent(BasePermission):
-    message = "Only an admin or this event's club head can modify it."
+    message = "Only a superadmin or this club's assigned board member can modify it."
 
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated)
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
+        if IsSuperAdmin().has_permission(request, view):
             return True
 
         return bool(
+            getattr(request.user, 'role', None) == 'BOARD_MEMBER'
+            and
             obj.club_id
-            and Club.objects.filter(
-                pk=obj.club_id,
-                head__user=request.user,
+            and ClubBoardAssignment.objects.filter(
+                user=request.user,
+                club_id=obj.club_id,
             ).exists()
         )
 
@@ -323,30 +398,30 @@ class CanModifyClubEvent(BasePermission):
     retrieve=extend_schema(
         summary='Retrieve a public event',
         description=(
-            'Public event detail. RSVP counts, the current user RSVP state, and '
-            'attendee previews are not implemented and are intentionally absent.'
+            'Public event detail. RSVP totals are public; current-user state and '
+            'attendee previews are request-aware and hide identities anonymously.'
         ),
         responses={200: ClubEventSerializer, 404: OpenApiResponse(description='Not found.')},
         auth=[],
     ),
     create=extend_schema(
-        summary='Create an event (interim management API)',
+        summary='Create an event',
         description=(
-            'Not part of the stable public read contract. Runtime permissions are '
-            'temporary; final shared board/superadmin roles are not integrated.'
+            'Requires a superadmin or a BOARD_MEMBER with a matching '
+            'ClubBoardAssignment.'
         ),
     ),
     update=extend_schema(
-        summary='Replace an event (interim management API)',
-        description='Non-public interim management operation; final roles are pending.',
+        summary='Replace an event',
+        description='Requires management permission for the event club.',
     ),
     partial_update=extend_schema(
-        summary='Update an event (interim management API)',
-        description='Non-public interim management operation; final roles are pending.',
+        summary='Update an event',
+        description='Requires management permission for the event club.',
     ),
     destroy=extend_schema(
-        summary='Delete an event (interim management API)',
-        description='Non-public interim management operation; final roles are pending.',
+        summary='Delete an event',
+        description='Requires management permission for the event club.',
     ),
 )
 class ClubEventViewSet(viewsets.ModelViewSet):
@@ -356,7 +431,45 @@ class ClubEventViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description', 'club__name', 'location']
     pagination_class = ClubEventPagination
 
+    def hydrate_rsvp_state(self, event):
+        """Attach request-aware RSVP values without serializer-side queries."""
+        if not isinstance(event, ClubEvent):
+            return
+        event.rsvps_count = event.rsvps.count()
+        request = getattr(self, 'request', None)
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            event.has_user_rsvpd = event.rsvps.filter(user=user).exists()
+            event.attendees_preview_rsvps = list(
+                event.rsvps.select_related('user').order_by('-created_at')[:3]
+            )
+
+    def get_queryset(self):
+        queryset = super().get_queryset().annotate(
+            rsvps_count=Count('rsvps', distinct=True),
+        )
+        user = getattr(self.request, 'user', None)
+        if user and user.is_authenticated:
+            queryset = queryset.annotate(
+                has_user_rsvpd=Exists(
+                    Rsvp.objects.filter(event=OuterRef('pk'), user=user)
+                )
+            ).prefetch_related(
+                Prefetch(
+                    'rsvps',
+                    queryset=(
+                        Rsvp.objects.select_related('user')
+                        .order_by('-created_at')[:3]
+                    ),
+                    to_attr='attendees_preview_rsvps',
+                )
+            )
+        return queryset
+
     def get_permissions(self):
+        if self.action in ('rsvp', 'attendees'):
+            return [IsAuthenticated()]
+
         if self.action == "create":
             return [CanCreateClubEvent()]
 
@@ -365,13 +478,97 @@ class ClubEventViewSet(viewsets.ModelViewSet):
 
         return [AllowAny()]
 
+    @extend_schema(
+        request=None,
+        responses={
+            200: RsvpStatusSerializer,
+            201: RsvpStatusSerializer,
+            401: OpenApiResponse(description='Authentication required.'),
+            404: OpenApiResponse(description='Event not found.'),
+            409: OpenApiResponse(description='Event capacity has been reached.'),
+        },
+    )
+    @action(
+        detail=True,
+        methods=['post', 'delete'],
+        permission_classes=[IsAuthenticated],
+        url_path='rsvp',
+    )
+    def rsvp(self, request, pk=None):
+        with transaction.atomic():
+            try:
+                event = ClubEvent.objects.select_for_update().get(pk=pk)
+            except ClubEvent.DoesNotExist:
+                return Response(
+                    {'detail': 'Event not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            existing = Rsvp.objects.filter(event=event, user=request.user)
+            if request.method == 'POST':
+                if existing.exists():
+                    response_status = status.HTTP_200_OK
+                else:
+                    current_count = Rsvp.objects.filter(event=event).count()
+                    if event.capacity is not None and current_count >= event.capacity:
+                        return Response(
+                            {
+                                'detail': 'Event capacity has been reached.',
+                                'rsvps_count': current_count,
+                                'has_user_rsvpd': False,
+                            },
+                            status=status.HTTP_409_CONFLICT,
+                        )
+                    Rsvp.objects.create(event=event, user=request.user)
+                    response_status = status.HTTP_201_CREATED
+                has_user_rsvpd = True
+            else:
+                existing.delete()
+                response_status = status.HTTP_200_OK
+                has_user_rsvpd = False
+
+            rsvps_count = Rsvp.objects.filter(event=event).count()
+
+        return Response(
+            {
+                'rsvps_count': rsvps_count,
+                'has_user_rsvpd': has_user_rsvpd,
+            },
+            status=response_status,
+        )
+
+    @extend_schema(
+        responses={
+            200: PaginatedAttendeeSerializer,
+            401: OpenApiResponse(description='Authentication required.'),
+            404: OpenApiResponse(description='Event not found.'),
+        }
+    )
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[IsAuthenticated],
+        url_path='attendees',
+    )
+    def attendees(self, request, pk=None):
+        event = self.get_object()
+        queryset = (
+            User.objects.filter(rsvps__event=event)
+            .order_by('-rsvps__created_at', '-pk')
+        )
+        paginator = AttendeePagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = AttendeeSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
+
     # [ahmed] Automatically broadcast new events after creation.
     def perform_create(self, serializer):
         # [ahmed] Save the new event.
         serializer.save()
+        self.hydrate_rsvp_state(serializer.instance)
 
         # [ahmed] Get the saved event's serialized data.
-        event_data = dict(serializer.data)
+        event_data = public_event_broadcast_data(serializer.data)
 
         # [ahmed] Broadcast only after a successful database commit.
         transaction.on_commit(
@@ -386,9 +583,10 @@ class ClubEventViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         # [ahmed] Save the modified event in the database.
         serializer.save()
+        self.hydrate_rsvp_state(serializer.instance)
 
         # [ahmed] Get the event's updated information.
-        event_data = dict(serializer.data)
+        event_data = public_event_broadcast_data(serializer.data)
 
         # [ahmed] Notify clients after a successful commit.
         transaction.on_commit(
@@ -455,8 +653,8 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 class UserMemberViewSet(viewsets.ModelViewSet):
     queryset = UserMember.objects.select_related('department_id', 'club_id').all()
     serializer_class = UserMemberSerializer
-    # [ahmed] Temporarily restrict all member data and writes to Django staff.
-    permission_classes = [IsAdminUser]
+    # Keep personal member data restricted to the integrated superadmin policy.
+    permission_classes = [IsSuperAdmin]
 
 
 @extend_schema_view(
@@ -510,8 +708,8 @@ class ClubViewSet(viewsets.ModelViewSet):
 @extend_schema(
     summary='Legacy email signup',
     description=(
-        'Existing legacy endpoint, not the unfinished custom-user authentication '
-        'contract owned by Ayoub.'
+        'Preserved legacy email signup endpoint alongside the integrated accounts '
+        'authentication API.'
     ),
     request=SignupSerializer,
     responses={
@@ -531,7 +729,17 @@ class ClubViewSet(viewsets.ModelViewSet):
 def signup(request):
     serializer = SignupSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    member = serializer.save()
+    try:
+        with transaction.atomic():
+            member = serializer.save()
+    except IntegrityError:
+        email = serializer.validated_data['email']
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'email': 'An account with this email already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        raise
     token, _ = Token.objects.get_or_create(user=member.user)
     return Response(
         {

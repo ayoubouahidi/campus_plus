@@ -9,7 +9,12 @@ from channels.testing import WebsocketCommunicator
 from django.db import transaction
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
-from core_data.views import ClubEventViewSet
+from core_data.serializers import ClubEventSerializer
+from core_data.views import (
+    PUBLIC_EVENT_BROADCAST_FIELDS,
+    ClubEventViewSet,
+    public_event_broadcast_data,
+)
 from realtime.broadcast import broadcast_calendar_event
 from realtime.consumers import CalendarConsumer
 
@@ -190,6 +195,61 @@ class BestEffortEventBroadcastRegistrationTests(SimpleTestCase):
             {"id": 31, "name": "Created event"},
         )
 
+    def test_projection_preserves_every_current_public_event_field(self):
+        current_fields = set(ClubEventSerializer.Meta.fields)
+        self.assertEqual(
+            PUBLIC_EVENT_BROADCAST_FIELDS,
+            current_fields - {'has_user_rsvpd', 'attendees_preview'},
+        )
+        public_data = {
+            field: f'public-{field}'
+            for field in current_fields
+        }
+
+        expected = {
+            key: value
+            for key, value in public_data.items()
+            if key in PUBLIC_EVENT_BROADCAST_FIELDS
+        }
+        expected['has_user_rsvpd'] = False
+        expected['attendees_preview'] = []
+        self.assertEqual(public_event_broadcast_data(public_data), expected)
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_create_broadcast_redacts_request_specific_data(self, broadcast):
+        serializer = Mock()
+        serializer.data = {
+            'id': 35,
+            'name': 'Private RSVP source',
+            'rsvps_count': 8,
+            'has_user_rsvpd': True,
+            'attendees_preview': [
+                {
+                    'id': 91,
+                    'full_name': 'Private Attendee',
+                    'avatar_url': '/media/avatars/private.webp',
+                },
+            ],
+            'request_user_email': 'private@example.test',
+        }
+        callback = self.capture_callback(
+            lambda: ClubEventViewSet().perform_create(serializer)
+        )
+
+        serializer.save.assert_called_once_with()
+        broadcast.assert_not_called()
+        callback()
+        broadcast.assert_called_once_with(
+            'event_created',
+            {
+                'id': 35,
+                'name': 'Private RSVP source',
+                'rsvps_count': 8,
+                'has_user_rsvpd': False,
+                'attendees_preview': [],
+            },
+        )
+
     @patch("core_data.views.broadcast_calendar_event")
     def test_update_saves_once_and_registers_one_robust_callback(self, broadcast):
         serializer = Mock()
@@ -204,6 +264,39 @@ class BestEffortEventBroadcastRegistrationTests(SimpleTestCase):
         broadcast.assert_called_once_with(
             "event_updated",
             {"id": 32, "location": "Updated hall"},
+        )
+
+    @patch("core_data.views.broadcast_calendar_event")
+    def test_update_broadcast_redacts_request_specific_data(self, broadcast):
+        serializer = Mock()
+        serializer.data = {
+            'id': 36,
+            'location': 'Privacy Hall',
+            'has_user_rsvpd': True,
+            'attendees_preview': [
+                {
+                    'id': 92,
+                    'full_name': 'Another Private Attendee',
+                    'avatar_url': None,
+                },
+            ],
+            'internal_permission_scope': 'board-only',
+        }
+        callback = self.capture_callback(
+            lambda: ClubEventViewSet().perform_update(serializer)
+        )
+
+        serializer.save.assert_called_once_with()
+        broadcast.assert_not_called()
+        callback()
+        broadcast.assert_called_once_with(
+            'event_updated',
+            {
+                'id': 36,
+                'location': 'Privacy Hall',
+                'has_user_rsvpd': False,
+                'attendees_preview': [],
+            },
         )
 
     @patch("core_data.views.broadcast_calendar_event")

@@ -14,6 +14,7 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.request import Request
 from rest_framework.test import APIClient, APIRequestFactory
 
+from accounts.models import ClubBoardAssignment
 from .models import (
     MAX_IMAGE_DIMENSION,
     MAX_IMAGE_SIZE,
@@ -110,12 +111,12 @@ class ClubEventPublicReadSerializerTests(SimpleTestCase):
             'http://testserver/media/events_pics/flyer.webp',
         )
 
-    def test_authentication_dependent_rsvp_fields_are_not_stubbed(self):
+    def test_rsvp_fields_have_safe_anonymous_defaults(self):
         data = ClubEventSerializer(self.event).data
 
-        self.assertNotIn('rsvps_count', data)
-        self.assertNotIn('has_user_rsvpd', data)
-        self.assertNotIn('attendees_preview', data)
+        self.assertEqual(data['rsvps_count'], 0)
+        self.assertFalse(data['has_user_rsvpd'])
+        self.assertEqual(data['attendees_preview'], [])
 
     def test_nullable_legacy_values_are_not_replaced_with_invented_data(self):
         event = ClubEvent(
@@ -139,9 +140,17 @@ class ClubEventOwnershipSecurityTests(SimpleTestCase):
     def setUp(self):
         self.department = Department(id=1, title='Technology')
         self.other_department = Department(id=2, title='Arts')
-        self.head_user = User(id=10, username='head')
+        self.head_user = User(
+            id=10,
+            username='head',
+            role=User.Role.BOARD_MEMBER,
+        )
         self.student = User(id=11, username='student')
-        self.staff = User(id=12, username='staff', is_staff=True)
+        self.staff = User(
+            id=12,
+            username='superadmin',
+            role=User.Role.SUPERADMIN,
+        )
         self.head = UserMember(id=20, username='head', user=self.head_user)
         self.other_head = UserMember(id=21, username='other-head')
         self.club = Club(
@@ -183,7 +192,7 @@ class ClubEventOwnershipSecurityTests(SimpleTestCase):
             ClubEventViewSet(),
         ))
 
-    @patch('core_data.views.Club.objects.filter')
+    @patch('core_data.views.ClubBoardAssignment.objects.filter')
     def test_ordinary_student_event_modification_is_denied(self, club_filter):
         club_filter.return_value.exists.return_value = False
         permission = CanModifyClubEvent()
@@ -196,7 +205,7 @@ class ClubEventOwnershipSecurityTests(SimpleTestCase):
             self.event,
         ))
 
-    @patch('core_data.views.Club.objects.filter')
+    @patch('core_data.views.ClubBoardAssignment.objects.filter')
     def test_club_head_can_update_an_ordinary_field(self, club_filter):
         club_filter.return_value.exists.return_value = True
         permission = CanModifyClubEvent()
@@ -226,7 +235,7 @@ class ClubEventOwnershipSecurityTests(SimpleTestCase):
         self.assertEqual(serializer.validated_data['location'], 'Main Hall')
         self.assertEqual(serializer.validated_data['status'], 'ongoing')
 
-    @patch('core_data.views.Club.objects.filter')
+    @patch('core_data.views.ClubBoardAssignment.objects.filter')
     def test_club_head_cannot_modify_another_clubs_event(self, club_filter):
         club_filter.return_value.exists.return_value = False
         other_event = ClubEvent(
@@ -299,7 +308,7 @@ class ClubEventOwnershipSecurityTests(SimpleTestCase):
         broadcast.assert_not_called()
         self.assertEqual(self.event.club_id, self.club.pk)
 
-    def test_django_staff_permissions_and_relationship_updates_remain_allowed(self):
+    def test_superadmin_permissions_and_relationship_updates_remain_allowed(self):
         permission = CanModifyClubEvent()
         request = self.request_for(self.staff)
 
@@ -325,8 +334,16 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
     def setUp(self):
         self.department = Department(id=101, title='Technology')
         self.other_department = Department(id=102, title='Arts')
-        self.head_user = User(id=110, username='head')
-        self.staff = User(id=111, username='staff', is_staff=True)
+        self.head_user = User(
+            id=110,
+            username='head',
+            role=User.Role.BOARD_MEMBER,
+        )
+        self.staff = User(
+            id=111,
+            username='superadmin',
+            role=User.Role.SUPERADMIN,
+        )
         self.head = UserMember(
             id=120,
             username='head',
@@ -362,7 +379,7 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
         )
         return serializer.validate(attrs)
 
-    @patch('core_data.views.Club.objects.filter')
+    @patch('core_data.views.ClubBoardAssignment.objects.filter')
     def test_club_head_creates_for_own_club_and_department(self, club_filter):
         club_filter.return_value.exists.return_value = True
         request = self.request_for(self.head_user, {'club': self.club.pk})
@@ -394,7 +411,7 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
 
         self.assertIn('parent_id', context.exception.detail)
 
-    @patch('core_data.views.Club.objects.filter')
+    @patch('core_data.views.ClubBoardAssignment.objects.filter')
     def test_club_head_cannot_create_for_another_club(self, club_filter):
         club_filter.return_value.exists.return_value = False
         request = self.request_for(self.head_user, {
@@ -513,8 +530,16 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
 class ClubEventManagementValidationTests(SimpleTestCase):
     def setUp(self):
         self.department = Department(id=201, title='Technology')
-        self.staff = User(id=210, username='staff', is_staff=True)
-        self.head_user = User(id=211, username='head')
+        self.staff = User(
+            id=210,
+            username='superadmin',
+            role=User.Role.SUPERADMIN,
+        )
+        self.head_user = User(
+            id=211,
+            username='head',
+            role=User.Role.BOARD_MEMBER,
+        )
         self.head = UserMember(
             id=220,
             username='head',
@@ -1286,8 +1311,12 @@ class UserMemberPermissionTests(SimpleTestCase):
     def setUp(self):
         self.client = APIClient()
         self.view = UserMemberViewSet()
-        self.student = User(username='student', is_staff=False)
+        self.student = User(username='student')
         self.staff = User(username='staff', is_staff=True)
+        self.superadmin = User(
+            username='superadmin',
+            role=User.Role.SUPERADMIN,
+        )
 
     def is_allowed(self, user):
         permissions = self.view.get_permissions()
@@ -1329,7 +1358,10 @@ class UserMemberPermissionTests(SimpleTestCase):
                     response = request(url, data, format='json')
                 self.assertEqual(response.status_code, 403)
 
-    def test_staff_user_can_list_retrieve_and_write_members(self):
+    def test_staff_flag_alone_cannot_access_members(self):
+        self.assertFalse(self.is_allowed(self.staff))
+
+    def test_superadmin_can_list_retrieve_and_write_members(self):
         actions = (
             'list',
             'retrieve',
@@ -1341,7 +1373,7 @@ class UserMemberPermissionTests(SimpleTestCase):
         for action in actions:
             with self.subTest(action=action):
                 self.view.action = action
-                self.assertTrue(self.is_allowed(self.staff))
+                self.assertTrue(self.is_allowed(self.superadmin))
 
 
 class DepartmentAndMemberApiTests(TestCase):
@@ -1349,16 +1381,15 @@ class DepartmentAndMemberApiTests(TestCase):
         self.client = APIClient()
         self.department = Department.objects.create(title='Technology')
 
-    def test_department_can_be_created_and_listed(self):
+    def test_department_writes_remain_disabled(self):
         create_response = self.client.post(
             '/api/departments/',
             {'title': 'Arts'},
             format='json',
         )
 
-        self.assertEqual(create_response.status_code, 201)
-        self.assertEqual(create_response.data['title'], 'Arts')
-        self.assertEqual(Department.objects.count(), 2)
+        self.assertEqual(create_response.status_code, 405)
+        self.assertEqual(Department.objects.count(), 1)
 
     def test_member_can_be_created_with_department(self):
         admin = User.objects.create_superuser(
@@ -1433,7 +1464,7 @@ class DepartmentAndMemberApiTests(TestCase):
             second_response.data['member']['username'],
         )
 
-    def test_admin_can_create_club_with_president_and_metadata(self):
+    def test_club_writes_remain_disabled_for_superadmin(self):
         admin = User.objects.create_superuser(
             username='admin',
             password='admin-password-123',
@@ -1458,16 +1489,14 @@ class DepartmentAndMemberApiTests(TestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data['president'], president.pk)
-        self.assertEqual(response.data['member_count'], 0)
-        self.assertEqual(response.data['event_count'], 0)
-        self.assertEqual(Club.objects.get(name='Programming').head, president)
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(Club.objects.filter(name='Programming').exists())
 
-    def test_club_event_can_store_schedule_and_club(self):
+    def test_assigned_board_member_can_create_club_event(self):
         head_user = User.objects.create_user(
             username='event-head',
             password='head-password-123',
+            role=User.Role.BOARD_MEMBER,
         )
         head = UserMember.objects.create(
             username='event-head',
@@ -1479,12 +1508,14 @@ class DepartmentAndMemberApiTests(TestCase):
             department=self.department,
             head=head,
         )
+        ClubBoardAssignment.objects.create(user=head_user, club=club)
         self.client.force_authenticate(user=head_user)
 
         response = self.client.post(
             '/api/club-events/',
             {
                 'name': 'Demo Day',
+                'category': 'Tech',
                 'description': 'Project demonstrations.',
                 'parent_id': self.department.pk,
                 'club': club.pk,
@@ -1499,6 +1530,39 @@ class DepartmentAndMemberApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['club'], club.pk)
         self.assertEqual(response.data['status'], 'planned')
+
+    def test_staff_flag_alone_cannot_mutate_core_data(self):
+        staff_user = User.objects.create_user(
+            username='staff-only',
+            password='staff-password-123',
+            is_staff=True,
+        )
+        club = Club.objects.create(
+            name='Programming',
+            department=self.department,
+        )
+        self.client.force_authenticate(user=staff_user)
+
+        member_response = self.client.post(
+            '/api/members/',
+            {'username': 'unauthorized-member'},
+            format='json',
+        )
+        event_response = self.client.post(
+            '/api/club-events/',
+            {
+                'name': 'Unauthorized Event',
+                'category': 'Tech',
+                'parent_id': self.department.pk,
+                'club': club.pk,
+                'starts_at': '2026-11-01T10:00:00Z',
+                'ends_at': '2026-11-01T12:00:00Z',
+            },
+            format='json',
+        )
+
+        self.assertEqual(member_response.status_code, 403)
+        self.assertEqual(event_response.status_code, 403)
 
     def test_non_head_cannot_create_club_event(self):
         head_user = User.objects.create_user(

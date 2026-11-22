@@ -140,12 +140,11 @@ class PublicOpenApiSchemaTests(SimpleTestCase):
         self.assertNotIn('president_phone', club)
         self.assertTrue(department['slug']['nullable'])
 
-        for unavailable_field in (
-            'rsvps_count',
-            'has_user_rsvpd',
-            'attendees_preview',
-        ):
-            self.assertNotIn(unavailable_field, event)
+        self.assertEqual(event['rsvps_count']['type'], 'integer')
+        self.assertEqual(event['has_user_rsvpd']['type'], 'boolean')
+        self.assertEqual(event['attendees_preview']['type'], 'array')
+        attendee = components['Attendee']['properties']
+        self.assertEqual(set(attendee), {'id', 'full_name', 'avatar_url'})
 
     def test_health_media_types_distinguish_json_and_plain_text_liveness(self):
         health_content = self.schema['paths']['/api/health/']['get'][

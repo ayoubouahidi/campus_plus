@@ -98,6 +98,38 @@ stable pages. Client `ordering` is not supported; sending it returns 400.
 Authentication: none. The response uses the same event item shape as the list.
 Unknown IDs return 404.
 
+Every event list/detail item also includes:
+
+- `rsvps_count`: public aggregate registration count.
+- `has_user_rsvpd`: current authenticated user's state; always `false` for an
+  anonymous request.
+- `attendees_preview`: at most three newest attendees for authenticated users;
+  always `[]` anonymously. Entries contain only `id`, `full_name`, and
+  `avatar_url`.
+
+### Register or cancel an RSVP
+
+`POST /api/club-events/{id}/rsvp/` and
+`DELETE /api/club-events/{id}/rsvp/` require authentication.
+
+POST creates one registration and returns 201. Repeating POST is idempotent and
+returns 200 without creating a duplicate. DELETE removes only the requesting
+user's registration and is idempotent when no registration exists. Successful
+responses contain `rsvps_count` and `has_user_rsvpd`.
+
+Capacity is enforced transactionally. A full event returns 409 and creates no
+RSVP. Unknown events return 404. Event-status restrictions remain a product
+decision; this API does not currently invent a cancelled/completed-event rule.
+
+### List attendees
+
+`GET /api/club-events/{id}/attendees/` requires authentication and returns the
+standard `{count, next, previous, results}` envelope, newest RSVP first. Each
+entry contains only `id`, `full_name`, and `avatar_url`; email, phone, password,
+token, and membership-private fields are never returned. Signed-in-student
+visibility follows the frontend recommendation and still requires final product
+owner approval.
+
 ## Public Club API
 
 ### List active Clubs
@@ -260,10 +292,9 @@ authentication. In development, the default `WS_AUTH_BACKEND=token_dev` keeps
 this issuance endpoint disabled. Production must explicitly select
 `WS_AUTH_BACKEND=jwt`; `token_dev` is already rejected when `DEBUG=False`.
 
-This implements issuance only. Ayoub's future `/auth/sync`, `/api/me/`, logout,
-custom user, and token lifecycle remain dependencies for complete login and
-frontend integration. Existing sockets currently remain valid until their JWT
-expires unless the team later approves active logout revocation.
+The integrated backend also provides `/auth/sync`, email/password login,
+`/api/me/`, and logout. Existing sockets remain valid until their JWT expires;
+HTTP token logout does not maintain a WebSocket revocation list.
 
 ## Existing non-public/interim operations
 
@@ -282,13 +313,10 @@ logout contract.
 
 The schema intentionally does not claim the following:
 
-- `rsvps_count`, `has_user_rsvpd`, or `attendees_preview` event fields;
-- RSVP create/cancel or attendee-list endpoints;
-- Ayoub's `accounts.User` integration;
-- `/auth/sync`, `/api/me/`, or final logout behavior;
-- final board/superadmin Club, Department, or Event permissions;
+- `/api/me/rsvps/`;
+- final product approval for attendee visibility and cancelled/completed RSVP
+  policy;
 - protected database/Redis/Channels readiness;
-- board and superadmin dashboard endpoints.
 
 ## Unresolved compatibility questions
 
