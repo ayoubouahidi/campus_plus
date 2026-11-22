@@ -134,6 +134,22 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 
 ---
 
+## 1e. Backend merge review (Mouad, 2026-11-22, branch `Ahmed` at `e04d4a3`, PR #4 `integration/ahmed-ayoub-final`)
+
+Ahmed and Ayoub merged accounts, dashboard, RSVP and realtime. **Thank you: most of what the student site waited for is there**, with our field names (`title`, `start_time`, `rsvps_count`, `has_user_rsvpd`, `attendees_preview`…). The student site now builds its data layer against this API (DOCS §14). What is still missing or different:
+
+| # | Who | What | Why the student site needs it |
+| --- | --- | --- | --- |
+| BE1 | Ahmed | **Club contact for signed-in requests:** `president_email` and `president_phone` (or `contact_email`) in `GET /api/clubs/{slug}/` when the request has a valid token; absent for anonymous requests (already the privacy rule in `API_SPEC.md`) | The club page's contact card shows them to signed-in students (DOCS §6.13). Today the API never sends them, so the card would always be empty |
+| BE2 | Ahmed | **`GET /api/me/rsvps/`** (or `GET /api/club-events/?rsvped=true` with the token): the signed-in user's RSVP'd events, upcoming and past | `/profile` lists "Going" and "Went to". Without it the profile can only show mocks. `API_SPEC.md` lists it as unavailable on purpose: tell us the plan |
+| BE3 | Ahmed + Ayoub | **Drop EMINES and UM6P from the seed and the docs** (`README_BACKEND_AHMED_AYOUB.md` still plans departments `1337, emines, um6p`). Set the 42 campus allow-list (`auth_sync`) to the 1337 campuses | Decision §1d: Campus Hub is for 1337 only |
+| BE4 | Ahmed + Hamza | **Media URLs the browser can load:** `flyer_url` / `logo_url` / `banner_url` are built from the request host. When Next.js calls Django inside Docker (`http://web:8000`), that host is `web:8000`, which no browser can reach. Serve `/media/` through nginx and build URLs from a public base (e.g. `PUBLIC_MEDIA_URL=https://localhost/media/`) | Every flyer and logo would be a broken image on the student site |
+| BE5 | Ahmed | Confirm **club slugs are never null** after the A0 backfill (AH6) | Club pages are `/clubs/{slug}`; the frontend hides clubs without a slug until then |
+| BE6 | Hamza | Merged compose: `BACKEND_URL=http://web:8000` and the same `BACKEND_INTERNAL_KEY` for `frontend` and `web` (HZ2) | Login, sign-up and every page read Django through these |
+| BE7 | everyone | **Merging `Mouad`:** the `Ahmed` branch still has the old placeholder `frontend/` folder from October (Hamza, `fa2151a`). Git will report conflicts in `frontend/` when the student site is merged: **keep `Mouad`'s version of every file in `frontend/`** | The October folder is the old Next.js starter, not the student site |
+
+New on the API that the student site will use (no action needed): `capacity` and **409 "Event capacity has been reached"** on RSVP (the site will show "Event full"), `status` (`cancelled` events get a badge), numeric ids (the site maps them to strings), `member_count` / `upcoming_event_count` on clubs.
+
 ## 1d. Decision: Campus Hub is for 1337 only (Mouad, 2026-11-22)
 
 **EMINES and UM6P are not partners.** The student site no longer mentions them: no campus switch (All / 1337 / EMINES) on the feed and the clubs page, no EMINES or UM6P links in the footer, legal texts and descriptions say 1337 only, mock clubs and events are 1337 ones (DOCS §13). What the rest of the team should do:

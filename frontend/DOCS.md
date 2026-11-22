@@ -105,7 +105,7 @@ This codebase is the **Student & Public Web App**, open to everyone including si
 | 4     | Calendar, event dossier, clubs, search palette | ✅ Done (2026-11-05): `/calendar`, `/events/[id]`, `/clubs`, `/clubs/[slug]`, ⌘K search (§6). 4.11 (event as a modal over the feed) skipped, optional |
 | 5     | Student auth & route guards           | 🚧 In progress: 5.1 login page (§7.4), 5.2 Auth.js + real `/auth/login` (§7.5), 5.3 real session site-wide (§7.6), 5.4 `/profile` + guard + logout (§7.7–7.8) |
 | 6     | Real-time WebSockets                  | ⏳             |
-| 7     | i18n (Arabic RTL) & live API          | ✅ Languages done (§12, EN / FR / AR + RTL, 2026-11-22); live API waits for the merge (TEAM_NEEDS §1c) |
+| 7     | i18n (Arabic RTL) & live API          | ✅ Languages done (§12, 2026-11-22). 🚧 Live API started (§14): mapping layer + data functions, pages read Django when `BACKEND_URL` is set |
 
 **Phase 2 tasks**
 
@@ -4315,3 +4315,65 @@ export default async function PrivacyPage() {
 **Verified (2026-11-22).** The four searches above; `tsc` passes; ESLint: the same 6 old findings. In the browser: checklist on `/test` (each page in Arabic at phone and desktop width, then French, then dark mode).
 
 **Gotcha found while writing this entry: Tailwind reads the docs.** Tailwind v4 scans every file that git doesn't ignore for class names, `.md` files included. This entry first quoted a class fragment with an ellipsis (`[&` + `…]:border-l`); Tailwind turned it into a CSS rule with "…" in the selector, Next's CSS parser rejected the whole stylesheet, and every page answered 500 until the text was changed. Fix: `@source not "../../*.md";` in `globals.css` (Tailwind ≥ 4.1), so `DOCS.md`, `ARCHITECTURE.md`, `TEAM_NEEDS.md`, `CLAUDE.md` and `AGENTS.md` are never scanned. Classes only live in `src/`.
+
+## 14. Live API: the mapping layer (Phase 7, 2026-11-22)
+
+The backend was merged on branch `Ahmed` (PR #4, `e04d4a3`: Ahmed's API + Ayoub's accounts and dashboard). Review and what the team still owes: TEAM_NEEDS §1e (BE1–BE7).
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 14.1 | Raw types, mappers, API client, server token reader, data functions with the dev mock fallback; every server page switched to them | ✅ validated 2026-11-22 |
+| 14.2 | Run branch `Ahmed`'s Django locally, set `BACKEND_URL`, check every page against real data | ⏳ |
+| 14.3 | RSVP and attendees for real: server action with the token, rollback on failure, "Event full" (409), "Cancelled" badge | ⏳ |
+| 14.4 | Search (⌘K) and notifications off the mocks (they run in the browser: a route handler or the realtime feed) | ⏳ |
+
+### 14.1 Raw types, mappers, client and data functions (Step 14.1, 2026-11-22)
+
+**Files:** `src/lib/api/raw.ts`, `src/lib/api/mappers.ts`, `src/lib/api/client.ts`, `src/lib/api/token.ts`, `src/lib/data.ts` (all new); `src/types/api.ts` (`EventItem.club_slug?`, `status?`, `capacity?`, `EventStatus`); pages `app/(feed)`, `app/calendar`, `app/clubs`, `app/clubs/[slug]`, `app/events/[id]`, `app/profile`, `app/auth/register`; `src/auth.ts` (42 login user id fix). Test: `src/app/test/page.tsx` + `src/app/test/apiSamples.ts`.
+**Status:** ✅ Validated (2026-11-22). In dev without `BACKEND_URL` every page reads the mocks through `lib/data.ts` and looks exactly as before.
+
+**Business purpose.** The student site has shown mock data since Phase 3. With the backend merged, students must see the real events and clubs that board members create on the dashboard, and their real RSVPs. This step builds the one road from Django to the pages, so switching on the real data is setting `BACKEND_URL`.
+
+**Core concepts & decisions.**
+- **Four layers, one direction.** `client.ts` talks HTTP to Django → `raw.ts` describes what comes back → `mappers.ts` turns it into our types (`@/types/api`) → `data.ts` offers one function per need (`listEvents`, `getEvent`, `getAttendees`, `listClubs`, `getClub`, `listDepartments`). Components never see Django's shapes: a backend rename changes `raw.ts` + `mappers.ts` only.
+- **Mappers are pure and decide every edge case once:** numeric ids → strings; missing text → `''`, missing images → `null`; an unknown category → `EventsOrganization` with a server warning (the colour tables are exhaustive `Record`s and would crash); a club without a slug → `null`, dropped from lists (its page can't exist, BE5); president contact copied only when Django sent it (absent stays absent, the privacy rule).
+- **Two kinds of failure** (`client.ts`). `ApiError` = Django answered 4xx (`status`, `body` kept: 404 → `notFound()`, later 409 → "Event full"). `ApiUnavailable` = no proper answer (network, 8 s timeout, 5xx, not JSON) → the error page. DRF auth header is `Authorization: Token <key>`. `cache: 'no-store'`: answers depend on the visitor's token, so nothing is shared through Next's cache.
+- **Pagination.** `apiFetchAll` follows DRF's `next`, keeping only its query string (Django writes its own host, `http://web:8000`, into `next`), 200 per page, at most 10 pages.
+- **Mock fallback, same rule as login** (`data.ts`). Without `BACKEND_URL`: mocks in development, `ApiUnavailable` in production (never fake data in front of real students).
+- **The Django token stays on the server.** `getBackendToken()` decodes the encrypted Auth.js cookie with `getToken` (both cookie names: `__Secure-` over HTTPS, plain over HTTP), cached per request. It is never put in the session object, which the browser can read. With a token, Django fills `has_user_rsvpd` and `attendees_preview`; the pages' own `eventsForVisitor` guard stays as a second check.
+- **Page by page:** feed `listEvents({ upcoming: true })`; calendar `listEvents()`; clubs `listClubs()` + upcoming counts from `listEvents({ upcoming: true })`; club page `getClub(slug, token)` + `listEvents({ club: slug })`; event page `getEvent(id, token)`, organizer by slug or id, `getAttendees` **minus the student themself** (Django's list includes them; `AttendeesSection` adds "You" on its own); sign-up `listDepartments()` + `listClubs()`; `/profile` every event read with the token, kept where `has_user_rsvpd`, until `/api/me/rsvps/` exists (BE2).
+- **Bug fixed in `src/auth.ts`:** after a 42 login, Django's numeric user id was copied as a number, and the session callback (which only accepts strings) turned it into `''`. Now `String(data.user.id)`, like the email login already did.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Hand-written raw types + mappers | Generate types from Django's OpenAPI (`/api/schema/`) | Generated types would still need mapping (ids, nulls, names); `raw.ts` lists only the fields we read and documents them. Worth revisiting if the API grows a lot. |
+| Server-side fetches only | Browser calls Django through nginx | The token stays in the httpOnly cookie, pages render with data (SSR, no loading flash), Django's internal address is never exposed. |
+| Mocks in dev without `BACKEND_URL` | Always require the backend | Frontend work and `/test` keep running without the Django stack; production refuses to fall back. |
+| `/profile` filters all events by `has_user_rsvpd` | Wait for `/api/me/rsvps/` | Correct today with the token; one function to change when BE2 lands. |
+| Unknown category → `EventsOrganization` + warning | Throw | One odd event must not take the feed down; the warning makes the mismatch visible. |
+
+**Contract.**
+```ts
+// src/lib/data.ts (server only)
+listEvents(query?: { upcoming?: boolean; club?: string }, token?: string | null): Promise<EventItem[]>;
+getEvent(id: string, token?: string | null): Promise<EventItem | null>;      // null on 404 or a non-numeric id
+getAttendees(event: EventItem, token: string | null): Promise<AttendeePreview[]>; // [] signed out
+listClubs(): Promise<Club[]>;  getClub(slug: string, token?: string | null): Promise<Club | null>;
+listDepartments(): Promise<Department[]>;
+// src/lib/api/token.ts
+getBackendToken(): Promise<string | null>; // null signed out, with the dev logins, or without AUTH_SECRET
+// src/lib/api/client.ts
+class ApiError { status: number; body: unknown }  class ApiUnavailable {}
+apiFetch<T>(path, { method?, token?, body? }): Promise<T>;  apiFetchAll<T>(path, request?, maxPages = 10): Promise<T[]>;
+```
+
+**Usage.**
+```tsx
+// any server page
+const token = await getBackendToken();
+const events = await listEvents({ upcoming: true }, token);
+```
+
+**Verified (2026-11-22).** Without `BACKEND_URL`: all routes render as before (titles and content checked; `/test` reports "Mocks: 6 events and 6 clubs"). `/test` runs the mappers on the API_SPEC.md examples: event ids "3"/"2", attendee "20", status and capacity kept; edge event: `club_id ""`, `description ""`, "Workshops" → "EventsOrganization" with `[api] event 4: unknown category "Workshops"` in the server log; club without a slug → `null`; user id "42", `avatar_url null`, `club_id "2"`. `tsc` passes; ESLint: the same 6 old findings (a function named `useMocks` was read as a React hook: renamed `mocksOnly`). Against real Django: Step 14.2.

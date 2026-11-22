@@ -2,7 +2,8 @@ import { getLocale } from 'next-intl/server';
 import { getSessionState } from '@/auth';
 import { EventFeed } from '@/components/events/EventFeed';
 import { eventsForVisitor, getUpcomingEvents } from '@/lib/events';
-import { mockEvents } from '@/lib/mockData';
+import { getBackendToken } from '@/lib/api/token';
+import { listEvents } from '@/lib/data';
 import { getEventSchedules } from '@/lib/time';
 import { getRequestTime } from '@/lib/requestTime';
 
@@ -13,10 +14,11 @@ export default async function Home() {
   // and events that have already ended keep showing in production (DOCS.md §5.5).
   const now = await getRequestTime();
 
-  // Phase 7: replace mockEvents with the API response.
-  // Signed out: the count only, no attendee names, no "Going" (DOCS.md §9.3, §9.4).
+  // Django (or the mocks in dev, lib/data.ts). Signed out: the count only, no attendee names, no "Going"
+  // (DOCS.md §9.3, §9.4); eventsForVisitor stays as a second guard after the API's own rule.
   const isSignedIn = (await getSessionState()).status === 'signed-in';
-  const upcomingEvents = eventsForVisitor(getUpcomingEvents(mockEvents, now), isSignedIn);
+  const events = await listEvents({ upcoming: true }, await getBackendToken());
+  const upcomingEvents = eventsForVisitor(getUpcomingEvents(events, now), isSignedIn);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">

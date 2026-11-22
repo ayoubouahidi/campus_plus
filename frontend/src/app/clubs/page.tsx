@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { ClubDirectory } from '@/components/clubs/ClubDirectory';
 import { getUpcomingEventCounts, sortClubsByName } from '@/lib/clubs';
-import { mockClubs, mockEvents } from '@/lib/mockData';
+import { listClubs, listEvents } from '@/lib/data';
 import { getRequestTime } from '@/lib/requestTime';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -19,12 +19,12 @@ export default async function ClubsPage() {
   // Render per request: "upcoming" counts use the request time (same reason as `/`, DOCS.md §5.5).
   const now = await getRequestTime();
 
-  // Phase 7: GET /api/clubs (and the counts from the API) instead of mocks.
+  // Django (or the mocks in dev, lib/data.ts). Counts come from the upcoming events, the same rule as the feed.
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <ClubDirectory
-        clubs={sortClubsByName(mockClubs)}
-        upcomingCounts={getUpcomingEventCounts(mockEvents, now)}
+        clubs={sortClubsByName(await listClubs())}
+        upcomingCounts={getUpcomingEventCounts(await listEvents({ upcoming: true }), now)}
       />
     </div>
   );

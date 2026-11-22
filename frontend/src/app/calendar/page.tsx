@@ -4,7 +4,8 @@ import { getSessionState } from '@/auth';
 import { EventCalendar } from '@/components/calendar/EventCalendar';
 import { getCalendarNames, getEventIdsByDay, getEventTimes, toCampusDayKey } from '@/lib/calendar';
 import { eventsForVisitor } from '@/lib/events';
-import { mockEvents } from '@/lib/mockData';
+import { getBackendToken } from '@/lib/api/token';
+import { listEvents } from '@/lib/data';
 import { getRequestTime } from '@/lib/requestTime';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,11 +22,11 @@ export default async function CalendarPage() {
   // Render per request, so "today" is the request date, not the build date (same as `/`, DOCS.md §5.5).
   const now = await getRequestTime();
 
-  // Phase 7: fetch the events of the visible range from the API instead of mockEvents.
+  // Every event (Django or the mocks, lib/data.ts). Later: only the visible range (?from=&to=, DOCS.md §14).
   // Past events stay listed: a calendar shows what happened too, unlike the "upcoming" feed.
   // Signed out: no "Going" badges in the day agenda (DOCS.md §9.4).
   const isSignedIn = (await getSessionState()).status === 'signed-in';
-  const events = eventsForVisitor(mockEvents, isSignedIn);
+  const events = eventsForVisitor(await listEvents({}, await getBackendToken()), isSignedIn);
   // Times, month and weekday names in the visitor's language, made here on the server (Step 12.4).
   const locale = await getLocale();
   const t = await getTranslations('Calendar');

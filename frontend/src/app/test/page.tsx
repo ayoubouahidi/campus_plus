@@ -5,6 +5,10 @@ import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 import { DEV_LOGIN_ENABLED, getSessionState, signOut } from '@/auth';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { LOCALE_INFO } from '@/i18n/config';
+import { hasBackend } from '@/lib/api/client';
+import { toClub, toEventItem, toUser } from '@/lib/api/mappers';
+import { listClubs, listEvents } from '@/lib/data';
+import { SAMPLE_CLUB, SAMPLE_CLUB_NO_SLUG, SAMPLE_EVENT_EDGE, SAMPLE_EVENT_SIGNED_IN, SAMPLE_USER } from './apiSamples';
 import { SessionSwitcher } from './SessionSwitcher';
 
 // TEST PAGE (/test): where each new step is checked before it goes into the real pages.
@@ -33,6 +37,14 @@ export default async function TestPage() {
   const t = await getTranslations('Events');
   const format = await getFormatter();
   const sampleDate = new Date('2026-11-13T17:00:00Z'); // hackathon opening, a fixed date (no hydration drift)
+  const [liveEvents, liveClubs] = await Promise.all([listEvents(), listClubs()]);
+  const mapperCases = [
+    { label: 'Event (signed-in request)', raw: SAMPLE_EVENT_SIGNED_IN, mapped: toEventItem(SAMPLE_EVENT_SIGNED_IN) },
+    { label: 'Event (edge cases)', raw: SAMPLE_EVENT_EDGE, mapped: toEventItem(SAMPLE_EVENT_EDGE) },
+    { label: 'Club', raw: SAMPLE_CLUB, mapped: toClub(SAMPLE_CLUB) },
+    { label: 'Club without a slug', raw: SAMPLE_CLUB_NO_SLUG, mapped: toClub(SAMPLE_CLUB_NO_SLUG) },
+    { label: 'User (/api/me/)', raw: SAMPLE_USER, mapped: toUser(SAMPLE_USER) },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -41,7 +53,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.8, final Arabic (RTL) pass over the whole site</p>
+        <p className="font-semibold">Test page: Step 14.1, the API mapping layer (Django → student site types)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,81 +130,40 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Every page, in العربية (switch above first)</h3>
-          <ul className="mt-2 flex flex-wrap gap-2">
-            <li>
-              <Link href="/" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Feed
-              </Link>
-            </li>
-            <li>
-              <Link href="/calendar" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Calendar
-              </Link>
-            </li>
-            <li>
-              <Link href="/calendar?date=2026-11-14&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Week view
-              </Link>
-            </li>
-            <li>
-              <Link href="/clubs" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Clubs
-              </Link>
-            </li>
-            <li>
-              <Link href="/clubs/leet-dev" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                A club
-              </Link>
-            </li>
-            <li>
-              <Link href="/events/evt_hackathon_ai" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                An event
-              </Link>
-            </li>
-            <li>
-              <Link href="/auth/login" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Login
-              </Link>
-            </li>
-            <li>
-              <Link href="/auth/register" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Sign-up
-              </Link>
-            </li>
-            <li>
-              <Link href="/profile" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Profile
-              </Link>
-            </li>
-            <li>
-              <Link href="/privacy" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Privacy
-              </Link>
-            </li>
-            <li>
-              <Link href="/terms" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Terms
-              </Link>
-            </li>
-            <li>
-              <Link href="/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                404
-              </Link>
-            </li>
-          </ul>
+          <h3 className="font-semibold">Data source right now</h3>
+          <p className="mt-1">
+            {hasBackend() ? (
+              <>Django at <code>{process.env.BACKEND_URL}</code>: {liveEvents.length} events and {liveClubs.length} clubs read through lib/data.ts.</>
+            ) : (
+              <>Mocks (no <code>BACKEND_URL</code>): {liveEvents.length} events and {liveClubs.length} clubs from lib/mockData.ts, the dev fallback.</>
+            )}
+          </p>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.8), at phone width and at desktop width</h3>
+          <h3 className="font-semibold">Mappers on the API_SPEC.md examples (raw → mapped)</h3>
+          <div className="mt-2 grid gap-3 lg:grid-cols-2">
+            {mapperCases.map(({ label, raw, mapped }) => (
+              <details key={label} className="rounded-lg border border-slate-200/80 p-3 dark:border-slate-800">
+                <summary className="cursor-pointer font-medium">{label}</summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <pre dir="ltr" className="overflow-x-auto rounded bg-slate-50 p-2 text-xs dark:bg-slate-800">{JSON.stringify(raw, null, 2)}</pre>
+                  <pre dir="ltr" className="overflow-x-auto rounded bg-violet-50 p-2 text-xs dark:bg-violet-500/10">{JSON.stringify(mapped, null, 2)}</pre>
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="font-semibold">What to check (Step 14.1)</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Each page reads right to left: headings, text and lists start on the right; nothing is stuck on the left by mistake; no horizontal scroll on a phone.</li>
-            <li>Arrows point the reading way: back links (→ in Arabic), calendar ‹ ›, profile row chevrons and &quot;Discover events&quot; arrow, logout icon, the footer&apos;s &quot;opens in a new tab&quot; icon.</li>
-            <li>Keyboard: ← / → move the right way in the calendar grid and in tabs; Tab order follows the visual order (right to left).</li>
-            <li>Left-to-right islands stay readable: emails, phone numbers (+212 6 …), @login, cookie names, times like 16:00.</li>
-            <li>No English left except names (Campus Hub, 1337 Coding School, 42 Intra), event and club data, cookie names, the &quot;Ctrl&quot; key, and the developers-only dev login button. Signed in: notifications, RSVP buttons and toasts, the profile.</li>
-            <li>Then once in Français: no English sentence anywhere.</li>
-            <li>Dark mode, both languages: nothing changes but the colours.</li>
+            <li>Every page looks exactly as before (feed, calendar, clubs, a club, an event, sign-up, /profile signed in): in dev they still read the mocks, now through lib/data.ts.</li>
+            <li>Mapped event: ids are strings (&quot;3&quot;, &quot;2&quot;), dates unchanged, attendee id &quot;20&quot;, status and capacity kept.</li>
+            <li>Edge event: club_id &quot;&quot;, description &quot;&quot;, unknown category &quot;Workshops&quot; → &quot;EventsOrganization&quot; (a warning in the server log), cancelled kept.</li>
+            <li>Club: logo &quot;&quot;, no president_email / president_phone keys (Django doesn&apos;t send them yet, TEAM_NEEDS BE1). Club without a slug → null (dropped from lists).</li>
+            <li>User: id &quot;42&quot;, avatar_url null, club_id &quot;2&quot;, role BOARD_MEMBER.</li>
+            <li>Against the real backend: next step (run branch Ahmed&apos;s Django locally and set BACKEND_URL).</li>
           </ul>
         </div>
       </section>

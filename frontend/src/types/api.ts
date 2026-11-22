@@ -62,7 +62,13 @@ export interface EventItem {
     rsvps_count: number;
     has_user_rsvpd: boolean;
     attendees_preview: AttendeePreview[]; // at most 3, newest first
+    // From the API since Step 14.1 (optional: the mocks don't set them).
+    club_slug?: string | null;
+    status?: EventStatus; // 'cancelled' events get a badge (next step)
+    capacity?: number | null; // null = no limit; RSVP answers 409 when full
   }
+
+  export type EventStatus = 'planned' | 'ongoing' | 'completed' | 'cancelled';
   
   // Standard Paginated Response Envelope :  EventResponse, ClubResponse, UserResponse
   export interface ApiResponse<T> {

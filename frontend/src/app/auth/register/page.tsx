@@ -6,7 +6,7 @@ import { LoginLayout } from '@/components/auth/LoginLayout';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 import { RegisterPanel } from '@/components/auth/RegisterPanel';
 import { safeNextPath } from '@/lib/login';
-import { mockClubs, mockDepartments } from '@/lib/mockData';
+import { listClubs, listDepartments } from '@/lib/data';
 import { registerWithEmail } from './actions';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,9 +30,9 @@ export default async function RegisterPage({
   // Already signed in: no second account.
   if (await auth()) redirect(next);
 
-  // Phase 7: GET /api/departments/ and /api/clubs/ instead of the mocks. Only what the form needs is sent.
-  const departments = mockDepartments.map(({ id, name }) => ({ id, name }));
-  const clubs = mockClubs.map(({ id, name, department_id }) => ({ id, name, department_id }));
+  // Django's departments and clubs (or the mocks in dev, lib/data.ts). Only what the form needs is sent.
+  const departments = (await listDepartments()).map(({ id, name }) => ({ id, name }));
+  const clubs = (await listClubs()).map(({ id, name, department_id }) => ({ id, name, department_id }));
 
   return (
     <LoginLayout>

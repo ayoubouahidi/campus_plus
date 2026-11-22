@@ -7,9 +7,10 @@ import { getSessionState } from '@/auth';
 import { ClubEvents } from '@/components/clubs/ClubEvents';
 import { ClubHeader } from '@/components/clubs/ClubHeader';
 import { IconBase } from '@/components/ui/layout/navIcons';
-import { formatClubSince, getClubBySlug, getClubContact, getClubEvents } from '@/lib/clubs';
+import { formatClubSince, getClubContact, getClubEvents } from '@/lib/clubs';
+import { getBackendToken } from '@/lib/api/token';
+import { getClub, listEvents } from '@/lib/data';
 import { eventsForVisitor } from '@/lib/events';
-import { mockClubs, mockEvents } from '@/lib/mockData';
 import { getEventSchedules } from '@/lib/time';
 import { getRequestTime } from '@/lib/requestTime';
 
@@ -18,10 +19,10 @@ interface ClubPageProps {
 }
 
 // One lookup per request, shared by generateMetadata and the page. Phase 7: GET /api/clubs/:slug here.
-const loadClub = cache((slug: string) => getClubBySlug(mockClubs, slug));
+const loadClub = cache(async (slug: string) => getClub(slug, await getBackendToken()));
 
 export async function generateMetadata({ params }: ClubPageProps): Promise<Metadata> {
-  const club = loadClub((await params).slug);
+  const club = await loadClub((await params).slug);
   if (!club) return { title: (await getTranslations('Meta'))('clubNotFound') };
 
   return {
@@ -37,11 +38,11 @@ export default async function ClubPage({ params }: ClubPageProps) {
   // Render per request: upcoming vs past uses the request time (same reason as `/`, DOCS.md §5.5).
   const now = await getRequestTime();
 
-  const club = loadClub((await params).slug);
+  const club = await loadClub((await params).slug);
   if (!club) notFound(); // → ./not-found.tsx, HTTP 404
 
-  // Phase 7: the club's events from the API instead of filtering mockEvents.
-  const { upcoming, past } = getClubEvents(mockEvents, club.id, now);
+  // The club's events (Django: ?club=<slug>; mocks: filtered), split at the request time.
+  const { upcoming, past } = getClubEvents(await listEvents({ club: club.slug }, await getBackendToken()), club.id, now);
 
   // Decided on the server: signed-out visitors never receive the president's contact details, not even in the
   // page data (DOCS.md §6.13). Same cached session read as the root layout (one cookie decode per request).

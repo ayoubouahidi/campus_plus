@@ -27,7 +27,8 @@ type FortyTwoProfile = {
   campus?: { name: string }[];
 };
 
-type BackendSyncResponse = { token: string; user: { id: string; role: UserRole } };
+// Django sends a numeric id (accounts.UserSerializer); the session stores it as a string (Step 14.1).
+type BackendSyncResponse = { token: string; user: { id: number | string; role: UserRole } };
 
 const ROLES: readonly UserRole[] = ['STUDENT', 'BOARD_MEMBER', 'SUPERADMIN'];
 const isRole = (value: unknown): value is UserRole => ROLES.includes(value as UserRole);
@@ -199,7 +200,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       // Handed to the jwt callback below (same request)
       user.backendToken = data.token;
-      user.backendUserId = data.user.id;
+      user.backendUserId = String(data.user.id); // was copied as a number, which the session callback dropped
       user.role = data.user.role;
       user.login = fortyTwo.login;
       user.campus = fortyTwo.campus?.[0]?.name ?? null;

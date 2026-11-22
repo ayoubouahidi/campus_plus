@@ -3,7 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { auth, getSessionState, signOut } from '@/auth';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { getMyEvents } from '@/lib/events';
-import { mockEvents } from '@/lib/mockData';
+import { getBackendToken } from '@/lib/api/token';
+import { listEvents } from '@/lib/data';
 import { getRequestTime } from '@/lib/requestTime';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,8 +30,9 @@ export default async function ProfilePage() {
   if (session.status !== 'signed-in') return null; // unreachable: the layout redirects first
   const authSession = await auth(); // 42 login + campus (not part of our User shape)
 
-  // Phase 7: GET /api/me/rsvps/ instead of the mock events flagged has_user_rsvpd.
-  const { upcoming, past } = getMyEvents(mockEvents, now);
+  // Until Django has /api/me/rsvps/ (TEAM_NEEDS BE2): every event read with the student's token, kept where
+  // has_user_rsvpd is true. Correct, just heavier than a dedicated endpoint.
+  const { upcoming, past } = getMyEvents(await listEvents({}, await getBackendToken()), now);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
