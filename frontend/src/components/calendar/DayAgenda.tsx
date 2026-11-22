@@ -1,9 +1,10 @@
 import React, { useId } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { CATEGORY_LABELS } from '@/lib/events';
-import { formatAgendaTime, formatDayLabel, type DayKey, type EventTimes } from '@/lib/calendar';
+import { useCalendarFormat } from '@/hooks/useCalendarFormat';
+import type { CalendarNames, DayKey, EventTimes } from '@/lib/calendar';
 import type { EventCategory, EventItem } from '@/types/api';
 
 /* --------------------------------- Types ---------------------------------- */
@@ -14,6 +15,8 @@ export interface DayAgendaProps extends React.HTMLAttributes<HTMLElement> {
   events: EventItem[];
   // From getEventTimes on the server, keyed by event id.
   eventTimes: Record<string, EventTimes>;
+  // Month and weekday names in the visitor's language (getCalendarNames on the server, Step 12.4).
+  names: CalendarNames;
   headingLevel?: 'h2' | 'h3';
   // Where each event links to. Default: its page. EventCalendar passes one that remembers the calendar's
   // place, so the event page can link back to this day (eventFromCalendarHref).
@@ -35,31 +38,33 @@ const accentStyles: Record<EventCategory, string> = {
   EventsOrganization: 'border-s-sky-500',
 };
 
-const describeCount = (count: number): string =>
-  count === 0 ? 'No events' : `${count} ${count === 1 ? 'event' : 'events'}`;
-
 /* -------------------------------- DayAgenda ------------------------------- */
 
 // The selected day's events, under the month grid on phones and beside it on large screens.
-// No hooks besides useId and no handlers: it renders the same on server and client.
+// No state and no handlers: it renders the same on server and client (labels: useCalendarFormat).
 export const DayAgenda = React.forwardRef<HTMLElement, DayAgendaProps>(
-  ({ dayKey, events, eventTimes, headingLevel: Heading = 'h2', eventHref = defaultEventHref, className = '', ...props }, ref) => {
+  ({ dayKey, events, eventTimes, names, headingLevel: Heading = 'h2', eventHref = defaultEventHref, className = '', ...props }, ref) => {
     const headingId = useId();
+    const format = useCalendarFormat(names);
+    const t = useTranslations('Calendar');
+    const tEvents = useTranslations('Events');
+    const tCategory = useTranslations('Categories');
+    const tRsvp = useTranslations('Rsvp');
 
     return (
       <section ref={ref} aria-labelledby={headingId} className={`space-y-3 ${className}`} {...props}>
         <div>
           <Heading id={headingId} className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            {formatDayLabel(dayKey)}
+            {format.dayLabel(dayKey)}
           </Heading>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{describeCount(events.length)}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{tEvents('count', { count: events.length })}</p>
         </div>
 
         {events.length === 0 ? (
           <EmptyState
             className="py-10"
-            title="Nothing on this day"
-            description="Pick another day to see what's on."
+            title={t('emptyTitle')}
+            description={t('emptyBody')}
           />
         ) : (
           <ul className="space-y-2">
@@ -72,7 +77,7 @@ export const DayAgenda = React.forwardRef<HTMLElement, DayAgendaProps>(
                 >
                   {times && (
                     <p className="text-xs font-semibold text-violet-600 dark:text-violet-400">
-                      {formatAgendaTime(times, dayKey)}
+                      {format.agendaTime(times, dayKey)}
                     </p>
                   )}
                   <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -88,10 +93,10 @@ export const DayAgenda = React.forwardRef<HTMLElement, DayAgendaProps>(
                     {event.club_name} · {event.location}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <Badge variant={event.category}>{CATEGORY_LABELS[event.category]}</Badge>
+                    <Badge variant={event.category}>{tCategory(event.category)}</Badge>
                     {event.has_user_rsvpd && (
                       <Badge variant="success" hasDot>
-                        Going
+                        {tRsvp('going')}
                       </Badge>
                     )}
                   </div>

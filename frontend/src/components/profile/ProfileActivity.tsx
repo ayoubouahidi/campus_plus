@@ -34,7 +34,7 @@ interface StatProps {
 
 // Desktop: icon tile + value + label in a row. Phone: centered value over a short label (Figma phone frame).
 const Stat = ({ icon, value, label, shortLabel, extra }: StatProps) => (
-  <div className="flex flex-1 flex-col items-center gap-1 px-2 py-5 text-center sm:flex-row sm:gap-2 sm:px-6 sm:text-left">
+  <div className="flex flex-1 flex-col items-center gap-1 px-2 py-5 text-center sm:flex-row sm:gap-2 sm:px-6 sm:text-start">
     <span className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600 sm:flex dark:bg-violet-500/10 dark:text-violet-400">
       {icon}
     </span>

@@ -3813,7 +3813,7 @@ Two accessibility modules of the subject: **≥ 3 languages with a switcher** (a
 | 12.1 | Setup: next-intl, language from a cookie, `<html lang dir>`, Arabic font, `LanguageSwitcher` | ✅ validated 2026-11-21 (switcher placed in 12.2) |
 | 12.2 | Shell: navbar (switcher in it), mobile tab bar + drawer, footer, search palette, notifications, toasts, modal close; RTL fixes found there (drawer side and slide, `Input`/`Select`/`Toast`/`Avatar` physical classes) | ✅ validated 2026-11-22 |
 | 12.3 | Feed, event cards, event page, RSVP, attendees; event dates in the active language (Moroccan Arabic month names) | ✅ validated 2026-11-22 |
-| 12.4 | Calendar (weekday names, month titles, agenda) | ⏳ |
+| 12.4 | Calendar (weekday names, month and week titles, agenda, times); server-made names so the browser re-renders the same text | ✅ validated 2026-11-22 |
 | 12.5 | Clubs directory and club pages | ⏳ |
 | 12.6 | Login, sign-up (validation and error messages), profile | ⏳ |
 | 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), the remaining `Intl` formatters on the active locale (calendar ones in 12.4; `formatDateTile`, `formatClubSince`) | ⏳ |
@@ -4028,3 +4028,85 @@ const t = useTranslations('Rsvp');
 **Notes for later.**
 - `/events/nope` answers HTTP **200**, not 404, in dev, and it did before this step too (checked on the previous commit). The route has a `loading.tsx`, so the response starts streaming before `notFound()` runs; Next then sends the not-found UI with a `noindex` tag. To check in 12.7 with a production build (`next build && next start`).
 - The browser tab title (`metadata`), e.g. "Event not found | Campus Hub", is still English: 12.7.
+
+### 12.4 The calendar in three languages (Step 12.4, 2026-11-22)
+
+**Files:** `src/lib/calendar.ts` (`getCalendarNames`, `CalendarNames`, `WeekdayNames`, `dayParts`, `weekBounds`, `getAgendaTimeKind`, `getEventTimes(events, locale)`; removed `WEEKDAYS`, `formatMonthTitle`, `formatDayLabel`, `formatWeekTitle`, `CALENDAR_TITLES`, `formatAgendaTime`; `CALENDAR_VIEWS` is now `CalendarView[]`), `src/hooks/useCalendarFormat.ts` (new), `src/i18n/messages/{en,fr,ar}.ts` (namespace `Calendar`), `src/components/calendar/{EventCalendar,CalendarHeader,MonthGrid,WeekGrid,DayAgenda,CalendarSkeleton,dayStyles}.tsx|ts`, `src/app/calendar/page.tsx`, `src/lib/events.ts` (comment). Test: `src/app/test/page.tsx` (links + checklist).
+**Status:** ✅ Validated on `/test` (2026-11-22). Live on `/calendar`.
+
+**Business purpose.** The calendar is how students plan their week. In French or Arabic it now reads like a local calendar: month names as Moroccans write them, Monday first, times in 24-hour format in French and Arabic, and the agenda's "from / until / all day" in their language.
+
+**Core concepts & decisions.**
+- **The hydration problem.** Unlike the feed, the calendar re-renders its labels in the browser on every click (next month, another day), so the same label is made on the server (first HTML) and in the browser (after hydration and clicks). Before this step the labels used `Intl` with `'en'` on both sides, which worked because English output is stable. In other languages `Intl` output depends on the ICU version: older browsers write "نوفمبر" where Node writes "نونبر", the Arabic comma and the spacing around dashes vary. A mismatch on first render is a React hydration error.
+- **The fix: `Intl` on the server only, templates in the browser.** `getCalendarNames(locale)` (server, cached per language) returns the bare names: 12 long months, 12 short months, 7 weekdays (long, short, compact), Monday first. The page passes them as a `names` prop. In the browser, `useCalendarFormat(names)` only puts them into ICU message templates (`Calendar.monthTitle`, `dayLabel`, `weekSameMonth` / `weekCrossMonth` / `weekCrossYear`). Message formatting is plain string work, so server and browser produce the same characters on any browser.
+- **Word order lives in the messages.** English "Thursday, November 5" / "Nov 2 – 8, 2026"; French "jeudi 5 novembre" / "2 – 8 nov. 2026" / "30 nov. – 6 déc. 2026"; Arabic "الخميس، 5 نونبر" / "2 – 8 نونبر 2026". Three week templates (same month, across months, across years) cover every week. Numbers are passed as strings (`dayParts`), so ICU never writes "2,026".
+- **Weekday headers.** `short` from 640 px. On phones `compact`: the short name, except in Arabic, where the "short" names are the full words (الأربعاء is too wide for a seventh of a phone); there it is the one-letter form (ن ث ر خ ج س ح) that Arabic calendars use. The `<abbr title>` keeps the full name.
+- **Agenda times.** `getEventTimes(events, locale)` writes start/end on the server in the visitor's language ("8:00 AM" / "8:00"). `getAgendaTimeKind` decides which of `timeRange`, `from`, `until`, `allDay` applies for a day, and the hook words it ("Dès 8:00", "حتى 17:00", "Toute la journée").
+- **Counts and names:** day buttons read `Calendar.dayButton` ("jeudi 5 novembre, 1 événement", plural forms), agenda count `Events.count`, "+N more" `Calendar.more`, category badges `Categories`, the "Going" badge `Rsvp.going`, prev/next labels as message keys in the `STEP_LABELS` table, view tabs `t(view)`.
+- **RTL fix found here:** the cell separators used `[&:not(:first-child)]:border-l`. In Arabic the first cell is on the right, so the lines sat on the wrong side of each cell (a double line at the left edge, none between the first two days). Now `border-s` in `MonthGrid`, `WeekGrid` and `CalendarSkeleton`. Arrow icons and arrow keys already followed the direction (`rtl:-scale-x-100`, `useDayGridNavigation`).
+- **This replaces 12.3's note** that the calendar's week title stays hand-built for hydration reasons: it is now built from server-made names and message templates, which solves the same problem in every language.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Server-made names + message templates | `Intl` (or next-intl's `useFormatter`) in the browser | Safe for every browser: no ICU version can make the server and browser disagree. Costs one small prop (≈ 40 short strings). |
+| Server-made names + templates | Format every label for every day on the server | The calendar can move to any month on click; precomputing all of them is impossible. Names + templates cover any date. |
+| Names passed as a prop | A React context for the names | Only four components need them, all under `EventCalendar`; a prop is explicit and keeps `MonthGrid` / `WeekGrid` / `DayAgenda` usable on their own. |
+| One-letter Arabic weekdays on phones | Truncate the full names | A cut Arabic word is unreadable; the one-letter forms are the usual Arabic calendar header. Other languages keep their 3-letter names. |
+| Three week templates | `Intl.DateTimeFormat.formatRange` | `formatRange` runs `Intl` in the browser (the problem above). |
+
+**Contract.**
+```ts
+// src/lib/calendar.ts
+interface WeekdayNames { long: string; short: string; compact: string }
+interface CalendarNames { months: string[]; monthsShort: string[]; weekdays: WeekdayNames[] } // Monday first
+getCalendarNames(locale = 'en'): CalendarNames;                       // server only, cached per language
+getEventTimes(events: EventItem[], locale = 'en'): Record<string, EventTimes>; // server only
+type AgendaTimeKind = 'timeRange' | 'from' | 'until' | 'allDay';
+getAgendaTimeKind(times: EventTimes, day: DayKey): AgendaTimeKind;   // any runtime
+dayParts(key: DayKey): { year: string; monthIndex: number; day: string; weekdayIndex: number };
+weekBounds(key: DayKey): { start: DayKey; end: DayKey };
+CALENDAR_VIEWS: CalendarView[]; // ['month', 'week']
+// src/hooks/useCalendarFormat.ts
+useCalendarFormat(names: CalendarNames): {
+  monthTitle(key): string; weekTitle(key): string; dayLabel(key): string;
+  agendaTime(times: EventTimes, day: DayKey): string; title: Record<CalendarView, (key: DayKey) => string>;
+};
+// New required prop `names: CalendarNames` on EventCalendar, MonthGrid, WeekGrid, DayAgenda.
+```
+
+**Usage.**
+```tsx
+// app/calendar/page.tsx (server)
+const locale = await getLocale();
+<EventCalendar events={events} eventIdsByDay={getEventIdsByDay(events)} eventTimes={getEventTimes(events, locale)}
+  names={getCalendarNames(locale)} todayKey={toCampusDayKey(now)} urlState />
+
+// any calendar component (client)
+const format = useCalendarFormat(names);
+<h2>{format.dayLabel(selectedKey)}</h2>
+```
+
+**Verified (2026-11-22, server HTML fetched inside the container).** `/calendar?date=2026-11-14`: "November 2026" / "novembre 2026" / "نونبر 2026", Today / Aujourd’hui / اليوم, Month·Week / Mois·Semaine / شهر·أسبوع, headers Mon / lun. / ن + الاثنين, day labels "Thursday, November 5, 1 event" / "jeudi 5 novembre, 1 événement" / "الخميس، 5 نونبر، فعالية واحدة", "Previous month" / "Mois précédent" / "الشهر السابق". Week views: "Nov 9 – 15, 2026" / "9 – 15 nov. 2026" / "9 – 15 نونبر 2026" with the hackathon's "From 8:00 AM · All day · Until 5:00 PM" / "Dès 8:00 · Toute la journée · Jusqu’à 17:00" / "من 8:00 · طوال اليوم · حتى 17:00"; across months "Nov 30 – Dec 6, 2026" / "30 nov. – 6 déc. 2026" / "30 نونبر – 6 دجنبر 2026"; across years "Dec 28, 2026 – Jan 3, 2027" / "28 déc. 2026 – 3 janv. 2027" / "28 دجنبر 2026 – 3 يناير 2027"; empty day "Nothing on this day" / "Rien ce jour-là" / "لا شيء في هذا اليوم". `tsc` passes; ESLint: the same 6 old findings, none new. In the browser (checklist on `/test`): clicking through months and weeks, no hydration warning, the Arabic grid separators.
+
+**Notes for later.**
+- French writes the first of the month "1er" in running text ("dimanche 1er novembre"); `Intl` and these templates write "1". Left as is, to match the event page (which uses `Intl` directly). An ICU `select` on `day` could add it if wanted.
+- Counts with `#` in client components (here and in 12.2–12.3) are formatted with `Intl.NumberFormat('ar')`. Current browsers and Node write Latin digits (0–9) for `ar`; a very old browser could write Arabic-Indic digits (١٢) and show a hydration warning. Not seen; to keep in mind for the 12.8 audit.
+
+### 12.4b Profile hero in Arabic: mirrored layout, translated banner (fix, 2026-11-22)
+
+**Files:** `src/components/profile/ProfileHero.tsx`, `src/components/profile/ProfileSkeleton.tsx`, `src/components/profile/ProfileActivity.tsx`, `src/i18n/messages/{en,fr,ar}.ts` (new namespace `Profile`).
+**Status:** ✅ Validated (2026-11-22). Found by Mouad while checking 12.4 in Arabic.
+
+**The problem.** The hero (banner + avatar + name) was laid out with physical classes: `sm:pl-40 sm:pr-8` reserved room for the avatar on the left, and the avatar sat at `sm:left-[31px]`. In Arabic the text and the buttons move to the right but the avatar and the reserved space didn't, so the buttons column ran under the avatar and the name had a gap on the wrong side. The banner's text ("Your campus. Your community.") and the hero's chips and buttons were still English.
+
+**Fix.**
+- Logical classes: `sm:ps-40 sm:pe-8` and the avatar at `sm:start-[31px]` (hero and its skeleton), so avatar, padding and text swap sides together. The stats row's `sm:text-left` → `sm:text-start`.
+- The banner gradient runs the other way in Arabic (`rtl:bg-gradient-to-l`), so its light end stays behind the text, as in the design.
+- `@login` gets `dir="ltr"`: in a right-to-left paragraph the bidi algorithm moves a leading "@" to the end ("mnajjar@").
+- Translated in the hero (the rest of `/profile` stays for 12.6): the banner tagline, role chips (`Profile.roles.STUDENT | BOARD_MEMBER | SUPERADMIN`), "Member since {date}", the "· Soon" buttons. "Campus Hub" and "1337 × EMINES" are names and stay.
+
+**Tradeoff.** `ROLE_LABELS` (a `Record<UserRole, string>`) became a nested message object `Profile.roles`, read with ``t(`roles.${user.role}`)``. next-intl types the template literal against the messages, so a new `UserRole` without a translation still fails `tsc`, as the `Record` did.
+
+**Verified.** `tsc` passes; ESLint: the same 6 old findings. The page needs a signed-in session, so the layout is checked in the browser: `/profile` in العربية, avatar on the right, name and chips beside it, buttons on the far left, banner text in Arabic on the left side of the banner.

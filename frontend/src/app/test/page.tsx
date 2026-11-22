@@ -41,7 +41,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.3, the feed, event cards, event page, RSVP and attendees in EN / FR / AR</p>
+        <p className="font-semibold">Test page: Step 12.4, the calendar in EN / FR / AR</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,50 +118,48 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Pages to open (Step 12.3 is live on them)</h3>
+          <h3 className="font-semibold">Pages to open (Step 12.4 is live on /calendar)</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             <li>
-              <Link href="/" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Feed (/)
+              <Link href="/calendar?date=2026-11-14" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Month (November 2026)
               </Link>
             </li>
             <li>
-              <Link href="/events/evt_welcome_bbq" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Upcoming one-day event
+              <Link href="/calendar?date=2026-11-14&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Week with the 3-day hackathon
               </Link>
             </li>
             <li>
-              <Link href="/events/evt_hackathon_ai" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Ended multi-day event
+              <Link href="/calendar?date=2026-12-01&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Week across two months
               </Link>
             </li>
             <li>
-              <Link href="/events/evt_basketball_final" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Event with attendees
+              <Link href="/calendar?date=2026-12-29&view=week" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Week across two years
               </Link>
             </li>
             <li>
-              <Link href="/events/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Unknown event (404)
+              <Link href="/calendar" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Today
               </Link>
             </li>
           </ul>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.3), in Français then العربية</h3>
+          <h3 className="font-semibold">What to check (Step 12.4), in Français then العربية</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Feed heading, result count (&quot;1 événement&quot;, &quot;فعالية واحدة&quot;; filter down to 0 for &quot;Aucun événement&quot;), campus toggle (&quot;Tous&quot; / &quot;الكل&quot;; 1337 and EMINES stay), category chips (&quot;Toutes&quot;, translated category names).</li>
-            <li>Pick a campus + category with no events: the empty state and &quot;Effacer les filtres&quot; are translated; the button brings the grid back and focus lands on it.</li>
-            <li>Event cards: category badge, date (&quot;ven. 27 nov.&quot;, &quot;الجمعة، 27 نونبر&quot;, Moroccan month names), &quot;N participants&quot;, and the RSVP slot: signed out &quot;Se connecter pour participer&quot;; signed in (session switcher above) &quot;Participer&quot; / &quot;J’y vais&quot;. The toast after a click is translated.</li>
-            <li>Event page: back link (&quot;Tous les événements&quot;; from the calendar, &quot;Retour au calendrier&quot;), When / Where / Organizer, &quot;À propos&quot;, date with the year and the time range (16:00 – 18:00 in French, 24-hour).</li>
-            <li>Ended multi-day event (hackathon): date range &quot;vendredi 13 – dimanche 15 novembre 2026&quot;, &quot;Début 8:00, fin 17:00&quot;, RSVP card &quot;Cet événement est terminé&quot;, &quot;120 participants&quot; / &quot;حضر 120 شخصًا&quot;.</li>
-            <li>Attendees: signed out, the lock line and &quot;Se connecter pour voir qui participe&quot;. Signed in: the summary sentence (&quot;Vous et Salma Idrissi&quot;, &quot;… et 3 autres&quot;; Arabic joins with و), &quot;Tout voir&quot;, the dialog title and the &quot;Vous&quot; / &quot;أنت&quot; badge.</li>
-            <li>RSVP card (signed in): &quot;Participer&quot; → &quot;Vous participez&quot; + &quot;Annuler ma participation&quot;; on phones it is the bottom bar, in Arabic its button is on the left.</li>
-            <li>Screen reader: each card&apos;s button says the event (&quot;Participer à Leet Jam&quot;); the count is announced after a filter change; the event list and filters are named in the current language.</li>
-            <li>Arabic layout: card badge and date start on the right, the back arrow points right, the facts box icons sit on the right of each fact.</li>
-            <li>⌘K search: typing a category in the current language finds its events (&quot;musique&quot;, &quot;رياضة&quot;); English names still work.</li>
-            <li>Stays as written: event titles, descriptions, places, club names (data). Still English (next steps): calendar, clubs pages, login, profile, legal pages, page titles in the browser tab.</li>
+            <li>Header: title &quot;novembre 2026&quot; / &quot;نونبر 2026&quot; (Moroccan month names), &quot;Aujourd’hui&quot;, Mois / Semaine tabs; the arrows&apos; names (hover or screen reader): &quot;Mois précédent&quot;, &quot;Semaine suivante&quot;…</li>
+            <li>Week titles: &quot;9 – 15 nov. 2026&quot;, across months &quot;30 nov. – 6 déc. 2026&quot;, across years &quot;28 déc. 2026 – 3 janv. 2027&quot;; Arabic &quot;9 – 15 نونبر 2026&quot;.</li>
+            <li>Weekday headers start on Monday: lun. mar. mer.… In Arabic, full names from 640px wide (الاثنين…) and one letter on phones (ن ث ر خ ج س ح); hover shows the full name.</li>
+            <li>Agenda: day heading &quot;samedi 14 novembre&quot; / &quot;السبت، 14 نونبر&quot;, the count, the hackathon&apos;s times per day: &quot;Dès 8:00&quot;, &quot;Toute la journée&quot;, &quot;Jusqu’à 17:00&quot; (24-hour in French and Arabic), category badge, &quot;J’y vais&quot; badge when signed in and going. An empty day: &quot;Rien ce jour-là&quot;.</li>
+            <li>Week view (from 768px): each chip shows the translated time; more than 4 events on a day shows &quot;+N autres&quot;.</li>
+            <li><strong>Click around</strong> (next/previous month and week, Today, other days, switch Month/Week): titles and labels stay in the chosen language. Open the browser console: <strong>no hydration warning</strong> after a reload in each language.</li>
+            <li>Arabic layout: the grid reads right to left (Monday on the right), the cell separators sit between the days (no double line on the left edge), ← and → arrows point the right way, keyboard ← / → move one day in the reading direction.</li>
+            <li>Screen reader: a day button reads &quot;jeudi 5 novembre, 1 événement&quot;; the grid is named after the month or week; the page heading is &quot;Calendrier&quot;.</li>
+            <li>Still English (next steps): clubs pages, login, profile, legal pages, page titles in the browser tab.</li>
           </ul>
         </div>
       </section>

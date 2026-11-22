@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { Skeleton, SkeletonRegion } from '@/components/ui/Skeleton';
 
 // Loading placeholder for /calendar, mirroring EventCalendar: header (title · Today · arrows · view tabs),
@@ -10,7 +11,7 @@ const DAYS = 7;
 
 export const CalendarSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <SkeletonRegion ref={ref} label="Loading calendar" className={className} {...props}>
+    <SkeletonRegion ref={ref} label={useTranslations('Calendar')('loading')} className={className} {...props}>
       <div aria-hidden="true" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -33,7 +34,7 @@ export const CalendarSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttri
                 {Array.from({ length: DAYS }, (_, day) => (
                   <div
                     key={day}
-                    className="flex h-16 justify-center border-slate-200/80 p-1 sm:h-28 sm:justify-start sm:p-1.5 dark:border-slate-800 [&:not(:first-child)]:border-l"
+                    className="flex h-16 justify-center border-slate-200/80 p-1 sm:h-28 sm:justify-start sm:p-1.5 dark:border-slate-800 [&:not(:first-child)]:border-s"
                   >
                     <Skeleton variant="circular" className="size-7" />
                   </div>

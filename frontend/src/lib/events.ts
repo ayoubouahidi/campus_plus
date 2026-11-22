@@ -40,8 +40,7 @@ export const EVENT_CATEGORIES: EventCategory[] = [
 ];
 
 // English labels, used by the ⌘K search so "sports" finds Sports events in every language (lib/search.ts).
-// What the screen shows comes from the Categories messages instead (Step 12.3); the calendar agenda still uses
-// these until Step 12.4.
+// What the screen shows comes from the Categories messages instead (Steps 12.3–12.4).
 export const CATEGORY_LABELS: Record<EventCategory, string> = {
   Tech: 'Tech',
   Media: 'Media',

@@ -5,16 +5,17 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent } from '@/components/ui/Tabs';
 import {
   CALENDAR_STEPS,
-  CALENDAR_TITLES,
   calendarQuery,
   eventFromCalendarHref,
   isCalendarView,
   readCalendarLocation,
+  type CalendarNames,
   type CalendarView,
   type DayKey,
   type EventTimes,
 } from '@/lib/calendar';
 import type { EventItem } from '@/types/api';
+import { useCalendarFormat } from '@/hooks/useCalendarFormat';
 import { CalendarHeader } from './CalendarHeader';
 import { DayAgenda } from './DayAgenda';
 import { MonthGrid } from './MonthGrid';
@@ -26,6 +27,9 @@ export interface EventCalendarProps {
   eventIdsByDay: Record<DayKey, string[]>;
   eventTimes: Record<string, EventTimes>;
   todayKey: DayKey;
+  // Month and weekday names in the visitor's language (getCalendarNames, Step 12.4): built with Intl on the
+  // server only, so the labels the browser re-renders after each click match the server's exactly.
+  names: CalendarNames;
   // Keep the selected day and view in the query string (?date=…&view=week): reload, share and "back to
   // calendar" from an event page all land on the same place. Off for a calendar embedded in another page.
   urlState?: boolean;
@@ -33,9 +37,10 @@ export interface EventCalendarProps {
 
 // The interactive part of /calendar: owns the selected day and the view, composes header, grids and agenda.
 // One piece of date state (selectedKey): the month/week shown and the agenda all follow it.
-export const EventCalendar = ({ events, eventIdsByDay, eventTimes, todayKey, urlState = false }: EventCalendarProps) => {
+export const EventCalendar = ({ events, eventIdsByDay, eventTimes, todayKey, names, urlState = false }: EventCalendarProps) => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const format = useCalendarFormat(names);
 
   // The URL is read once, as the starting point; after that React state leads and the URL follows (show()).
   // useSearchParams (not server props) so Back/Forward, which restore the URL we wrote, start from it too.
@@ -69,7 +74,7 @@ export const EventCalendar = ({ events, eventIdsByDay, eventTimes, todayKey, url
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       <Tabs value={view} onValueChange={(next) => isCalendarView(next) && show(selectedKey, next)}>
         <CalendarHeader
-          title={CALENDAR_TITLES[view](selectedKey)}
+          title={format.title[view](selectedKey)}
           view={view}
           onPrevious={() => show(CALENDAR_STEPS[view](selectedKey, -1), view)}
           onNext={() => show(CALENDAR_STEPS[view](selectedKey, 1), view)}
@@ -82,6 +87,7 @@ export const EventCalendar = ({ events, eventIdsByDay, eventTimes, todayKey, url
             selectedKey={selectedKey}
             todayKey={todayKey}
             eventsByDay={eventsByDay}
+            names={names}
             onSelectDay={(key) => show(key, view)}
           />
         </TabsContent>
@@ -91,6 +97,7 @@ export const EventCalendar = ({ events, eventIdsByDay, eventTimes, todayKey, url
             todayKey={todayKey}
             eventsByDay={eventsByDay}
             eventTimes={eventTimes}
+            names={names}
             onSelectDay={(key) => show(key, view)}
           />
         </TabsContent>
@@ -100,6 +107,7 @@ export const EventCalendar = ({ events, eventIdsByDay, eventTimes, todayKey, url
         dayKey={selectedKey}
         events={eventsByDay[selectedKey] ?? []}
         eventTimes={eventTimes}
+        names={names}
         eventHref={urlState ? (event) => eventFromCalendarHref(event.id, { date: selectedKey, view }) : undefined}
         className="lg:sticky lg:top-20"
       />

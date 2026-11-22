@@ -48,5 +48,4 @@ export const dotStyles: Record<EventCategory, string> = {
 
 export const MAX_DOTS = 3; // dots per day on phones
 
-export const describeCount = (count: number): string =>
-  count === 0 ? 'no events' : `${count} ${count === 1 ? 'event' : 'events'}`;
+// A day button's screen-reader name ("Thursday, November 5, 2 events") is the Calendar.dayButton message.

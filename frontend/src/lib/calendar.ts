@@ -16,16 +16,6 @@ const DAY_MS = 86_400_000;
 // 6 weeks: every month fits, and the grid keeps the same height from month to month (no layout jump).
 export const CALENDAR_WEEKS = 6;
 
-// Monday first (Morocco). Phase 7 translates the labels.
-export const WEEKDAYS: { short: string; long: string }[] = [
-  { short: 'Mon', long: 'Monday' },
-  { short: 'Tue', long: 'Tuesday' },
-  { short: 'Wed', long: 'Wednesday' },
-  { short: 'Thu', long: 'Thursday' },
-  { short: 'Fri', long: 'Friday' },
-  { short: 'Sat', long: 'Saturday' },
-  { short: 'Sun', long: 'Sunday' },
-];
 
 /* ----------------------- Date-only arithmetic (any runtime) ---------------------- */
 // A DayKey is mapped to UTC midnight of that date. No time zone is involved, so these give the same
@@ -76,44 +66,77 @@ export const buildWeekDays = (key: DayKey): CalendarDay[] => {
   });
 };
 
-// Labels for a date (not a moment): formatted in UTC, matching keyToUtc, so client-safe.
-const monthTitleFormatter = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-const dayLabelFormatter = new Intl.DateTimeFormat('en', {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
-  timeZone: 'UTC',
+/* ------------------------- Names and labels (Step 12.4) ------------------------- */
+// The calendar re-renders in the browser on every click (another month, another day), so its labels are
+// built on both sides. Intl's output can differ between the server's and the browser's ICU versions
+// (spacing, Arabic commas, month spellings), which would break hydration. So Intl runs on the server
+// only, once per language: getCalendarNames() returns the bare month and weekday names in the visitor's
+// language, the page passes them down as a prop, and the client only puts them into message templates
+// (useCalendarFormat, Calendar.* messages). Same strings on both sides, by construction.
+
+export interface WeekdayNames {
+  long: string; // "Monday", "lundi", "الاثنين": the <abbr> title and the screen-reader name
+  short: string; // "Mon", "lun.", "الاثنين": column headers from `sm`
+  compact: string; // phones: short, except Arabic, whose short names are full words (too wide for 7 columns): "ن"
+}
+
+export interface CalendarNames {
+  months: string[]; // 12 long names, January first
+  monthsShort: string[]; // 12 short names ("Nov", "nov.", "نونبر")
+  weekdays: WeekdayNames[]; // 7, Monday first (Morocco)
+}
+
+const nameFormatter = cachedFormatter(
+  (tag) => (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(tag, { ...options, timeZone: 'UTC' })
+);
+
+const calendarNamesCache = new Map<string, CalendarNames>();
+
+// Server only (see above). Dates are UTC midnights, so no time zone can shift the day.
+export const getCalendarNames = (locale = 'en'): CalendarNames => {
+  const cached = calendarNamesCache.get(locale);
+  if (cached) return cached;
+
+  const format = nameFormatter(locale);
+  const [monthLong, monthShort] = [format({ month: 'long' }), format({ month: 'short' })];
+  const [dayLong, dayShort, dayNarrow] = [format({ weekday: 'long' }), format({ weekday: 'short' }), format({ weekday: 'narrow' })];
+  const months = Array.from({ length: 12 }, (_, month) => Date.UTC(2026, month, 15));
+  const mondayFirst = Array.from({ length: 7 }, (_, i) => Date.UTC(2026, 10, 2 + i)); // Mon 2 Nov 2026 → Sun 8
+
+  const names: CalendarNames = {
+    months: months.map((ms) => monthLong.format(ms)),
+    monthsShort: months.map((ms) => monthShort.format(ms)),
+    weekdays: mondayFirst.map((ms) => ({
+      long: dayLong.format(ms),
+      short: dayShort.format(ms),
+      compact: (locale === 'ar' ? dayNarrow : dayShort).format(ms),
+    })),
+  };
+  calendarNamesCache.set(locale, names);
+  return names;
+};
+
+// The pieces of a DayKey the templates need: numbers as strings, so ICU never adds a thousands separator
+// to a year ("2,026").
+export const dayParts = (key: DayKey) => ({
+  year: key.slice(0, 4),
+  monthIndex: Number(key.slice(5, 7)) - 1,
+  day: String(Number(key.slice(8))),
+  weekdayIndex: weekdayIndex(key),
 });
 
-const shortMonthFormatter = new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' });
-
-export const formatMonthTitle = (key: DayKey): string => monthTitleFormatter.format(keyToUtc(key)); // "November 2026"
-export const formatDayLabel = (key: DayKey): string => dayLabelFormatter.format(keyToUtc(key)); // "Thursday, November 5"
-
-// Monday–Sunday of the week containing `key`: "Nov 2 – 8, 2026", "Nov 30 – Dec 6, 2026",
-// "Dec 28, 2026 – Jan 3, 2027". Built by hand rather than with Intl's formatRange, whose spacing
-// (thin spaces around the dash) differs between ICU versions, i.e. between server and browser.
-export const formatWeekTitle = (key: DayKey): string => {
+// Monday and Sunday of the week containing `key` (for the week title).
+export const weekBounds = (key: DayKey): { start: DayKey; end: DayKey } => {
   const start = addDays(key, -weekdayIndex(key));
-  const end = addDays(start, 6);
-  const [startYear, endYear] = [start.slice(0, 4), end.slice(0, 4)];
-  const [startDay, endDay] = [Number(start.slice(8)), Number(end.slice(8))];
-  const [startMonth, endMonth] = [start, end].map((day) => shortMonthFormatter.format(keyToUtc(day)));
-
-  if (startYear !== endYear) return `${startMonth} ${startDay}, ${startYear} – ${endMonth} ${endDay}, ${endYear}`;
-  if (startMonth !== endMonth) return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${endYear}`;
-  return `${startMonth} ${startDay} – ${endDay}, ${endYear}`;
+  return { start, end: addDays(start, 6) };
 };
 
 /* ----------------------------------- Views ----------------------------------- */
 
 export type CalendarView = 'month' | 'week';
 
-// Tab order in the calendar header.
-export const CALENDAR_VIEWS: { value: CalendarView; label: string }[] = [
-  { value: 'month', label: 'Month' },
-  { value: 'week', label: 'Week' },
-];
+// Tab order in the calendar header (labels: Calendar.month / Calendar.week).
+export const CALENDAR_VIEWS: CalendarView[] = ['month', 'week'];
 
 export const isCalendarView = (value: string): value is CalendarView => value === 'month' || value === 'week';
 
@@ -121,11 +144,6 @@ export const isCalendarView = (value: string): value is CalendarView => value ==
 export const CALENDAR_STEPS: Record<CalendarView, (key: DayKey, direction: -1 | 1) => DayKey> = {
   month: (key, direction) => addMonths(key, direction),
   week: (key, direction) => addDays(key, 7 * direction),
-};
-
-export const CALENDAR_TITLES: Record<CalendarView, (key: DayKey) => string> = {
-  month: formatMonthTitle,
-  week: formatWeekTitle,
 };
 
 /* ---------------------------- URL state (any runtime) ---------------------------- */
@@ -214,7 +232,7 @@ export const getEventIdsByDay = (events: EventItem[]): Record<DayKey, string[]> 
   return byDay;
 };
 
-// Start/end of an event in campus time, pre-formatted on the server ("5:00 PM").
+// Start/end of an event in campus time, pre-formatted on the server ("5:00 PM", "17:00").
 export interface EventTimes {
   startDay: DayKey;
   endDay: DayKey;
@@ -222,14 +240,10 @@ export interface EventTimes {
   end: string;
 }
 
-const campusTimeFormatter = new Intl.DateTimeFormat('en', {
-  hour: 'numeric',
-  minute: '2-digit',
-  timeZone: CAMPUS_TIME_ZONE,
-});
-
-export const getEventTimes = (events: EventItem[]): Record<string, EventTimes> =>
-  Object.fromEntries(
+// Pass the request's language (getLocale()): the times are written in it (Step 12.4).
+export const getEventTimes = (events: EventItem[], locale = 'en'): Record<string, EventTimes> => {
+  const times = eventTimeFormatter(locale);
+  return Object.fromEntries(
     events.map((event) => {
       const { first, last } = getEventDaySpan(event);
       return [
@@ -237,12 +251,13 @@ export const getEventTimes = (events: EventItem[]): Record<string, EventTimes> =
         {
           startDay: first,
           endDay: last,
-          start: campusTimeFormatter.format(Date.parse(event.start_time)),
-          end: campusTimeFormatter.format(Date.parse(event.end_time)),
+          start: times.format(Date.parse(event.start_time)),
+          end: times.format(Date.parse(event.end_time)),
         },
       ];
     })
   );
+};
 
 // Date and time lines for the event page, in campus time and the visitor's language. Server only.
 //   One day:   "Thursday, November 5, 2026"                      · "5:00 – 8:00 PM"
@@ -252,7 +267,7 @@ export const getEventTimes = (events: EventItem[]): Record<string, EventTimes> =
 // Intl's formatRange writes the range: each language has its own grammar for it (French writes the shared
 // month once, Arabic puts the year after a comma), which a hand-built "a – b, year" would get wrong outside
 // English. Its spacing differs between ICU versions, which is fine here: this runs on the server only, the
-// browser receives the finished string (the calendar's week title is built by hand because it runs in both).
+// browser receives the finished string (the calendar's labels, which run in both, use getCalendarNames instead).
 export interface EventDateDetails {
   date: string;
   time: string; // one-day events: the time range
@@ -289,11 +304,14 @@ export const getEventDateDetails = (event: EventItem, locale = 'en'): EventDateD
 
 /* ------------------------- Agenda time label (any runtime) ------------------------- */
 
-// What an event's time looks like on one given day of the agenda. Pure string work on server-made
-// values, so it is client-safe.
-export const formatAgendaTime = ({ startDay, endDay, start, end }: EventTimes, day: DayKey): string => {
-  if (startDay === endDay) return `${start} – ${end}`;
-  if (day === startDay) return `From ${start}`;
-  if (day === endDay) return `Until ${end}`;
-  return 'All day';
+// How an event's time reads on one given day of the agenda: "5:00 PM – 8:00 PM" (one day), "From 8:00 AM"
+// (its first day), "Until 5:00 PM" (its last day), "All day" (a day in between). The words are the
+// Calendar.timeRange / from / until / allDay messages (useCalendarFormat). Client-safe.
+export type AgendaTimeKind = 'timeRange' | 'from' | 'until' | 'allDay';
+
+export const getAgendaTimeKind = ({ startDay, endDay }: EventTimes, day: DayKey): AgendaTimeKind => {
+  if (startDay === endDay) return 'timeRange';
+  if (day === startDay) return 'from';
+  if (day === endDay) return 'until';
+  return 'allDay';
 };

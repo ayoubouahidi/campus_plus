@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
-import { WEEKDAYS, buildMonthMatrix, formatDayLabel, formatMonthTitle, type DayKey } from '@/lib/calendar';
+import { buildMonthMatrix, type CalendarNames, type DayKey } from '@/lib/calendar';
+import { useCalendarFormat } from '@/hooks/useCalendarFormat';
 import { useDayGridNavigation } from '@/hooks/useDayGridNavigation';
 import { useMergedRef } from '@/lib/refs';
 import {
@@ -10,7 +12,6 @@ import {
   chipStyles,
   dayCellStyles,
   dayNumberStyles,
-  describeCount,
   dotStyles,
   getDayTone,
 } from './dayStyles';
@@ -25,6 +26,8 @@ export interface MonthGridProps extends React.TableHTMLAttributes<HTMLTableEleme
   // Events per day, in start-time order (built from getEventIdsByDay on the server).
   eventsByDay: Record<DayKey, EventItem[]>;
   onSelectDay: (key: DayKey) => void;
+  // Month and weekday names in the visitor's language, from the server (getCalendarNames, Step 12.4).
+  names: CalendarNames;
 }
 
 const MAX_CHIPS = 2; // titles shown per day from `sm` up
@@ -32,9 +35,11 @@ const MAX_CHIPS = 2; // titles shown per day from `sm` up
 /* -------------------------------- MonthGrid ------------------------------- */
 
 export const MonthGrid = React.forwardRef<HTMLTableElement, MonthGridProps>(
-  ({ selectedKey, todayKey, eventsByDay, onSelectDay, className = '', onKeyDown, ...props }, ref) => {
+  ({ selectedKey, todayKey, eventsByDay, names, onSelectDay, className = '', onKeyDown, ...props }, ref) => {
     const { gridRef, selectDay, handleKeyDown } = useDayGridNavigation<HTMLTableElement>(selectedKey, onSelectDay);
     const mergedRef = useMergedRef(ref, gridRef);
+    const format = useCalendarFormat(names);
+    const t = useTranslations('Calendar');
 
     const days = buildMonthMatrix(selectedKey);
     const weeks = Array.from({ length: days.length / 7 }, (_, i) => days.slice(i * 7, i * 7 + 7));
@@ -44,7 +49,7 @@ export const MonthGrid = React.forwardRef<HTMLTableElement, MonthGridProps>(
         <table
           ref={mergedRef}
           role="grid"
-          aria-label={formatMonthTitle(selectedKey)}
+          aria-label={format.monthTitle(selectedKey)}
           onKeyDown={(event) => {
             onKeyDown?.(event);
             handleKeyDown(event);
@@ -54,10 +59,11 @@ export const MonthGrid = React.forwardRef<HTMLTableElement, MonthGridProps>(
         >
           <thead>
             <tr>
-              {WEEKDAYS.map(({ short, long }) => (
-                <th key={short} scope="col" className="py-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+              {names.weekdays.map(({ long, short, compact }) => (
+                <th key={long} scope="col" className="py-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                   <abbr title={long} className="no-underline">
-                    {short}
+                    <span className="sm:hidden">{compact}</span>
+                    <span className="hidden sm:inline">{short}</span>
                   </abbr>
                 </th>
               ))}
@@ -75,13 +81,13 @@ export const MonthGrid = React.forwardRef<HTMLTableElement, MonthGridProps>(
                     <td
                       key={key}
                       aria-selected={isSelected}
-                      className="border-t border-slate-200/80 p-0 align-top dark:border-slate-800 [&:not(:first-child)]:border-l"
+                      className="border-t border-slate-200/80 p-0 align-top dark:border-slate-800 [&:not(:first-child)]:border-s"
                     >
                       <button
                         type="button"
                         data-day={key}
                         tabIndex={isSelected ? 0 : -1}
-                        aria-label={`${formatDayLabel(key)}, ${describeCount(events.length)}`}
+                        aria-label={t('dayButton', { day: format.dayLabel(key), count: events.length })}
                         aria-current={key === todayKey ? 'date' : undefined}
                         onClick={() => selectDay(key)}
                         className={`flex h-16 w-full flex-col items-center gap-1 p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 sm:h-28 sm:items-stretch sm:p-1.5 ${
@@ -115,7 +121,7 @@ export const MonthGrid = React.forwardRef<HTMLTableElement, MonthGridProps>(
                           ))}
                           {events.length > MAX_CHIPS && (
                             <span className="px-1.5 text-start text-xs text-slate-500 dark:text-slate-400">
-                              +{events.length - MAX_CHIPS} more
+                              {t('more', { count: events.length - MAX_CHIPS })}
                             </span>
                           )}
                         </span>

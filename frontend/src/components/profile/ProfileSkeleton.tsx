@@ -16,10 +16,10 @@ export const ProfileSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttrib
 
         <div className={`relative overflow-hidden ${PROFILE_PANEL}`}>
           <Skeleton variant="rectangular" className="h-[104px] w-full" />
-          <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:py-6 sm:pr-8 sm:pl-40">
+          <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:py-6 sm:pe-8 sm:ps-40">
             <Skeleton
               variant="circular"
-              className="-mt-[52px] h-[104px] w-[104px] ring-[5px] ring-white sm:absolute sm:top-[63px] sm:left-[31px] sm:mt-0 dark:ring-slate-900"
+              className="-mt-[52px] h-[104px] w-[104px] ring-[5px] ring-white sm:absolute sm:top-[63px] sm:start-[31px] sm:mt-0 dark:ring-slate-900"
             />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-9 w-56 rounded-lg" />
