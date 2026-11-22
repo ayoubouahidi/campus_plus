@@ -40,7 +40,7 @@ ClubCardSkeleton.displayName = 'ClubCardSkeleton';
 
 /* -------------------------- ClubDirectorySkeleton ------------------------- */
 
-// Mirrors ClubDirectory: heading + count · intro text · campus toggle · grid. For app/clubs/loading.tsx.
+// Mirrors ClubDirectory: heading + count · intro text · grid. For app/clubs/loading.tsx.
 export const ClubDirectorySkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
     <SkeletonRegion ref={ref} label={useTranslations('Clubs')('loading')} className={`space-y-8 ${className}`} {...props}>
@@ -53,7 +53,6 @@ export const ClubDirectorySkeleton = React.forwardRef<HTMLDivElement, React.HTML
           <Skeleton className="h-4 w-full rounded" />
           <Skeleton className="h-4 w-1/2 rounded" />
         </div>
-        <Skeleton className="h-[42px] w-full sm:w-64" />
       </div>
 
       <div aria-hidden="true" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

@@ -93,7 +93,7 @@ const nameFormatter = cachedFormatter(
 const calendarNamesCache = new Map<string, CalendarNames>();
 
 // Server only (see above). Dates are UTC midnights, so no time zone can shift the day.
-export const getCalendarNames = (locale = 'en'): CalendarNames => {
+export const getCalendarNames = (locale: string): CalendarNames => {
   const cached = calendarNamesCache.get(locale);
   if (cached) return cached;
 
@@ -241,7 +241,7 @@ export interface EventTimes {
 }
 
 // Pass the request's language (getLocale()): the times are written in it (Step 12.4).
-export const getEventTimes = (events: EventItem[], locale = 'en'): Record<string, EventTimes> => {
+export const getEventTimes = (events: EventItem[], locale: string): Record<string, EventTimes> => {
   const times = eventTimeFormatter(locale);
   return Object.fromEntries(
     events.map((event) => {
@@ -287,7 +287,7 @@ const longDayFormatter = cachedFormatter(
     })
 );
 
-export const getEventDateDetails = (event: EventItem, locale = 'en'): EventDateDetails => {
+export const getEventDateDetails = (event: EventItem, locale: string): EventDateDetails => {
   const { first, last } = getEventDaySpan(event);
   const startMs = Date.parse(event.start_time);
   const endMs = Date.parse(event.end_time);

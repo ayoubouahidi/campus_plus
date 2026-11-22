@@ -14,7 +14,7 @@ const ar = {
     profile: 'ملفي الشخصي',
     login: 'تسجيل الدخول',
     explore: 'استكشف',
-    campuses: 'المؤسسات',
+    network: 'الشبكة',
     privacy: 'سياسة الخصوصية',
     terms: 'شروط الاستخدام',
   },
@@ -35,7 +35,7 @@ const ar = {
     campusLinks: 'روابط المؤسسات',
   },
   Footer: {
-    tagline: 'الفعاليات والأندية والتسجيل لطلاب 1337 Coding School وEMINES (UM6P)، في مكان واحد.',
+    tagline: 'الفعاليات والأندية وتسجيل الحضور لطلبة 1337 Coding School، في مكان واحد.',
     nav: 'تذييل الصفحة',
     legal: 'المعلومات القانونية',
     newTab: '(يُفتح في علامة تبويب جديدة)',
@@ -82,8 +82,6 @@ const ar = {
   Feed: {
     title: 'الفعاليات القادمة',
     filters: 'تصفية الفعاليات',
-    campus: 'الحرم الجامعي',
-    allCampuses: 'الكل',
     categories: 'التصفية حسب الفئة',
     allCategories: 'الكل',
     list: 'الفعاليات',
@@ -91,7 +89,7 @@ const ar = {
     emptyTitle: 'لا توجد فعاليات قادمة بعد',
     emptyBody: 'تظهر الفعاليات الجديدة هنا فور نشرها من طرف الأندية.',
     noMatchTitle: 'لا توجد فعاليات تطابق اختياراتك',
-    noMatchBody: 'جرّب حرمًا جامعيًا أو فئة أخرى.',
+    noMatchBody: 'جرّب فئة أخرى.',
     clearFilters: 'مسح التصفية',
   },
   Rsvp: {
@@ -201,13 +199,11 @@ const ar = {
   },
   Clubs: {
     title: 'الأندية',
-    intro: 'الأندية الطلابية في 1337 وEMINES. افتح ناديًا لترى من يديره وما الذي ينتظرك.',
+    intro: 'الأندية الطلابية في 1337. افتح ناديًا لترى من يديره وما الذي ينتظرك.',
     count:
       '{count, plural, =0 {لا توجد أندية} one {نادٍ واحد} two {ناديان} few {# أندية} many {# ناديًا} other {# نادٍ}}',
-    filters: 'تصفية الأندية',
-    emptyTitle: 'لا توجد أندية في هذا الحرم بعد',
-    emptyBody: 'الأندية المفتوحة لكل المؤسسات تظهر تحت «الكل».',
-    showAll: 'عرض كل الأندية',
+    emptyTitle: 'لا توجد أندية بعد',
+    emptyBody: 'تظهر الأندية هنا فور إنشائها.',
     upcomingCount:
       '{count, plural, =0 {لا توجد فعاليات قادمة} one {فعالية قادمة واحدة} two {فعاليتان قادمتان} few {# فعاليات قادمة} many {# فعالية قادمة} other {# فعالية قادمة}}',
     loading: 'جارٍ تحميل الأندية',
@@ -247,7 +243,7 @@ const ar = {
     loginErrors: {
       'access-denied': {
         title: 'تعذّر تسجيل دخولك',
-        description: 'حسابك في 42 غير مرتبط بحرم 1337 أو EMINES مدعوم. إذا كنت تظن أن هذا خطأ، تواصل مع فريق Campus Hub.',
+        description: 'Campus Hub مخصّص لطلبة 1337، وحسابك في 42 غير مرتبط بحرم 1337. إذا كنت تظن أن هذا خطأ، تواصل مع فريق Campus Hub.',
       },
       unavailable: {
         title: 'تسجيل الدخول غير متاح مؤقتًا',
@@ -314,6 +310,39 @@ const ar = {
     nameTooLong: 'استخدم {max} حرفًا على الأكثر.',
     yearRequired: 'اختر سنة الدراسة.',
     schoolRequired: 'اختر مؤسستك.',
+  },
+  Legal: {
+    lastUpdated: 'آخر تحديث: <date>{label}</date>',
+    onThisPage: 'في هذه الصفحة',
+    seeAlso: 'انظر أيضًا:',
+  },
+  Errors: {
+    label: 'خطأ',
+    title: 'حدث خطأ ما',
+    body: 'تعذّر تحميل هذه الصفحة. غالبًا ما يكون الأمر مؤقتًا: حاول مرة أخرى بعد قليل.',
+    code: 'رمز الخطأ:',
+    retry: 'حاول مرة أخرى',
+    notFoundTitle: 'الصفحة غير موجودة',
+    notFoundBody: 'هذه الصفحة غير موجودة، أو لم تُفتح بعد. الفعاليات والأندية على بُعد نقرة.',
+  },
+  Meta: {
+    siteTitle: 'Campus Hub | الأندية والفعاليات',
+    siteDescription: 'منصة الفعاليات والأندية في 1337 Coding School.',
+    calendar: 'التقويم',
+    calendarDescription: 'كل فعاليات 1337 حسب الشهر أو الأسبوع.',
+    clubs: 'الأندية',
+    clubsDescription: 'كل الأندية الطلابية في 1337 Coding School، مع فعالياتها القادمة.',
+    clubNotFound: 'النادي غير موجود',
+    eventNotFound: 'الفعالية غير موجودة',
+    login: 'تسجيل الدخول',
+    loginDescription: 'سجّل الدخول بحسابك في 42 Intra أو ببريدك الإلكتروني لتأكيد حضورك لفعاليات الحرم.',
+    register: 'إنشاء حساب',
+    registerDescription: 'أنشئ حسابًا في Campus Hub ببريدك الإلكتروني لتأكيد حضورك لفعاليات 1337.',
+    profile: 'ملفي الشخصي',
+    privacy: 'سياسة الخصوصية',
+    privacyDescription: 'ما يجمعه Campus Hub، ومن يمكنه رؤيته، وملفات تعريف الارتباط المستخدمة، وكيفية حذف بياناتك.',
+    terms: 'شروط الاستخدام',
+    termsDescription: 'قواعد استخدام Campus Hub: الحسابات، تسجيل الحضور، الأندية وما هو غير مسموح.',
   },
   Events: {
     count:

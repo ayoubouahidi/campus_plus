@@ -64,7 +64,7 @@ EventGridSkeleton.displayName = 'EventGridSkeleton';
 
 /* ---------------------------- EventFeedSkeleton --------------------------- */
 
-// Mirrors EventFeed: heading + count · campus toggle · category chips · grid. For app/loading.tsx.
+// Mirrors EventFeed: heading + count · category chips · grid. For app/loading.tsx.
 export const EventFeedSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
     <SkeletonRegion ref={ref} label={useTranslations('Feed')('loading')} className={`space-y-8 ${className}`} {...props}>
@@ -73,8 +73,6 @@ export const EventFeedSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttr
           <Skeleton className="h-8 w-52 rounded-lg" />
           <Skeleton className="h-4 w-16 rounded" />
         </div>
-        {/* CampusToggle: 42px tall, full width on phones. */}
-        <Skeleton className="h-[42px] w-full sm:w-64" />
         {/* CategoryFilter: one row of 32px chips (scrolls on phones, so clipped here). */}
         <div className="flex gap-2 overflow-hidden py-1">
           {['w-12', 'w-16', 'w-20', 'w-16', 'w-24', 'w-20', 'w-36', 'w-20'].map((width, index) => (

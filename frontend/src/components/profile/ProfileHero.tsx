@@ -26,9 +26,9 @@ export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
     const t = useTranslations('Profile');
     return (
       <header ref={ref} className={`relative overflow-hidden ${PROFILE_PANEL} ${className}`} {...props}>
-        {/* Banner: decorative brand line (desktop) / campus pair (phone) */}
+        {/* Banner: decorative brand line (desktop) / school name (phone) */}
         <div className="flex h-[104px] items-start justify-end bg-gradient-to-r rtl:bg-gradient-to-l from-violet-100 via-violet-50 via-60% to-indigo-100 px-4 pt-4 sm:items-center sm:px-8 sm:pt-0 dark:from-violet-950/80 dark:via-violet-950/40 dark:to-indigo-950/70">
-          <p className="text-xs font-semibold text-violet-700 sm:hidden dark:text-violet-300">1337 × EMINES</p>
+          <p className="text-xs font-semibold text-violet-700 sm:hidden dark:text-violet-300">1337 Coding School</p>
           <div className="hidden sm:block">
             <p className="text-[11px] font-semibold leading-[17px] tracking-wide text-violet-700 uppercase dark:text-violet-300">
               Campus Hub

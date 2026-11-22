@@ -67,7 +67,7 @@ async function syncWithBackend(profile: FortyTwoProfile): Promise<BackendSyncRes
       }),
       cache: 'no-store',
     });
-    if (!res.ok) return null; // e.g. 403 = not a 1337/EMINES account
+    if (!res.ok) return null; // e.g. 403 = not a 1337 account
     const data = (await res.json()) as BackendSyncResponse;
     return data?.token && data.user?.id && isRole(data.user.role) ? data : null;
   } catch {

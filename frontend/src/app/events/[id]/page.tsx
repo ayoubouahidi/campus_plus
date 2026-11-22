@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getLocale } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getSessionState } from '@/auth';
 import { EventBackLink } from '@/components/events/EventBackLink';
 import { EventDetails } from '@/components/events/EventDetails';
@@ -22,11 +22,11 @@ const loadEvent = cache((id: string) => getEventById(mockEvents, id));
 
 export async function generateMetadata({ params }: EventPageProps): Promise<Metadata> {
   const event = loadEvent((await params).id);
-  if (!event) return { title: 'Event not found | Campus Hub' };
+  if (!event) return { title: (await getTranslations('Meta'))('eventNotFound') };
 
   const description = event.description.length > 160 ? `${event.description.slice(0, 157)}…` : event.description;
   return {
-    title: `${event.title} | Campus Hub`,
+    title: event.title, // + " | Campus Hub" from the root layout's title.template
     description,
     // Link previews (WhatsApp, Slack…). The flyer image needs an absolute URL: add it with metadataBase in Phase 7.
     openGraph: { title: event.title, description, type: 'article' },

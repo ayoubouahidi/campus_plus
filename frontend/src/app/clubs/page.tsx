@@ -1,13 +1,17 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { ClubDirectory } from '@/components/clubs/ClubDirectory';
 import { getUpcomingEventCounts, sortClubsByName } from '@/lib/clubs';
 import { mockClubs, mockEvents } from '@/lib/mockData';
 import { getRequestTime } from '@/lib/requestTime';
 
-export const metadata: Metadata = {
-  title: 'Clubs | Campus Hub',
-  description: 'Every student club at 1337 Coding School and EMINES, with what each one has coming up.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Meta');
+  return {
+    title: t('clubs'),
+    description: t('clubsDescription'),
+  };
+}
 
 // `/clubs` (Phase 4). Server Component: sorts the clubs and counts upcoming events at request time,
 // then hands plain data to the interactive <ClubDirectory> (campus filter).

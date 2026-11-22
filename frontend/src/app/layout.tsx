@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_Arabic } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { LOCALE_INFO } from "@/i18n/config";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SessionProvider } from "@/components/providers/SessionProvider";
@@ -28,10 +28,15 @@ const notoSansArabic = Noto_Sans_Arabic({
   preload: false,
 });
 
-export const metadata: Metadata = {
-  title: "Campus Hub | Club & Event Management",
-  description: "Centralized event hub and collaboration platform for UM6P and 1337 clubs.",
-};
+// Tab title and description in the visitor's language (Step 12.7). `template` adds " | Campus Hub" to every
+// page's own title ("Calendrier | Campus Hub"); `default` is for pages without one (the feed).
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Meta");
+  return {
+    title: { default: t("siteTitle"), template: "%s | Campus Hub" },
+    description: t("siteDescription"),
+  };
+}
 
 export const viewport: Viewport = {
   // Lets the page extend under the iPhone notch/home indicator; the shell pads itself with env(safe-area-inset-*)

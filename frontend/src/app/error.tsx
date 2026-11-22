@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 
@@ -19,6 +20,8 @@ const SECONDARY_LINK_STYLES =
 // root layout itself are handled by ./global-error.tsx.
 export default function RouteError({ error, retry }: RouteErrorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations('Errors');
+  const tEvent = useTranslations('EventPage');
 
   // Phase 7: send to an error-reporting service instead of the console.
   useEffect(() => {
@@ -34,10 +37,10 @@ export default function RouteError({ error, retry }: RouteErrorProps) {
   return (
     <ErrorState ref={containerRef} tabIndex={-1} code={error.digest}>
       <Button onClick={() => retry()} className="h-10">
-        Try again
+        {t('retry')}
       </Button>
       <Link href="/" className={SECONDARY_LINK_STYLES}>
-        Discover events
+        {tEvent('discover')}
       </Link>
     </ErrorState>
   );

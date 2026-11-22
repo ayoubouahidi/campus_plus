@@ -44,7 +44,9 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
   ({ action, next, departments, clubs, className = '', onSubmit, ...props }, ref) => {
     const [state, formAction, isPending] = useActionState(action, REGISTER_INITIAL_STATE);
     const [clientErrors, setClientErrors] = useState<RegisterFieldErrors>({});
-    const [departmentId, setDepartmentId] = useState(state.values.department_id);
+    // One school today (1337 only, DOCS.md §13): it is chosen for the student, so its clubs show right away.
+    const onlyDepartment = departments.length === 1 ? departments[0].id : '';
+    const [departmentId, setDepartmentId] = useState(state.values.department_id || onlyDepartment);
     const formRef = useRef<HTMLFormElement | null>(null);
 
     const fieldErrors = Object.keys(clientErrors).length > 0 ? clientErrors : state.fieldErrors;
@@ -173,7 +175,7 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
             label={t('school')}
             placeholder={t('choose')}
             options={departments.map((department) => ({ value: department.id, label: department.name }))}
-            defaultValue={values.department_id}
+            defaultValue={values.department_id || onlyDepartment}
             error={errorText(fieldErrors.department_id)}
             onChange={(event) => {
               setDepartmentId(event.target.value);

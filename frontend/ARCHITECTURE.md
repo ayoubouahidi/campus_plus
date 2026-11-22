@@ -37,7 +37,7 @@
 
 ## 1. The big picture
 
-Campus Hub is the **student & public web app** for 1337 Coding School and EMINES (UM6P): discover events, browse the calendar, browse clubs, RSVP. The organizer dashboard and superadmin portal are a **separate app** (`dashboard_campus`, branch `Ayoub`).
+Campus Hub is the **student & public web app** for 1337 Coding School (1337 only since 2026-11-22, DOCS.md §13): discover events, browse the calendar, browse clubs, RSVP. The organizer dashboard and superadmin portal are a **separate app** (`dashboard_campus`, branch `Ayoub`).
 
 ```mermaid
 flowchart LR
@@ -163,9 +163,8 @@ Know nothing about events or clubs. Reused everywhere.
 | --- | --- | --- |
 | `events/` | `EventFeed` (feed state: filters + RSVP), `FeedToolbar`, `CategoryFilter`, `EventGrid`, `EventCard`, `EventDetails` (server), `EventBackLink` (server), `EventPageShell` (event page state), `RsvpCard`, `AttendeesSection`, `EventSkeletons` (card, grid, feed, page placeholders), `eventStyles.ts` | `/`, `/events/[id]`, club pages |
 | `calendar/` | `EventCalendar` (state: selected day + view), `CalendarHeader`, `MonthGrid`, `WeekGrid`, `DayAgenda`, `CalendarSkeleton`, `dayStyles.ts` | `/calendar` |
-| `clubs/` | `ClubDirectory` (state: campus filter), `ClubCard`, `ClubHeader` (server), `ClubContactCard`, `ClubEvents` (state: RSVP), `ClubSkeletons` (card, directory, page placeholders) | `/clubs`, `/clubs/[slug]` |
+| `clubs/` | `ClubDirectory` (server, no filter since §13), `ClubCard`, `ClubHeader` (server), `ClubContactCard`, `ClubEvents` (state: RSVP), `ClubSkeletons` (card, directory, page placeholders) | `/clubs`, `/clubs/[slug]` |
 | `search/` | `SearchPalette` | AppShell (navbar + ⌘K) |
-| `filters/` | `CampusToggle` (All / 1337 / EMINES) | feed, clubs directory |
 | `providers/` | `SessionProvider` + `useSession()` | root layout; read by navbar, RSVP, attendees, contact card… |
 
 ### 3.5 `src/hooks/`

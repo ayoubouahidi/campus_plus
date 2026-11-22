@@ -11,7 +11,7 @@ const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 // One formatter per language, built on first use (building an Intl formatter is the slow part).
-// `locale` = the active language (useLocale() / getLocale(), Steps 12.2–12.3); 'en' by default.
+// `locale` = the active language (useLocale() / getLocale()). Required since Step 12.7: no silent English fallback.
 // cachedFormatter(build)(locale) returns the formatter for that language, building it once.
 export const cachedFormatter = <T>(build: (intlTag: string) => T) => {
   const cache = new Map<string, T>();
@@ -30,7 +30,7 @@ const absoluteFormatter = cachedFormatter((tag) => new Intl.DateTimeFormat(tag, 
 
 // Pure: `now` is passed in so the caller decides when time "moves" and tests stay deterministic.
 // Under 45 s: "now" / "maintenant" / "الآن" (Intl's own word for 0 seconds with numeric: 'auto').
-export const formatRelativeTime = (iso: string, now: number, locale = 'en'): string => {
+export const formatRelativeTime = (iso: string, now: number, locale: string): string => {
   const diffSeconds = Math.round((new Date(iso).getTime() - now) / 1000);
   if (Math.abs(diffSeconds) < 45) return relativeFormatter(locale).format(0, 'second');
 
@@ -39,7 +39,7 @@ export const formatRelativeTime = (iso: string, now: number, locale = 'en'): str
   return relativeFormatter(locale).format(Math.round(diffSeconds / unitSeconds), unit);
 };
 
-export const formatAbsoluteTime = (iso: string, locale = 'en'): string => absoluteFormatter(locale).format(new Date(iso));
+export const formatAbsoluteTime = (iso: string, locale: string): string => absoluteFormatter(locale).format(new Date(iso));
 
 // Event times are shown in campus time, whatever the viewer's device says.
 // Pinning the zone is NOT enough for server/browser agreement: each runtime ships its own copy of the
@@ -63,7 +63,7 @@ export const eventTimeFormatter = cachedFormatter(
 
 // "Thu, Nov 5" and "5:00 PM" ("ven. 20 nov." and "16:00" in French), kept separate so the card can lay them
 // out with a separator. Server only (see CAMPUS_TIME_ZONE). Use getEventSchedules to format a whole list.
-export const formatEventSchedule = (iso: string, locale = 'en'): EventSchedule => {
+export const formatEventSchedule = (iso: string, locale: string): EventSchedule => {
   const date = new Date(iso);
   return { day: eventDayFormatter(locale).format(date), time: eventTimeFormatter(locale).format(date) };
 };
@@ -73,7 +73,7 @@ export const formatEventSchedule = (iso: string, locale = 'en'): EventSchedule =
 // Pass the request's language (getLocale()); the strings are then in that language (Step 12.3).
 export const getEventSchedules = (
   events: { id: string; start_time: string }[],
-  locale = 'en'
+  locale: string
 ): Record<string, EventSchedule> =>
   Object.fromEntries(events.map((event) => [event.id, formatEventSchedule(event.start_time, locale)]));
 
@@ -88,7 +88,7 @@ const tileMonthFormatter = cachedFormatter((tag) => new Intl.DateTimeFormat(tag,
 const tileDayFormatter = cachedFormatter((tag) => new Intl.DateTimeFormat(tag, { day: '2-digit', timeZone: CAMPUS_TIME_ZONE }));
 
 // toUpperCase is a no-op on Arabic letters, so the same code serves all three languages.
-export const formatDateTile = (iso: string, locale = 'en'): DateTile => {
+export const formatDateTile = (iso: string, locale: string): DateTile => {
   const date = new Date(iso);
   return {
     month: tileMonthFormatter(locale).format(date).toLocaleUpperCase(intlLocale(locale)),
@@ -96,5 +96,5 @@ export const formatDateTile = (iso: string, locale = 'en'): DateTile => {
   };
 };
 
-export const getDateTiles = (events: { id: string; start_time: string }[], locale = 'en'): Record<string, DateTile> =>
+export const getDateTiles = (events: { id: string; start_time: string }[], locale: string): Record<string, DateTile> =>
   Object.fromEntries(events.map((event) => [event.id, formatDateTile(event.start_time, locale)]));

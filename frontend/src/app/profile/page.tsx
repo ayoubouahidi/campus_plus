@@ -1,14 +1,18 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { auth, getSessionState, signOut } from '@/auth';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { getMyEvents } from '@/lib/events';
 import { mockEvents } from '@/lib/mockData';
 import { getRequestTime } from '@/lib/requestTime';
 
-export const metadata: Metadata = {
-  title: 'My profile | Campus Hub',
-  robots: { index: false, follow: false }, // personal page
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Meta');
+  return {
+    title: t('profile'),
+    robots: { index: false, follow: false }, // personal page
+  };
+}
 
 // Log out, then land on Discover (a signed-out visitor can't stay on /profile).
 async function logout() {

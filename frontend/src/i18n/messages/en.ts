@@ -15,7 +15,7 @@ const en = {
     profile: 'My Profile',
     login: 'Log in',
     explore: 'Explore',
-    campuses: 'Campuses',
+    network: 'Network',
     privacy: 'Privacy Policy',
     terms: 'Terms of Service',
   },
@@ -36,7 +36,7 @@ const en = {
     campusLinks: 'Campus links',
   },
   Footer: {
-    tagline: 'Events, clubs and RSVPs for students of 1337 Coding School and EMINES (UM6P), all in one place.',
+    tagline: 'Events, clubs and RSVPs for 1337 Coding School students, all in one place.',
     nav: 'Footer',
     legal: 'Legal',
     newTab: '(opens in a new tab)',
@@ -83,8 +83,6 @@ const en = {
   Feed: {
     title: 'Upcoming events',
     filters: 'Filter events',
-    campus: 'Campus',
-    allCampuses: 'All',
     categories: 'Filter by category',
     allCategories: 'All',
     list: 'Events',
@@ -92,7 +90,7 @@ const en = {
     emptyTitle: 'No upcoming events yet',
     emptyBody: 'New events show up here as soon as clubs publish them.',
     noMatchTitle: 'No events match your filters',
-    noMatchBody: 'Try another campus or category.',
+    noMatchBody: 'Try another category.',
     clearFilters: 'Clear filters',
   },
   // RSVP words shared by the event cards, the event page's RSVP card and the toast. The sr* texts follow the
@@ -202,12 +200,10 @@ const en = {
   // Step 12.5: /clubs and /clubs/[slug].
   Clubs: {
     title: 'Clubs',
-    intro: 'Student clubs at 1337 and EMINES. Open one to see who runs it and what’s coming up.',
+    intro: 'Student clubs at 1337. Open one to see who runs it and what’s coming up.',
     count: '{count, plural, =0 {No clubs} one {# club} other {# clubs}}',
-    filters: 'Filter clubs',
-    emptyTitle: 'No clubs on this campus yet',
-    emptyBody: 'Clubs open to every school are listed under All.',
-    showAll: 'Show all clubs',
+    emptyTitle: 'No clubs yet',
+    emptyBody: 'Clubs show up here as soon as they are created.',
     upcomingCount: '{count, plural, =0 {No upcoming events} one {# upcoming event} other {# upcoming events}}',
     loading: 'Loading clubs',
     allClubs: 'All clubs',
@@ -247,7 +243,7 @@ const en = {
       'access-denied': {
         title: 'We couldn’t sign you in',
         description:
-          'Your 42 account isn’t linked to a 1337 or EMINES campus we support. If you think this is a mistake, contact the Campus Hub team.',
+          'Campus Hub is for 1337 students, and your 42 account isn’t linked to a 1337 campus. If you think this is a mistake, contact the Campus Hub team.',
       },
       unavailable: {
         title: 'Login is temporarily unavailable',
@@ -314,6 +310,41 @@ const en = {
     nameTooLong: 'Use at most {max} characters.',
     yearRequired: 'Choose your year of study.',
     schoolRequired: 'Choose your school.',
+  },
+  // Step 12.7: legal page frame, error and 404 pages, browser tab titles.
+  Legal: {
+    lastUpdated: 'Last updated <date>{label}</date>',
+    onThisPage: 'On this page',
+    seeAlso: 'See also:',
+  },
+  Errors: {
+    label: 'Error',
+    title: 'Something went wrong',
+    body: 'This page couldn’t load. It’s probably temporary: try again in a moment.',
+    code: 'Error code:',
+    retry: 'Try again',
+    notFoundTitle: 'Page not found',
+    notFoundBody: 'This page doesn’t exist, or it isn’t open yet. Upcoming events and clubs are one tap away.',
+  },
+  // Tab titles: the root layout adds " | Campus Hub" (title.template), so these are the page part only.
+  Meta: {
+    siteTitle: 'Campus Hub | Club & Event Management',
+    siteDescription: 'The events and clubs platform of 1337 Coding School.',
+    calendar: 'Calendar',
+    calendarDescription: 'Every 1337 event by month or week.',
+    clubs: 'Clubs',
+    clubsDescription: 'Every student club at 1337 Coding School, with what each one has coming up.',
+    clubNotFound: 'Club not found',
+    eventNotFound: 'Event not found',
+    login: 'Log in',
+    loginDescription: 'Log in with your 42 Intra account or your email to RSVP to campus events.',
+    register: 'Create an account',
+    registerDescription: 'Create a Campus Hub account with your email to RSVP to 1337 events.',
+    profile: 'My profile',
+    privacy: 'Privacy Policy',
+    privacyDescription: 'What Campus Hub collects, who can see it, the cookies we use and how to get your data deleted.',
+    terms: 'Terms of Service',
+    termsDescription: 'The rules for using Campus Hub: accounts, RSVPs, clubs and what is not allowed.',
   },
   Events: {
     count: '{count, plural, =0 {No events} one {# event} other {# events}}',

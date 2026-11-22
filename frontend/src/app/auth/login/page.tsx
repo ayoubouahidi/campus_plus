@@ -10,11 +10,14 @@ import { LoginDivider, LoginPanel } from '@/components/auth/LoginPanel';
 import { getLoginErrorKind, registerHref, safeNextPath } from '@/lib/login';
 import { signInWithEmail } from './actions';
 
-export const metadata: Metadata = {
-  title: 'Log in | Campus Hub',
-  description: 'Log in with your 42 Intra account or your email to RSVP to campus events.',
-  robots: { index: false, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Meta');
+  return {
+    title: t('login'),
+    description: t('loginDescription'),
+    robots: { index: false, follow: true },
+  };
+}
 
 // The hidden `redirectTo` field can be edited in the browser: clean it again on the server.
 const redirectTarget = (formData: FormData) => safeNextPath(formData.get('redirectTo')?.toString());

@@ -41,7 +41,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.6, login, sign-up and the profile in EN / FR / AR</p>
+        <p className="font-semibold">Test page: Step 12.7, legal pages, error and 404 pages, tab titles in EN / FR / AR</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,54 +118,52 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Pages to open (Step 12.6 is live on them)</h3>
+          <h3 className="font-semibold">Pages to open (Step 12.7 is live on them)</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             <li>
-              <Link href="/auth/login" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Login
+              <Link href="/privacy" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Privacy Policy
               </Link>
             </li>
             <li>
-              <Link href="/auth/login?registered=1" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Login after sign-up
+              <Link href="/privacy#cookies" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Privacy: cookies table
               </Link>
             </li>
             <li>
-              <Link href="/auth/login?error=AccessDenied" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                42 refused
+              <Link href="/terms" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Terms of Service
               </Link>
             </li>
             <li>
-              <Link href="/auth/login?error=Configuration" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Login unavailable
+              <Link href="/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Unknown page (404)
               </Link>
             </li>
             <li>
-              <Link href="/auth/register" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Sign-up
+              <Link href="/events/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Unknown event
               </Link>
             </li>
             <li>
-              <Link href="/profile" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Profile (signed in)
+              <Link href="/clubs/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Unknown club
               </Link>
             </li>
           </ul>
-          <p className="mt-2 text-slate-500 dark:text-slate-400">The login pages redirect when you are signed in: sign out first (box above) to see them.</p>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.6), in Français then العربية</h3>
+          <h3 className="font-semibold">What to check (Step 12.7), in Français then العربية</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Login: heading, intro, &quot;Continuer avec 42 Intra&quot; (and &quot;Ouverture de 42 Intra…&quot; while it loads), &quot;ou par e-mail&quot;, field labels, button, &quot;Pas de compte et pas de 42 ?&quot;, the 42 note at the bottom. The back arrow at the top points right in Arabic. The dev login button stays English (developers only).</li>
-            <li>Error and notice boxes: ?error=AccessDenied, ?error=Configuration, ?registered=1 (links above).</li>
-            <li>Email login, browser check: submit empty → &quot;Saisissez votre e-mail.&quot; / &quot;أدخل بريدك الإلكتروني.&quot;, then a bad email → the &quot;valid email&quot; message. A wrong password (with Django off, any unknown email) → &quot;E-mail ou mot de passe incorrect&quot;.</li>
-            <li>Sign-up: labels, &quot;Au moins 8 caractères.&quot;, year list &quot;1re année, 2e année…&quot; / &quot;السنة الأولى…&quot;, &quot;Choisissez d’abord votre école&quot;, the intro and terms sentences with their links in the right place. Submit empty: every field shows its message, focus goes to the first one; mismatched passwords → &quot;Les mots de passe ne correspondent pas.&quot;</li>
-            <li>Sign up twice with the same email → the &quot;Un compte existe déjà&quot; box, &quot;Cet e-mail a déjà un compte.&quot; under the field, and &quot;Se connecter plutôt&quot;.</li>
-            <li>/profile (signed in): &quot;Mon profil&quot;, &quot;Se déconnecter&quot; (&quot;Déconnexion…&quot; while it runs), stats (&quot;Participations à venir&quot;, &quot;Événements suivis&quot;, &quot;Clubs suivis · Bientôt&quot;), &quot;Vos événements&quot; with the J’y vais / J’y suis allé tabs, empty states, &quot;Récemment suivis&quot; + &quot;Les 3 derniers sur N événements&quot;, the &quot;Suivi&quot; chip, date tiles &quot;NOV.&quot; / &quot;نونبر&quot;.</li>
-            <li>Arabic /profile: stats, tabs and rows mirror; the row chevrons and the logout icon point the other way; the date tile month fits in its box.</li>
-            <li>Messages that come from Django itself (a field it rejects) stay in Django&apos;s language: expected until the backend sends keys or translated text.</li>
-            <li>Still English (next step 12.7): Privacy / Terms, error and 404 pages, page titles in the browser tab.</li>
+            <li>Privacy and Terms: the whole text is in the chosen language (title, &quot;En bref&quot;, every section, lists, the cookies table, links). &quot;Mise à jour le 20 novembre 2026&quot; / &quot;آخر تحديث: 20 نونبر 2026&quot;, &quot;Sur cette page&quot;, &quot;Voir aussi&quot;. Table-of-contents links jump to the right section (anchors are the same in every language).</li>
+            <li>Arabic legal pages: text and list bullets on the right, the cookies table reads right to left (headers aligned right), the contact email reads left to right, the table of contents sits on the right from 1024px.</li>
+            <li><strong>Please read the French and Arabic legal texts once</strong> (or ask a teammate who writes Arabic well): they are translations of the English reference, which stays the version that counts.</li>
+            <li>Browser tab titles, page by page: &quot;Calendrier | Campus Hub&quot;, &quot;التقويم | Campus Hub&quot;, &quot;Connexion | Campus Hub&quot;; the feed shows &quot;Campus Hub | Clubs et événements&quot;; event and club pages show their own name.</li>
+            <li>404 pages (links above): body and tab title translated (&quot;Page introuvable&quot;, &quot;Événement introuvable&quot;, &quot;النادي غير موجود&quot;).</li>
+            <li>Error page: to see it, temporarily throw in a page (e.g. add <code>throw new Error(&apos;test&apos;)</code> at the top of app/clubs/page.tsx), open /clubs, check &quot;Un problème est survenu&quot;, &quot;Réessayer&quot;, &quot;Code d’erreur&quot;, then remove the line.</li>
+            <li>Loading screens (slow network in DevTools): the hidden &quot;Chargement…&quot; labels are in the language (screen reader).</li>
+            <li>Still English on purpose: the whole-app crash page (global-error, outside the layout, no access to the language) and the dev login button.</li>
           </ul>
         </div>
       </section>

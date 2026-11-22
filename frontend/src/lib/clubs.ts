@@ -1,5 +1,5 @@
 import type { Club, EventItem } from '@/types/api';
-import { matchesCampus, splitEventsByTime, type CampusFilter } from '@/lib/events';
+import { splitEventsByTime } from '@/lib/events';
 import { CAMPUS_TIME_ZONE, cachedFormatter } from '@/lib/time';
 
 // The president's contact details. Only for signed-in students: the page passes `null` to signed-out
@@ -33,9 +33,6 @@ export const getUpcomingEventCounts = (events: EventItem[], now: number): Record
 export const sortClubsByName = (clubs: Club[]): Club[] =>
   [...clubs].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
 
-// Same campus rule as the event feed (matchesCampus). Keeps the input order.
-export const filterClubsByCampus = (clubs: Club[], campus: CampusFilter): Club[] =>
-  clubs.filter((club) => matchesCampus(club.department_name, campus));
 
 // The month a club was created: "January 2026", "janvier 2026", "يناير 2026" (Step 12.5). The page wraps it in
 // Clubs.since ("Since {date}"). Server only: formatting a moment in the campus time zone (DOCS.md §5.2).
@@ -43,7 +40,7 @@ export const filterClubsByCampus = (clubs: Club[], campus: CampusFilter): Club[]
 const sinceFormatter = cachedFormatter(
   (tag) => new Intl.DateTimeFormat(tag, { month: 'long', year: 'numeric', timeZone: CAMPUS_TIME_ZONE })
 );
-export const formatClubSince = (createdAt: string, locale = 'en'): string =>
+export const formatClubSince = (createdAt: string, locale: string): string =>
   sinceFormatter(locale).format(Date.parse(createdAt));
 
 // "+212600000000" → "+212 6 00 00 00 00" (Moroccan grouping) for display only; tel: links keep the raw value.

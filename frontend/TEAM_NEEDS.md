@@ -75,7 +75,7 @@ Spec: `API_SPEC.md` on `Ahmed` (Swagger `/api/docs/`). Blocked part: `AYOUB_DEPE
 | `flyer_url` | `image_path` exists on the model but **isn't in the serializer** | Add it as an absolute URL (`''` or `null` when none) |
 | `category` | missing | Add `category` with choices `Tech, Media, Music, Sports, Business, EventsOrganization, Gaming` (filters, colours, calendar) |
 | `club_id`, `club_name` | `club` (id only) | Add `club_name` (and ideally `club_slug`) so the feed needn't fetch every club |
-| `department_name` + **campus** | missing on events | Add `department_name` and a `department_slug` (e.g. `1337`, `emines`). The campus filter currently guesses from names (DOCS §5.3). |
+| `department_name` + **campus** | missing on events | Add `department_name`. ~~`department_slug` for the campus filter~~: no longer needed, 1337 only (§1d). |
 | `status` (`planned`/`ongoing`/`completed`/`cancelled`) | exists | Keep it. Frontend will show a "Cancelled" badge. |
 
 **Query parameters** (so the frontend doesn't download everything): `?from=&to=` (date range for the calendar month), `?upcoming=true`, `?club=<slug>`, `?department=<slug>`, `?category=`, `?search=` (title/description/club/location).
@@ -133,6 +133,16 @@ Ahmed owns `realtime` (Channels, Daphne, Redis, WebSocket JWT, `POST /api/realti
 Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data": <event in the same shape as the API> }`. For `event_deleted`, `data` can be `{ "id": … }`. The frontend already uses these three names (`WebSocketEventType`).
 
 ---
+
+## 1d. Decision: Campus Hub is for 1337 only (Mouad, 2026-11-22)
+
+**EMINES and UM6P are not partners.** The student site no longer mentions them: no campus switch (All / 1337 / EMINES) on the feed and the clubs page, no EMINES or UM6P links in the footer, legal texts and descriptions say 1337 only, mock clubs and events are 1337 ones (DOCS §13). What the rest of the team should do:
+
+| Who | What |
+| --- | --- |
+| Ahmed | Seed / fixtures: only the `1337 Coding School` department (drop EMINES, FGSES, UM6P Central Campus). `department_slug` on events (§1.2) is no longer needed for a campus filter. |
+| Ayoub | Dashboard: no EMINES / UM6P departments or clubs in forms and mock data. `/auth/sync` (and email sign-up) should refuse accounts that aren't 1337 (the login page says "Campus Hub is for 1337 students" on `AccessDenied`). |
+| Everyone | README and presentation: describe Campus Hub as the 1337 platform. |
 
 ## 1c. Merge plan and open questions (2026-11-21)
 
@@ -237,7 +247,7 @@ Also from Ahmed: migrations `0007`, `0008` and `0009` are pushed and passed isol
 | Question | Options | Frontend's suggestion |
 | --- | --- | --- |
 | Who can see who's going to an event? | ~~Everyone / signed-in students / nobody but the count~~ | **Decided 2026-11-20: signed-in students only.** Signed-out visitors see the count. Enforced by the API (Ahmed, §1.1) and written in the Privacy Policy (DOCS §9) |
-| EMINES students without a 42 account | ~~Email sign-up / campus SSO / 42 only~~ | **Decided by the subject (§5): email + password sign-up and login are mandatory for everyone.** 42 stays as the OAuth module |
+| ~~EMINES~~ students without a 42 account (1337 only since §1d) | ~~Email sign-up / campus SSO / 42 only~~ | **Decided by the subject (§5): email + password sign-up and login are mandatory for everyone.** 42 stays as the OAuth module |
 | Dashboard location | `/dashboard` on the same domain / `admin.` subdomain | Subdomain (no cookie clash, clean nginx) |
 | When to merge | Now / after the dashboard endpoints | **Decided 2026-11-21 (Mouad): after Ayoub's dashboard endpoints are integrated and Ahmed OKs the endpoints.** Dates still to set (§1c, E1) |
 | Event categories | The 7 above / editable list in the DB | Fixed list for now |

@@ -1,6 +1,6 @@
 # Campus Hub — Frontend Architecture & Engineering Docs
 
-Campus Hub is the event discovery, club management, and RSVP platform for **1337 Coding School** and **EMINES (UM6P)**.
+Campus Hub is the event discovery, club management, and RSVP platform for **1337 Coding School**. (Until 2026-11-22 it also covered EMINES (UM6P); they are not partners, so it serves 1337 only: §13. Older sections below still mention EMINES and the campus toggle as history.)
 This file is the living engineering record: every component, layout, or utility gets an entry here when it is created or changed.
 
 > **New to the codebase? Start with [`ARCHITECTURE.md`](./ARCHITECTURE.md)**: how the app fits together, where things live, how data and state flow, and a study guide of the React / Next.js concepts used.
@@ -3816,7 +3816,7 @@ Two accessibility modules of the subject: **≥ 3 languages with a switcher** (a
 | 12.4 | Calendar (weekday names, month and week titles, agenda, times); server-made names so the browser re-renders the same text | ✅ validated 2026-11-22 |
 | 12.5 | Clubs directory and club pages; "since" month in the active language | ✅ validated 2026-11-22 |
 | 12.6 | Login, sign-up (validation and error messages as keys), logout, the rest of `/profile` (stats, tabs, date tiles) | ✅ validated 2026-11-22 |
-| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), drop the `locale = 'en'` defaults once every caller passes a locale (all formatters take one since 12.6) | ⏳ |
+| 12.7 | Privacy / Terms full text in FR and AR, legal page frame, error and 404 pages, tab titles (`title.template`), `locale` required on every formatter, 404 status question answered | ✅ validated 2026-11-22 |
 | 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ⏳ |
 
 ### 12.1 i18n setup and `LanguageSwitcher` (Step 12.1, 2026-11-21)
@@ -4201,3 +4201,85 @@ const errorText = useFieldError();
 ```
 
 **Verified (2026-11-22, server HTML fetched inside the container).** `/auth/login?registered=1`: "Welcome back" / "Bon retour" / "مرحبًا بعودتك", the intro, the notice, "Continue with 42 Intra" / "Continuer avec 42 Intra" / "المتابعة باستخدام 42 Intra", "or with email" / "ou par e-mail", labels, "Log in" / "Se connecter" / "تسجيل الدخول", "No account and no 42?" link, the 42 note, form label. `/auth/login?error=AccessDenied`: the three error boxes. `/auth/register`: labels, "At least 8 characters." / "Au moins 8 caractères." / "8 أحرف على الأقل.", years "1st year…7th year" / "1re année, 2e année…" / "السنة الأولى…السابعة", "Choose your school first", "Create account", the intro and terms sentences with their links. `tsc` passes; ESLint: the same 6 old findings (one new `react/display-name` from the first `t.rich` helper, fixed with the named `InlineLink`). Signed-in `/profile`, the form errors (browser and server) and the logout button: in the browser (checklist on `/test`).
+
+### 12.7 Legal pages, error and 404 pages, tab titles (Step 12.7, 2026-11-22)
+
+**Files:** `src/components/legal/content/{en,fr,ar}.tsx` (new: the two documents per language; `en.tsx` is the former `legalContent.tsx` text), `src/components/legal/legalContent.tsx` (now `LEGAL_DOCUMENTS: Record<Locale, LegalDocuments>`), `src/components/legal/legalParts.tsx` (new: `ContactLink`, `ExternalLink`), `src/components/legal/LegalPage.tsx`, `src/lib/legal.ts` (`LEGAL_LAST_UPDATED` is the ISO date only), `src/app/{privacy,terms}/page.tsx`, `src/components/ui/ErrorState.tsx`, `src/app/{error,not-found,global-error}.tsx`, `src/app/layout.tsx` and every page with metadata (`generateMetadata` + `Meta` messages), `src/lib/{time,calendar,clubs}.ts` (`locale` required), `src/i18n/messages/{en,fr,ar}.ts` (namespaces `Legal`, `Errors`, `Meta`). Test: `src/app/test/page.tsx`.
+**Status:** ✅ Validated (2026-11-22). **The French and Arabic legal texts still need one read by a fluent teammate** (see below).
+
+**Business purpose.** The Privacy Policy and Terms are mandatory (subject v21.2) and promise things to students: they must be readable in the language the student uses on the site. Error pages and tab titles are the last places a French or Arabic visitor would meet English.
+
+**Core concepts & decisions.**
+- **Legal text: one JSX document per language.** Long text with lists, a table, links and bold terms doesn't fit short ICU messages. Each language is a file in `components/legal/content/` exporting `{ privacy, terms }` with **the same section ids**, so `/privacy#cookies` works in every language. `LEGAL_DOCUMENTS[locale]` picks one on the server; only that language reaches the HTML. English is the reference: a change to what we collect goes into `en.tsx` first, then `fr.tsx` and `ar.tsx` in the same commit.
+- **Translations to review.** The French and Arabic texts are careful translations of the English one, not legal advice. Arabic uses Moroccan legal wording where it exists ("القانون رقم 09-08 المتعلق بحماية المعطيات الشخصية", "CNDP"); cookie names, law numbers and addresses stay in Latin script. A teammate who writes Arabic well should read it once before the evaluation.
+- **Frame and date.** `LegalPage` takes the date as `'YYYY-MM-DD'` and writes it with `Intl` in the visitor's language, in UTC (a calendar day, so no time zone can move it): "November 20, 2026" / "20 novembre 2026" / "20 نونبر 2026". "Last updated", "On this page", "See also" are `Legal` messages; `t.rich` wraps the date in `<time>` wherever each language puts it. `ExternalLink`'s "(opens in a new tab)" reuses `Footer.newTab`; the contact email gets `dir="ltr"`. RTL fix: the cookies table was `text-left`, now `text-start`.
+- **Tab titles with `title.template`.** The root layout's `generateMetadata` returns `{ default: Meta.siteTitle, template: '%s | Campus Hub' }`, and each page returns only its own part (`Meta.calendar` → "Calendrier | Campus Hub"). Event and club pages return the event or club name (data, untranslated). The root `not-found.tsx` exports `generateMetadata` too (allowed for the root not-found file, Next 16 docs), so unknown URLs show "Page introuvable | Campus Hub".
+- **Error page.** `ErrorState` reads the `Errors` messages itself ("Erreur", "Un problème est survenu", "Code d’erreur :"); `title` / `description` props still override them. `error.tsx` translates "Try again" and the way out.
+- **`global-error.tsx` stays English, on purpose.** It replaces the root layout when the layout itself crashes, so next-intl's provider isn't there, and the language cookie is `httpOnly` (scripts can't read it). It is three lines shown only when the whole app is down.
+- **The 404 status question (from 12.3) is answered.** Next's docs (`file-conventions/loading.md`, "Status codes"): a streamed response starts with `200`; when `notFound()` runs after streaming started (our routes with a `loading.tsx` skeleton), the status stays `200` and Next adds `<meta name="robots" content="noindex">`. Unknown URLs with no skeleton (`/nope`) do return `404`. Kept as is: the skeletons are worth more than the status code, and `noindex` keeps the pages out of search engines. To get a real 404 for `/events/<bad id>`, the check would have to run before streaming (e.g. in `proxy.ts`), which needs the API.
+- **`locale` is now required** on every formatter (`formatEventSchedule`, `getEventSchedules`, `getEventDateDetails`, `getEventTimes`, `getCalendarNames`, `formatClubSince`, `formatDateTile`, `getDateTiles`, `formatRelativeTime`, `formatAbsoluteTime`). Every caller already passed it, so `tsc` proved it; a new page that forgets gets a type error instead of silent English dates.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| One JSX file per language for the legal text | One message per paragraph in `messages/*.ts` | ~70 rich paragraphs with tags, lists and a table would become hard-to-read strings; per-language files read like the pages they produce. |
+| Same section ids in every language | Translated ids (`/privacy#cookies` → `#temoins`) | Links shared between students keep working whatever language the reader uses. |
+| `title.template` in the root layout | " \| Campus Hub" in each page's title | One place for the suffix; pages only translate their own name. |
+| Keep the `200` + `noindex` on streamed not-found | Drop `loading.tsx` on event and club routes | Skeletons avoid blank screens on slow networks; search engines already ignore these pages. |
+| `global-error` in English | Guess the language from `navigator.language` | It could disagree with the language the student picked; a crash screen is better consistent than guessed. |
+
+**Contract.**
+```ts
+// src/components/legal/legalContent.tsx
+interface LegalDocuments { privacy: LegalDocument; terms: LegalDocument }
+const LEGAL_DOCUMENTS: Record<Locale, LegalDocuments>;
+// src/components/legal/LegalPage.tsx
+interface LegalPageProps { document: LegalDocument; lastUpdated: string /* 'YYYY-MM-DD' */ }
+// src/lib/legal.ts
+const LEGAL_LAST_UPDATED = '2026-11-20';
+// src/components/ui/ErrorState.tsx: title / description optional, default to the Errors messages.
+```
+
+**Usage.**
+```tsx
+// app/privacy/page.tsx
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Meta');
+  return { title: t('privacy'), description: t('privacyDescription') };
+}
+export default async function PrivacyPage() {
+  const locale = await getLocale();
+  return <LegalPage document={LEGAL_DOCUMENTS[locale].privacy} lastUpdated={LEGAL_LAST_UPDATED} />;
+}
+```
+
+**Verified (2026-11-22, server HTML fetched inside the container).** Tab titles for `/`, `/calendar`, `/clubs`, a club, an unknown club, an event, an unknown event, `/auth/login`, `/auth/register`, `/privacy`, `/terms`, `/nope` in all three languages (e.g. "Calendrier | Campus Hub", "التقويم | Campus Hub", "Page introuvable | Campus Hub"). `/privacy`: "Mise à jour le 20 novembre 2026" / "آخر تحديث: 20 نونبر 2026", "En bref" / "باختصار", "Sur cette page", the 09-08 law sentence, "Voir aussi". `/nope`: HTTP 404, translated body and buttons. `tsc` passes (including with `locale` required everywhere); ESLint: the same 6 old findings.
+
+## 13. Campus Hub is for 1337 only: EMINES and UM6P removed (2026-11-22)
+
+**Files:** `src/lib/mockData.ts`, `src/lib/events.ts` (`Campus`, `CampusFilter`, `CAMPUS_FILTERS`, `CAMPUS_NAMES`, `CAMPUS_DEPARTMENT`, `matchesCampus` removed; `EventFilters` has no `campus`), `src/lib/clubs.ts` (`filterClubsByCampus` removed), `src/components/filters/CampusToggle.tsx` (deleted), `src/components/events/{FeedToolbar,EventFeed,EventSkeletons}.tsx`, `src/components/clubs/{ClubDirectory,ClubSkeletons}.tsx`, `src/lib/navigation.ts` + `src/types/navigation.ts` (footer group `network`), `src/components/ui/layout/Footer.tsx`, `src/components/profile/ProfileHero.tsx`, `src/components/auth/RegisterForm.tsx`, `src/i18n/messages/{en,fr,ar}.ts`, `src/components/legal/content/{en,fr,ar}.tsx`, comments in `src/auth.ts`, `src/lib/login.ts`, `CampusBackground.tsx`; `CLAUDE.md`, `ARCHITECTURE.md`, `TEAM_NEEDS.md` §1d.
+**Status:** ✅ Validated (2026-11-22). Asked by Mouad: "remove EMINES from the platform as a partner, keep just 1337 because they are not partners"; UM6P removed too (his choice: "only 1337").
+
+**Why.** Campus Hub was described as the platform of 1337 Coding School **and** EMINES (UM6P). They are not partners, so the site must not present them as such: not in the UI, not in the legal texts (which define who accounts are for), not in the data.
+
+**What changed.**
+- **No campus switch.** With one school there is nothing to filter: the All / 1337 / EMINES toggle is gone from the feed and the clubs directory, with its types and helpers. The feed keeps the category chips (inside the same `<search>` landmark); the empty-state hint is "Try another category". `ClubDirectory` lost its only state and is now a **Server Component** (no JavaScript shipped for `/clubs`); its empty state is "No clubs yet". Skeletons lost the toggle placeholder so nothing jumps.
+- **Mock data is 1337 only.** One department (`dept_1337`). EMINES Consulting Club → **LEET Business** (`/clubs/leet-business`), UM6P Sports Association → **LEET Sports** (`/clubs/leet-sports`), the Student Events Committee belongs to 1337. Their events were reworded (pitch night, inter-pool basketball final, courtyard BBQ); event ids are unchanged so the `/test` links still work.
+- **Footer.** The "Campuses" column became **"Network"** (`Nav.network`: Network / Réseau / الشبكة) with 1337 Coding School and 42 Network; the legal line says "1337 Coding School".
+- **Words.** Taglines, the clubs intro, page descriptions, the profile banner (phones: "1337 Coding School"), and the 42 refusal message ("Campus Hub is for 1337 students, and your 42 account isn't linked to a 1337 campus") in all three languages.
+- **Legal texts (EN, FR, AR).** "Who we are", "About these terms" and "Your account" now name 1337 only ("Accounts are for students and staff of 1337 Coding School"); the "not an official service of …" line names 1337 and the 42 Network.
+- **Sign-up.** With a single school, the School field is filled in for the student (`onlyDepartment`), so the club list shows right away. The field stays (the backend's sign-up takes a `department_id`).
+- **Login page photo:** kept (it shows where 1337 Benguerir is and carries no text), file renamed `public/UM6P_Campus.webp` → `public/campus.webp` so no other school's name ships in the HTML. Replace the image itself if the team prefers another photo.
+
+**Tradeoffs.**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Remove the campus switch | Keep it with All / 1337 | A one-choice filter is noise and a dead control for keyboard and screen-reader users. |
+| Keep the `department` model (one department) | Drop departments from the frontend | The backend still has departments; keeping the shape means no mapping change at the merge. |
+| Rename mock clubs to 1337 clubs, keep event ids | Delete the EMINES / UM6P mocks | The feed, calendar, profile and `/test` keep the same variety of cases (long title, multi-day, sports, 0 RSVPs). |
+
+**Verified (2026-11-22).** Full HTML of 14 pages (`/`, `/calendar`, `/clubs`, three club pages, three event pages, `/auth/login`, `/auth/register`, `/privacy`, `/terms`, `/nope`) in EN, FR and AR: no "EMINES" or "UM6P" anywhere (after renaming the login photo). `/clubs` lists LEET Business, LEET Dev, Leet Frame, LEET Music, LEET Sports, Student Events Committee. `tsc` passes; ESLint: the same 6 old findings.
+
+**Team follow-up:** TEAM_NEEDS §1d (Ahmed: seed only the 1337 department; Ayoub: dashboard data and refusing non-1337 accounts).

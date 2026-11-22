@@ -10,12 +10,9 @@ export const mockCurrentUser: User = {
   club_id: 'club_leet_frame',
 };
 
-export const mockDepartments: Department[] = [
-  { id: 'dept_1337', name: '1337 Coding School', slug: '1337' },
-  { id: 'dept_emines', name: 'EMINES - School of Industrial Management', slug: 'emines' },
-  { id: 'dept_fgsess', name: 'FGSES - Governance & Economics', slug: 'fgses' },
-  { id: 'dept_um6p', name: 'UM6P Central Campus', slug: 'um6p' },
-];
+// Campus Hub serves 1337 only (decided 2026-11-22: EMINES and UM6P are not partners). One department, so the
+// sign-up form's school field has a single choice; the model keeps departments for the backend's shape.
+export const mockDepartments: Department[] = [{ id: 'dept_1337', name: '1337 Coding School', slug: '1337' }];
 
 export const mockClubs: Club[] = [
   {
@@ -47,17 +44,17 @@ export const mockClubs: Club[] = [
     created_at: '2026-02-01T12:00:00Z',
   },
   {
-    id: 'club_emines_consulting',
-    department_id: 'dept_emines',
-    department_name: 'EMINES',
-    name: 'EMINES Consulting Club',
-    slug: 'emines-consulting',
-    description: 'Business case resolution, consulting frameworks, and industry networking.',
+    id: 'club_leet_business',
+    department_id: 'dept_1337',
+    department_name: '1337 Coding School',
+    name: 'LEET Business',
+    slug: 'leet-business',
+    description: 'Startup ideas, product pitches, and case challenges for 1337 students who build.',
     logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Yassine K.',
     president_phone: '+212622334455',
-    president_email: 'consulting@emines.um6p.ma',
+    president_email: 'leetbusiness@1337.ma',
     created_at: '2026-01-20T09:30:00Z',
   },
   {
@@ -75,31 +72,31 @@ export const mockClubs: Club[] = [
     created_at: '2026-01-10T08:00:00Z',
   },
   {
-    id: 'club_um6p_sports',
-    department_id: 'dept_um6p',
-    department_name: 'UM6P Central Campus',
-    name: 'UM6P Sports Association',
-    slug: 'um6p-sports',
-    description: 'Inter-school leagues, tournaments, and weekly training sessions at the UM6P sports complex.',
+    id: 'club_leet_sports',
+    department_id: 'dept_1337',
+    department_name: '1337 Coding School',
+    name: 'LEET Sports',
+    slug: 'leet-sports',
+    description: 'Football and basketball leagues, tournaments, and weekly training sessions for 1337 students.',
     logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Kenza R.',
     president_phone: '+212644556677',
-    president_email: 'sports@um6p.ma',
+    president_email: 'leetsports@1337.ma',
     created_at: '2026-01-05T09:00:00Z',
   },
   {
     id: 'club_bde',
-    department_id: 'dept_um6p',
-    department_name: 'UM6P Central Campus',
+    department_id: 'dept_1337',
+    department_name: '1337 Coding School',
     name: 'Student Events Committee',
     slug: 'student-events',
-    description: 'Campus-wide celebrations, welcome days, and end-of-semester events for every school.',
+    description: 'Welcome days, celebrations, and end-of-semester events for every 1337 student.',
     logo_url: '', // no logo uploaded: Avatar shows initials
     banner_url: null,
     president_name: 'Omar L.',
     president_phone: '+212655667788',
-    president_email: 'events@um6p.ma',
+    president_email: 'events@1337.ma',
     created_at: '2026-01-02T10:00:00Z',
   },
 ];
@@ -165,13 +162,14 @@ export const mockEvents: EventItem[] = [
   },
   {
     id: 'evt_case_competition',
-    club_id: 'club_emines_consulting',
-    club_name: 'EMINES Consulting Club',
-    department_name: 'EMINES',
-    title: 'Industrial Strategy Case Competition: Phosphate Supply Chains of the Next Decade, Final Round',
-    description: 'Teams of four pitch supply-chain strategies to a jury of OCP and consulting partners.',
+    club_id: 'club_leet_business',
+    club_name: 'LEET Business',
+    department_name: '1337 Coding School',
+    // Long on purpose: checks that titles clamp to two lines on cards.
+    title: 'Startup Pitch Night: Products Built by 1337 Students in Their First Year, Final Round',
+    description: 'Teams of four pitch the products they built to a jury of founders and mentors.',
     flyer_url: '/mock/events/symposium.png',
-    location: 'EMINES Amphitheater B',
+    location: 'Auditorium',
     category: 'Business',
     start_time: '2026-11-18T13:30:00Z',
     end_time: '2026-11-18T18:00:00Z',
@@ -181,11 +179,11 @@ export const mockEvents: EventItem[] = [
   },
   {
     id: 'evt_basketball_final',
-    club_id: 'club_um6p_sports',
-    club_name: 'UM6P Sports Association',
-    department_name: 'UM6P Central Campus',
-    title: 'Inter-School Basketball Final: 1337 vs EMINES',
-    description: 'The season final at the UM6P sports complex. Bring your school colours.',
+    club_id: 'club_leet_sports',
+    club_name: 'LEET Sports',
+    department_name: '1337 Coding School',
+    title: 'Inter-Pool Basketball Final',
+    description: 'The season final between this year’s pools. Bring your team colours.',
     flyer_url: '/mock/events/basketball.png',
     location: 'Sports Complex - Main Court',
     category: 'Sports',
@@ -199,11 +197,11 @@ export const mockEvents: EventItem[] = [
     id: 'evt_welcome_bbq',
     club_id: 'club_bde',
     club_name: 'Student Events Committee',
-    department_name: 'UM6P Central Campus',
+    department_name: '1337 Coding School',
     title: 'Winter Welcome BBQ',
-    description: 'Food, music and club stands on the central lawn to close the semester.',
+    description: 'Food, music and club stands in the courtyard to close the semester.',
     flyer_url: '/mock/events/campus-bbq.png',
-    location: 'Central Lawn',
+    location: 'Campus Courtyard',
     category: 'EventsOrganization',
     start_time: '2026-11-27T11:00:00Z',
     end_time: '2026-11-27T15:00:00Z',

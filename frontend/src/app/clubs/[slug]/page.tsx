@@ -22,10 +22,10 @@ const loadClub = cache((slug: string) => getClubBySlug(mockClubs, slug));
 
 export async function generateMetadata({ params }: ClubPageProps): Promise<Metadata> {
   const club = loadClub((await params).slug);
-  if (!club) return { title: 'Club not found | Campus Hub' };
+  if (!club) return { title: (await getTranslations('Meta'))('clubNotFound') };
 
   return {
-    title: `${club.name} | Campus Hub`,
+    title: club.name, // + " | Campus Hub" from the root layout's title.template
     description: club.description,
     openGraph: { title: club.name, description: club.description, type: 'profile' },
   };

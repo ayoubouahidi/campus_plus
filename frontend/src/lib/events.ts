@@ -1,32 +1,16 @@
 import { Club, EventCategory, EventItem } from '@/types/api';
 
-export type Campus = '1337' | 'emines';
-export type CampusFilter = 'all' | Campus;
 export type CategoryFilter = 'all' | EventCategory;
 
 export interface EventFilters {
-  campus: CampusFilter;
   category: CategoryFilter;
   query: string;
 }
 
-export const DEFAULT_EVENT_FILTERS: EventFilters = { campus: 'all', category: 'all', query: '' };
+export const DEFAULT_EVENT_FILTERS: EventFilters = { category: 'all', query: '' };
 
-// Tab order in the campus toggle (feed, clubs directory).
-export const CAMPUS_FILTERS: CampusFilter[] = ['all', '1337', 'emines'];
-
-// Campus names stay as they are in every language (proper names). "All" is UI text: Feed.allCampuses.
-export const CAMPUS_NAMES: Record<Campus, string> = {
-  '1337': '1337',
-  emines: 'EMINES',
-};
-
-// Events don't carry a department slug yet, so campus is matched on department_name.
-// Phase 7: switch to a slug once the API sends one.
-const CAMPUS_DEPARTMENT: Record<Campus, string> = {
-  '1337': '1337 Coding School',
-  emines: 'EMINES',
-};
+// No campus filter: Campus Hub serves 1337 only (2026-11-22, EMINES and UM6P are not partners). The All / 1337 /
+// EMINES toggle and its helpers were removed; see DOCS.md §13.
 
 // Chip order in the category row.
 export const EVENT_CATEGORIES: EventCategory[] = [
@@ -56,10 +40,6 @@ const COMBINING_MARKS = /[̀-ًͯ-ٰٟ]/g;
 
 export const normalizeText = (text: string): string => text.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase();
 
-// Shared by the event feed and the clubs directory. Campus-wide (UM6P Central) items only show under "All".
-export const matchesCampus = (departmentName: string, campus: CampusFilter): boolean =>
-  campus === 'all' || departmentName === CAMPUS_DEPARTMENT[campus];
-
 // Every word must appear somewhere in the title, club or location: "leet jam" narrows, it doesn't widen.
 const matchesTerms = (event: EventItem, terms: string[]): boolean => {
   if (terms.length === 0) return true;
@@ -68,12 +48,11 @@ const matchesTerms = (event: EventItem, terms: string[]): boolean => {
 };
 
 // Pure: keeps the input order and never mutates it.
-export const filterEvents = (events: EventItem[], { campus, category, query }: EventFilters): EventItem[] => {
+export const filterEvents = (events: EventItem[], { category, query }: EventFilters): EventItem[] => {
   const terms = normalizeText(query).split(/\s+/).filter(Boolean);
 
   return events.filter(
     (event) =>
-      matchesCampus(event.department_name, campus) &&
       (category === 'all' || event.category === category) &&
       matchesTerms(event, terms),
   );

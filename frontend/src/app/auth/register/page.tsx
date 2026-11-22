@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { LoginLayout } from '@/components/auth/LoginLayout';
@@ -8,11 +9,14 @@ import { safeNextPath } from '@/lib/login';
 import { mockClubs, mockDepartments } from '@/lib/mockData';
 import { registerWithEmail } from './actions';
 
-export const metadata: Metadata = {
-  title: 'Create an account | Campus Hub',
-  description: 'Create a Campus Hub account with your email to RSVP to events at 1337 and EMINES.',
-  robots: { index: false, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Meta');
+  return {
+    title: t('register'),
+    description: t('registerDescription'),
+    robots: { index: false, follow: true },
+  };
+}
 
 // `/auth/register` (Step 11.3): email sign-up, full screen like /auth/login (FULL_SCREEN_ROUTES covers /auth).
 // ?next= where to go once the account exists (the student is logged in right away).

@@ -4,7 +4,7 @@ import styles from './CampusBackground.module.css';
 /**
  * CampusBackground: the site-wide backdrop. "Desert elevation at golden hour, drawn by an engineer."
  *  - Horizon (bottom): a hairline elevation of the campus. A long terracotta block with stepped, recessed
- *    portals and claustra perforation grids (UM6P / Bofill), a tree-column solar pergola, and a slotted tower
+ *    portals and claustra perforation grids (Bofill-style), a tree-column solar pergola, and a slotted tower
  *    with a lattice strip.
  *  - Sky (top corners, from 640px): 1337-style circuit traces and a small constellation, ending in nodes and one
  *    coordinate tag (Benguerir).

@@ -2,7 +2,7 @@
 
 # MISSION: Frontend Engineering & Architecture for "Campus Hub"
 
-Act as a Staff Frontend Architect & Design Systems Engineer, collaborating with the user to build **Campus Hub**: an enterprise-grade, accessible event discovery, club management, and RSVP web platform for 1337 Coding School and EMINES (UM6P).
+Act as a Staff Frontend Architect & Design Systems Engineer, collaborating with the user to build **Campus Hub**: an enterprise-grade, accessible event discovery, club management, and RSVP web platform for 1337 Coding School (1337 only since 2026-11-22: EMINES and UM6P are not partners, `DOCS.md` §13).
 
 > Where we are right now: see the roadmap in `DOCS.md` §1.6 and the **Status** line of the latest entry in the last section.
 
@@ -77,7 +77,7 @@ Executed sequentially from Phase 2 through Phase 7:
   - Task 2.4: `Footer.tsx` (Campus branding, institutional links, legal copy)
   - Task 2.5: Root layout integration in `src/app/layout.tsx` (wrapping with `ToastProvider`)
 - **Phase 3: Public Event Feed (`/`)**
-  - Featured event hero banner, segmented campus tabs (All, 1337, EMINES), interactive category chips, debounced search bar, 3-column event grid, and empty states.
+  - Featured event hero banner, interactive category chips (the campus tabs were removed on 2026-11-22: 1337 only), debounced search bar, 3-column event grid, and empty states.
 - **Phase 4: Core Public Views** (in this order, see `DOCS.md` §6)
   - `/calendar`: 7-column monthly/weekly date matrix + selected-day agenda drawer.
   - `/events/[id]`: Dedicated event dossier with RSVP ticket flow and attendee stacks (fixes the event card links on `/`).

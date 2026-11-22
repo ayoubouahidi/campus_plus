@@ -13,6 +13,9 @@ interface GlobalErrorProps {
 // Last resort: the root layout itself failed (./error.tsx can't help, it lives inside that layout). This
 // file replaces the whole document, so it brings its own <html>, <body>, styles and <title>, and has no
 // navbar or footer (they are part of the broken layout). Dark mode still works: it follows the OS setting.
+// English only (Step 12.7): it renders outside the layout, so next-intl's provider and the language cookie
+// (httpOnly, unreadable here) are not available. The page has three short lines and a button; it is the one
+// screen left in English on purpose, shown only when the whole app has crashed.
 export default function GlobalError({ error, retry }: GlobalErrorProps) {
   useEffect(() => {
     console.error(error);

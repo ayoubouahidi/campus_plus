@@ -173,7 +173,7 @@ export const FooterLegal = React.forwardRef<HTMLDivElement, FooterLegalProps>(
               </li>
             ))}
             {variant === 'full' && <li aria-hidden="true">·</li>}
-            {variant === 'full' && <li>1337 Coding School × EMINES · UM6P</li>}
+            {variant === 'full' && <li>1337 Coding School</li>}
           </ul>
         </nav>
       </div>

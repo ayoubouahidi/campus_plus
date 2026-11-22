@@ -7,10 +7,13 @@ import { eventsForVisitor } from '@/lib/events';
 import { mockEvents } from '@/lib/mockData';
 import { getRequestTime } from '@/lib/requestTime';
 
-export const metadata: Metadata = {
-  title: 'Calendar | Campus Hub',
-  description: 'Every campus event by month or week, for 1337 Coding School and EMINES.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Meta');
+  return {
+    title: t('calendar'),
+    description: t('calendarDescription'),
+  };
+}
 
 // `/calendar` (Phase 4). Server Component: it decides "today" and puts events on campus days (both need
 // the server's time-zone data, DOCS.md §5.2), then hands plain data to the interactive <EventCalendar>.

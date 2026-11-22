@@ -45,7 +45,7 @@ export type FooterLink =
   | { kind: 'external'; label: string; href: `https://${string}` };
 
 export interface FooterLinkGroup {
-  id: 'explore' | 'campuses'; // stable key for filtering (e.g. the drawer skips 'explore')
+  id: 'explore' | 'network'; // stable key for filtering (e.g. the drawer skips 'explore')
   titleKey: NavLabelKey;
   links: readonly FooterLink[];
 }

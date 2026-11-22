@@ -41,8 +41,6 @@ export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
   return (
     <div className="space-y-8">
       <FeedToolbar
-        campus={filters.campus}
-        onCampusChange={(campus) => setFilters((current) => ({ ...current, campus }))}
         resultCount={visibleEvents.length}
       >
         <CategoryFilter

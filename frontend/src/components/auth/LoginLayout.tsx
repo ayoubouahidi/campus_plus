@@ -19,7 +19,7 @@ export const LoginLayout = React.forwardRef<HTMLDivElement, LoginLayoutProps>(
       <div ref={ref} className={`grid min-h-dvh grid-cols-1 lg:grid-cols-2 ${className}`} {...props}>
         {/* Decorative: the form column carries all the meaning, so alt="" keeps screen readers on the form */}
         <div className="relative hidden lg:block">
-          <Image src="/UM6P_Campus.webp" alt="" fill priority sizes="50vw" className="object-cover" />
+          <Image src="/campus.webp" alt="" fill priority sizes="50vw" className="object-cover" />
         </div>
 
         <div className="flex flex-col bg-white px-6 py-6 dark:bg-slate-950">

@@ -39,7 +39,7 @@ export const registerHref = (next: string): `/auth/register?next=${string}` =>
   `/auth/register?next=${encodeURIComponent(safeNextPath(next))}`;
 
 // Auth.js sends failed sign-ins back to the login page with ?error=<code>. Codes we treat specially:
-//  - AccessDenied: our signIn callback refused (Django's /auth/sync said no, e.g. not a 1337/EMINES account).
+//  - AccessDenied: our signIn callback refused (Django's /auth/sync said no, e.g. not a 1337 account).
 //  - Configuration: server misconfigured (bad secret, 42 app keys, backend down). Not the student's fault.
 // Everything else (OAuthCallbackError when the student cancels on 42, Verification, unknown) → generic.
 export type LoginErrorKind = 'access-denied' | 'unavailable' | 'generic';

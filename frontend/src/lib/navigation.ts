@@ -34,12 +34,11 @@ export const FOOTER_GROUPS: readonly FooterLinkGroup[] = [
     links: PUBLIC_NAV.map(({ labelKey, href }) => ({ kind: 'internal', labelKey, href })),
   },
   {
-    id: 'campuses',
-    titleKey: 'campuses',
+    // 1337 and its network only: EMINES and UM6P are not partners (2026-11-22, DOCS.md §13).
+    id: 'network',
+    titleKey: 'network',
     links: [
       { kind: 'external', label: '1337 Coding School', href: 'https://1337.ma' },
-      { kind: 'external', label: 'EMINES', href: 'https://www.emines-ingenieur.org' },
-      { kind: 'external', label: 'UM6P', href: 'https://um6p.ma' },
       { kind: 'external', label: '42 Network', href: 'https://www.42network.org' },
     ],
   },
