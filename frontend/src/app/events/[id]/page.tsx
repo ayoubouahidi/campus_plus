@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { getLocale } from 'next-intl/server';
 import { getSessionState } from '@/auth';
 import { EventBackLink } from '@/components/events/EventBackLink';
 import { EventDetails } from '@/components/events/EventDetails';
@@ -68,7 +69,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         <EventDetails
           event={event}
           club={getClubById(mockClubs, event.club_id)}
-          dateDetails={getEventDateDetails(event)}
+          dateDetails={getEventDateDetails(event, await getLocale())}
         />
       </EventPageShell>
     </div>

@@ -1,3 +1,5 @@
+import { intlLocale } from '@/i18n/config';
+
 // Largest unit first; the first one that fits the gap is used ("3 hours ago", not "180 minutes ago").
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31_536_000],
@@ -9,27 +11,22 @@ const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 // One formatter per language, built on first use (building an Intl formatter is the slow part).
-// `locale` = the active language (useLocale() / getLocale(), Step 12.2); 'en' by default.
-const relativeFormatters = new Map<string, Intl.RelativeTimeFormat>();
-const absoluteFormatters = new Map<string, Intl.DateTimeFormat>();
-
-const relativeFormatter = (locale: string) => {
-  let formatter = relativeFormatters.get(locale);
-  if (!formatter) {
-    formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-    relativeFormatters.set(locale, formatter);
-  }
-  return formatter;
+// `locale` = the active language (useLocale() / getLocale(), Steps 12.2–12.3); 'en' by default.
+// cachedFormatter(build)(locale) returns the formatter for that language, building it once.
+export const cachedFormatter = <T>(build: (intlTag: string) => T) => {
+  const cache = new Map<string, T>();
+  return (locale: string): T => {
+    let formatter = cache.get(locale);
+    if (!formatter) {
+      formatter = build(intlLocale(locale));
+      cache.set(locale, formatter);
+    }
+    return formatter;
+  };
 };
 
-const absoluteFormatter = (locale: string) => {
-  let formatter = absoluteFormatters.get(locale);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
-    absoluteFormatters.set(locale, formatter);
-  }
-  return formatter;
-};
+const relativeFormatter = cachedFormatter((tag) => new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }));
+const absoluteFormatter = cachedFormatter((tag) => new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeStyle: 'short' }));
 
 // Pure: `now` is passed in so the caller decides when time "moves" and tests stay deterministic.
 // Under 45 s: "now" / "maintenant" / "الآن" (Intl's own word for 0 seconds with numeric: 'auto').
@@ -56,29 +53,29 @@ export interface EventSchedule {
   time: string;
 }
 
-const eventDayFormatter = new Intl.DateTimeFormat('en', {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-  timeZone: CAMPUS_TIME_ZONE,
-});
-const eventTimeFormatter = new Intl.DateTimeFormat('en', {
-  hour: 'numeric',
-  minute: '2-digit',
-  timeZone: CAMPUS_TIME_ZONE,
-});
+const eventDayFormatter = cachedFormatter(
+  (tag) => new Intl.DateTimeFormat(tag, { weekday: 'short', month: 'short', day: 'numeric', timeZone: CAMPUS_TIME_ZONE })
+);
+// Exported for lib/calendar.ts (the event page's time range). 12-hour in English, 24-hour in French.
+export const eventTimeFormatter = cachedFormatter(
+  (tag) => new Intl.DateTimeFormat(tag, { hour: 'numeric', minute: '2-digit', timeZone: CAMPUS_TIME_ZONE })
+);
 
-// "Thu, Nov 5" and "5:00 PM", kept separate so the card can lay them out with a separator.
-// Server only (see CAMPUS_TIME_ZONE). Use getEventSchedules to format a whole list.
-export const formatEventSchedule = (iso: string): EventSchedule => {
+// "Thu, Nov 5" and "5:00 PM" ("ven. 20 nov." and "16:00" in French), kept separate so the card can lay them
+// out with a separator. Server only (see CAMPUS_TIME_ZONE). Use getEventSchedules to format a whole list.
+export const formatEventSchedule = (iso: string, locale = 'en'): EventSchedule => {
   const date = new Date(iso);
-  return { day: eventDayFormatter.format(date), time: eventTimeFormatter.format(date) };
+  return { day: eventDayFormatter(locale).format(date), time: eventTimeFormatter(locale).format(date) };
 };
 
 // Formats every event once, on the server, keyed by event id. Client components read from this map
 // instead of formatting, so their output never depends on the browser's time-zone data.
-export const getEventSchedules = (events: { id: string; start_time: string }[]): Record<string, EventSchedule> =>
-  Object.fromEntries(events.map((event) => [event.id, formatEventSchedule(event.start_time)]));
+// Pass the request's language (getLocale()); the strings are then in that language (Step 12.3).
+export const getEventSchedules = (
+  events: { id: string; start_time: string }[],
+  locale = 'en'
+): Record<string, EventSchedule> =>
+  Object.fromEntries(events.map((event) => [event.id, formatEventSchedule(event.start_time, locale)]));
 
 // Calendar-style date tile ("NOV" over "14") for event rows (/profile, Step 5.4). Server only (campus time zone).
 export interface DateTile {

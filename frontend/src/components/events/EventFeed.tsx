@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { EventItem } from '@/types/api';
 import { CategoryFilter } from '@/components/events/CategoryFilter';
 import { EventGrid } from '@/components/events/EventGrid';
@@ -26,6 +27,7 @@ export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
   const [events, setEvents] = useState<EventItem[]>(initialEvents);
   const [filters, setFilters] = useState<EventFilters>(DEFAULT_EVENT_FILTERS);
   const announceRsvp = useRsvpToast();
+  const t = useTranslations('Feed');
 
   const visibleEvents = filterEvents(events, filters);
 
@@ -59,17 +61,17 @@ export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
           events.length === 0 ? (
             <EmptyState
               icon={<CalendarIcon className="h-6 w-6" />}
-              title="No upcoming events yet"
-              description="New events show up here as soon as clubs publish them."
+              title={t('emptyTitle')}
+              description={t('emptyBody')}
             />
           ) : (
             <EmptyState
               icon={<CalendarIcon className="h-6 w-6" />}
-              title="No events match your filters"
-              description="Try another campus or category."
+              title={t('noMatchTitle')}
+              description={t('noMatchBody')}
               action={
                 <Button variant="secondary" onClick={() => setFilters(DEFAULT_EVENT_FILTERS)}>
-                  Clear filters
+                  {t('clearFilters')}
                 </Button>
               }
             />

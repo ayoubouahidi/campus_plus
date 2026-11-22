@@ -26,10 +26,13 @@ const matchesAll = (haystack: string, terms: string[]): boolean => {
   return terms.every((term) => normalized.includes(term));
 };
 
+// `categoryLabel` = the category's name in the visitor's language (Categories messages): a query matches the
+// English name ("sports") and the translated one ("رياضة") alike. Defaults to English only.
 export const searchCampus = (
   rawQuery: string,
   data: { events: EventItem[]; clubs: Club[] },
-  now: number
+  now: number,
+  categoryLabel: (category: EventItem['category']) => string = (category) => CATEGORY_LABELS[category]
 ): SearchResults => {
   const terms = toTerms(rawQuery);
   if (terms.length === 0) return { events: [], clubs: [] };
@@ -37,7 +40,10 @@ export const searchCampus = (
 
   const events = data.events
     .filter((event) =>
-      matchesAll(`${event.title} ${event.club_name} ${event.location} ${CATEGORY_LABELS[event.category]}`, terms)
+      matchesAll(
+        `${event.title} ${event.club_name} ${event.location} ${CATEGORY_LABELS[event.category]} ${categoryLabel(event.category)}`,
+        terms
+      )
     )
     .map((event) => ({ event, ended: Date.parse(event.end_time) <= now, rank: rank(event.title, query) }))
     // Upcoming before past, then best match, then soonest.

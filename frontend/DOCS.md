@@ -3812,11 +3812,11 @@ Two accessibility modules of the subject: **≥ 3 languages with a switcher** (a
 |---|---|---|
 | 12.1 | Setup: next-intl, language from a cookie, `<html lang dir>`, Arabic font, `LanguageSwitcher` | ✅ validated 2026-11-21 (switcher placed in 12.2) |
 | 12.2 | Shell: navbar (switcher in it), mobile tab bar + drawer, footer, search palette, notifications, toasts, modal close; RTL fixes found there (drawer side and slide, `Input`/`Select`/`Toast`/`Avatar` physical classes) | ✅ validated 2026-11-22 |
-| 12.3 | Feed, event cards, event page, RSVP, attendees | ⏳ |
+| 12.3 | Feed, event cards, event page, RSVP, attendees; event dates in the active language (Moroccan Arabic month names) | ✅ validated 2026-11-22 |
 | 12.4 | Calendar (weekday names, month titles, agenda) | ⏳ |
 | 12.5 | Clubs directory and club pages | ⏳ |
 | 12.6 | Login, sign-up (validation and error messages), profile | ⏳ |
-| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), `lib/time.ts` and the other formatters on `Intl` with the active locale | ⏳ |
+| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), the remaining `Intl` formatters on the active locale (calendar ones in 12.4; `formatDateTile`, `formatClubSince`) | ⏳ |
 | 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ⏳ |
 
 ### 12.1 i18n setup and `LanguageSwitcher` (Step 12.1, 2026-11-21)
@@ -3960,3 +3960,71 @@ const locale = useLocale();
 
 **Verified (2026-11-21, server HTML with curl on `/clubs`).** `NEXT_LOCALE=fr`: "Aller au contenu", links Découvrir / Calendrier / Clubs, "Ouvrir le menu", "Rechercher des événements et des clubs", switcher "Langue : Français", footer Explorer / Campus, the French tagline and "© 2026 Campus Hub. Fait par des étudiants, pour les étudiants.", landmarks "Principale", "Pied de page", "Mentions légales". `NEXT_LOCALE=ar`: `dir="rtl"`, اكتشف / التقويم / الأندية, "انتقل إلى المحتوى", "اللغة: العربية", Arabic footer and landmarks. English unchanged. `@keyframes drawer-in-rtl` and the `rtl:animate-drawer-in-rtl` rule are in the CSS. `tsc` passes; ESLint: the same 6 old findings (line numbers moved), none new. No server errors. In the browser (checklist on `/test`): drawer side, panel side, toasts, keyboard, screen reader.
 
+### 12.3 Feed, event cards, event page, RSVP and attendees in three languages (Step 12.3, 2026-11-22)
+
+**Files:** `src/i18n/messages/{en,fr,ar}.ts` (new namespaces `Feed`, `Rsvp`, `Attendees`, `EventPage`), `src/i18n/config.ts` (`LOCALE_INFO[…].intl`, `intlLocale`), `src/lib/time.ts` (`cachedFormatter`, `eventTimeFormatter`, `formatEventSchedule` / `getEventSchedules` take a locale), `src/lib/calendar.ts` (`getEventDateDetails(event, locale)`), `src/lib/events.ts` (`CAMPUS_FILTERS`, `CAMPUS_NAMES`; `formatEventCount` removed), `src/lib/search.ts` + `src/hooks/useCampusSearch.ts` (category in the active language), `src/hooks/useRsvpToast.ts`, `src/components/filters/CampusToggle.tsx`, `src/components/events/{FeedToolbar,CategoryFilter,EventFeed,EventGrid,EventCard,RsvpCard,AttendeesSection,EventDetails,EventBackLink,EventSkeletons}.tsx`, `src/app/events/[id]/not-found.tsx`, the pages that format dates (`app/(feed)/page.tsx`, `app/events/[id]/page.tsx`, `app/clubs/[slug]/page.tsx`, `components/profile/ProfileView.tsx`). Test: `src/app/test/page.tsx` (links + checklist; `ToastDemo.tsx` from 12.2 removed).
+**Status:** ✅ Validated on `/test` (2026-11-22). Live (shared components, like 12.2).
+
+**Business purpose.** The feed and the event page are where students spend their time: what's on, when, and "am I going". A French or Arabic speaker now reads all of it in their language, dates included, and the RSVP flow (buttons, counts, toast, who's going) speaks the same language as the rest of the site.
+
+**Core concepts & decisions.**
+- **Dates in the visitor's language, still on the server.** The event formatters stay server-only (campus time zone, DOCS §5.2); they now take the request's language (`getLocale()` in async pages, `useLocale()` in `ProfileView`) and the page passes the finished strings down as before. `getEventSchedules(events, locale)` gives "Fri, Nov 27" / "ven. 27 nov." / "الجمعة، 27 نونبر". The `locale` parameter defaults to `'en'`, so callers not migrated yet (calendar) keep working.
+- **Moroccan Arabic month names.** `Intl` with plain `ar` writes the Middle-East names (نوفمبر); Morocco uses the French-derived ones (نونبر). `LOCALE_INFO` now carries an `intl` tag per language (`ar` → `ar-MA`) and `intlLocale()` maps to it; every formatter in `lib/time.ts` goes through it. Digits stay Latin (0–9), as in Morocco. Pages keep `lang="ar"`: the tag only affects `Intl`.
+- **One cache helper.** `cachedFormatter(build)` returns `(locale) => formatter`, building each language's `Intl` object once (building is the slow part). Used for relative, absolute, event day and event time formatters, and by `lib/calendar.ts` for the long date.
+- **Event page dates with `formatRange`.** French writes "vendredi 13 – dimanche 15 novembre 2026" (shared month once), Arabic puts its own commas, English "Friday, November 13 – Sunday, November 15, 2026". A hand-built "a – b, year" was English grammar only. Its spacing differs between ICU versions, which is fine because this runs on the server only (the calendar's week title, which runs in both, stays hand-built). Multi-day times are worded by `<EventDetails>` with `EventPage.startsEnds` ("Starts 8:00 AM, ends 5:00 PM" / "Début 8:00, fin 17:00"), so `getEventDateDetails` returns `start` and `end` alone too.
+- **Counts through ICU plurals:** feed result count (`Events.count`), card "N going" (`Rsvp.cardCount`), RSVP card upcoming/ended counts, attendee "N people" / "N others", each with the six Arabic forms.
+- **"Salma, Youssef and 40 others" with `Intl.ListFormat`.** Each language joins lists its own way (English comma before "and", French "et", Arabic "و" attached to the next word). The summary is built from the names + a translated "N others" and joined by `ListFormat`; the hand-written `join(' and ')` is gone.
+- **Screen-reader suffixes per language.** Card buttons stay "visible word + sr-only event title", so six RSVP buttons are told apart: `Rsvp.srTitle` = " to {title}" / " à {title}" / ": {title}". The visible word comes first in all three languages, so the label still starts with what is on screen (WCAG "label in name").
+- **Keys, not words, in tables.** `RsvpCard`'s `STATUS` table holds message keys (`'ended' | 'youreGoing'`), `EventBackLink`'s `BACK_LABELS` too: still exhaustive `Record`s, type-checked against the messages.
+- **Campus names stay, "All" is translated.** `CAMPUS_FILTERS` is now `['all', '1337', 'emines']` and `CAMPUS_NAMES` holds the proper names; `CampusToggle` shows `Feed.allCampuses` for `all`. Shared with the clubs directory, which gets the translated toggle already.
+- **Categories.** Badges and chips use the `Categories` messages. `CATEGORY_LABELS` (English) stays for the ⌘K search: a query matches the English name and the name in the active language ("music", "musique", "موسيقى"), so someone who types English on a French page still finds things. The calendar agenda still shows `CATEGORY_LABELS` until 12.4.
+- **Data stays as written:** event titles, descriptions, places, club and department names.
+- **RTL:** nothing new to fix here: these components already used logical classes and `rtl:-scale-x-100` on the back arrow (checked on `/test`).
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Format dates on the server with the request locale | Format in the browser with next-intl's `useFormatter` | The browser's time-zone data can disagree with the server's (Morocco's offset changes by decree, DOCS §5.2) and break hydration. Same reason as before; only the language is new. |
+| `ar-MA` for `Intl` only | `lang="ar-MA"` everywhere / a fourth locale | Only the month names differ, so one tag in `LOCALE_INFO` fixes them. The cookie, the messages, the switcher and `<html lang>` stay as they are. |
+| `formatRange` on the server | Hand-built ranges per language | Correct range grammar in every language for free; server-only, so ICU spacing differences can't cause hydration errors. |
+| `Intl.ListFormat` for the attendee sentence | One ICU message per case ("{a} and {b}", "{a}, {b} and {n} others") | Covers every list length and language with one line; the plural part stays in ICU. |
+| Search matches English + translated category | Translated only | Mixed-language typing is common on campus; matching both costs nothing. |
+| `locale = 'en'` default on the formatters | Required parameter | Lets the calendar (12.4) migrate in its own step without breaking now; the default disappears once every caller passes it (12.7). |
+
+**Contract.**
+```ts
+// src/i18n/config.ts
+LOCALE_INFO: Record<Locale, { name: string; short: string; dir: Direction; intl: string }>; // intl: 'en' | 'fr' | 'ar-MA'
+intlLocale(locale: string): string; // known locale → its intl tag; anything else unchanged
+// src/lib/time.ts
+cachedFormatter<T>(build: (intlTag: string) => T): (locale: string) => T;
+eventTimeFormatter: (locale: string) => Intl.DateTimeFormat; // campus time zone
+formatEventSchedule(iso: string, locale = 'en'): EventSchedule;           // server only
+getEventSchedules(events: { id: string; start_time: string }[], locale = 'en'): Record<string, EventSchedule>;
+// src/lib/calendar.ts
+interface EventDateDetails { date: string; time: string; start: string; end: string; isMultiDay: boolean }
+getEventDateDetails(event: EventItem, locale = 'en'): EventDateDetails;   // server only
+// src/lib/events.ts
+CAMPUS_FILTERS: CampusFilter[];              // ['all', '1337', 'emines']
+CAMPUS_NAMES: Record<Campus, string>;
+// src/lib/search.ts
+searchCampus(query, data, now, categoryLabel = (c) => CATEGORY_LABELS[c]): SearchResults;
+```
+
+**Usage.**
+```tsx
+// Async server page: dates in the visitor's language, campus time zone
+const schedules = getEventSchedules(events, await getLocale());
+
+// Client or non-async server component
+const t = useTranslations('Rsvp');
+<p>{t('cardCount', { count: event.rsvps_count })}</p>
+<Button>{t('rsvp')}<span className="sr-only">{t('srTitle', { title: event.title })}</span></Button>
+```
+
+**Verified (2026-11-22, server HTML fetched inside the container with `NEXT_LOCALE` set).** `/`: "Upcoming events · 1 event · Fri, Nov 27 · No RSVPs yet · Log in to RSVP"; French "Événements à venir · 1 événement · Tous / Toutes · ven. 27 nov. · Aucun participant pour l’instant · Se connecter pour participer"; Arabic "الفعاليات القادمة · فعالية واحدة · الكل · الجمعة، 27 نونبر · لا أحد مسجَّل بعد · سجّل الدخول لتأكيد الحضور", landmarks and group labels translated. `/events/evt_hackathon_ai` (ended, multi-day): "vendredi 13 – dimanche 15 novembre 2026 · Début 8:00, fin 17:00 · Qui a participé · Cet événement est terminé · 120 participants"; Arabic "الجمعة، 13 – الأحد، 15 نونبر، 2026 · تبدأ 8:00، تنتهي 17:00 · حضر 120 شخصًا". `/events/evt_welcome_bbq` (one day): "Friday, November 27, 2026 · 11:00 AM – 3:00 PM"; "vendredi 27 novembre 2026 · 11:00 – 15:00". `/events/nope`: the translated not-found body is in the response. `tsc` passes; ESLint: the same 6 old findings, none new.
+
+**Notes for later.**
+- `/events/nope` answers HTTP **200**, not 404, in dev, and it did before this step too (checked on the previous commit). The route has a `loading.tsx`, so the response starts streaming before `notFound()` runs; Next then sends the not-found UI with a `noindex` tag. To check in 12.7 with a production build (`next build && next start`).
+- The browser tab title (`metadata`), e.g. "Event not found | Campus Hub", is still English: 12.7.

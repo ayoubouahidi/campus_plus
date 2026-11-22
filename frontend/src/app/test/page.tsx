@@ -6,7 +6,6 @@ import { DEV_LOGIN_ENABLED, getSessionState, signOut } from '@/auth';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { LOCALE_INFO } from '@/i18n/config';
 import { SessionSwitcher } from './SessionSwitcher';
-import { ToastDemo } from './ToastDemo';
 
 // TEST PAGE (/test): where each new step is checked before it goes into the real pages.
 // Workflow: build the step here → the user validates it in the browser → move it into the real route
@@ -42,7 +41,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.2, the shell (navbar, phone menu, footer, search, notifications) in EN / FR / AR</p>
+        <p className="font-semibold">Test page: Step 12.3, the feed, event cards, event page, RSVP and attendees in EN / FR / AR</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,23 +117,51 @@ export default async function TestPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <ToastDemo />
+        <div>
+          <h3 className="font-semibold">Pages to open (Step 12.3 is live on them)</h3>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            <li>
+              <Link href="/" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Feed (/)
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/evt_welcome_bbq" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Upcoming one-day event
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/evt_hackathon_ai" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Ended multi-day event
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/evt_basketball_final" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Event with attendees
+              </Link>
+            </li>
+            <li>
+              <Link href="/events/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Unknown event (404)
+              </Link>
+            </li>
+          </ul>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.2: the shell is live on every page)</h3>
+          <h3 className="font-semibold">What to check (Step 12.3), in Français then العربية</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Navbar (from 640px wide): the globe button sits next to search. Switch to Français, then العربية: links, search button, Log in / avatar label change; in Arabic the logo is on the right and the actions on the left.</li>
-            <li>Phone width (below 640px): no globe in the navbar; open the menu (burger): the switcher is in the drawer, under the account. In Arabic the drawer is on the right and slides in from the right; the close button is at its far side.</li>
-            <li>Phone tab bar: Découvrir / Calendrier / Clubs / Se connecter, and the Arabic names; the order mirrors in Arabic.</li>
-            <li>Footer: description, Explore / Campuses columns, Privacy / Terms, copyright line, all translated; campus names (1337, EMINES, UM6P) stay as they are. Columns mirror in Arabic.</li>
-            <li>Search (⌘K / Ctrl+K): title, placeholder, &quot;Coming up&quot;, &quot;Events&quot; / &quot;Clubs&quot; groups, category under each event (Tech → Tech / تقنية…), &quot;No events or clubs match…&quot;. Event titles and club names stay as written (data).</li>
-            <li>Notifications (signed in: use the session switcher above): bell label with the unread count, panel title, &quot;N unread&quot; (Arabic plural forms), &quot;Mark all as read&quot;, relative times (&quot;il y a 2 heures&quot;, &quot;قبل ساعتين&quot;); the panel opens toward the inside of the screen in Arabic and the red badge sits on the bell&apos;s outer corner.</li>
-            <li>Toast (button above): bottom right in English/French, bottom left in Arabic; screen reader reads the close button as &quot;Fermer la notification&quot; / &quot;إغلاق الإشعار&quot;.</li>
-            <li>Keyboard: Tab from the top of the page: the first stop is &quot;Skip to content&quot; in the current language, at the top left (top right in Arabic).</li>
-            <li>Screen reader: landmarks are named in the current language (&quot;Principale&quot;, &quot;Pied de page&quot;, &quot;Mentions légales&quot;…).</li>
-            <li>Not yet translated (next steps): the page contents (feed, calendar, clubs, events, login, profile, legal pages).</li>
+            <li>Feed heading, result count (&quot;1 événement&quot;, &quot;فعالية واحدة&quot;; filter down to 0 for &quot;Aucun événement&quot;), campus toggle (&quot;Tous&quot; / &quot;الكل&quot;; 1337 and EMINES stay), category chips (&quot;Toutes&quot;, translated category names).</li>
+            <li>Pick a campus + category with no events: the empty state and &quot;Effacer les filtres&quot; are translated; the button brings the grid back and focus lands on it.</li>
+            <li>Event cards: category badge, date (&quot;ven. 27 nov.&quot;, &quot;الجمعة، 27 نونبر&quot;, Moroccan month names), &quot;N participants&quot;, and the RSVP slot: signed out &quot;Se connecter pour participer&quot;; signed in (session switcher above) &quot;Participer&quot; / &quot;J’y vais&quot;. The toast after a click is translated.</li>
+            <li>Event page: back link (&quot;Tous les événements&quot;; from the calendar, &quot;Retour au calendrier&quot;), When / Where / Organizer, &quot;À propos&quot;, date with the year and the time range (16:00 – 18:00 in French, 24-hour).</li>
+            <li>Ended multi-day event (hackathon): date range &quot;vendredi 13 – dimanche 15 novembre 2026&quot;, &quot;Début 8:00, fin 17:00&quot;, RSVP card &quot;Cet événement est terminé&quot;, &quot;120 participants&quot; / &quot;حضر 120 شخصًا&quot;.</li>
+            <li>Attendees: signed out, the lock line and &quot;Se connecter pour voir qui participe&quot;. Signed in: the summary sentence (&quot;Vous et Salma Idrissi&quot;, &quot;… et 3 autres&quot;; Arabic joins with و), &quot;Tout voir&quot;, the dialog title and the &quot;Vous&quot; / &quot;أنت&quot; badge.</li>
+            <li>RSVP card (signed in): &quot;Participer&quot; → &quot;Vous participez&quot; + &quot;Annuler ma participation&quot;; on phones it is the bottom bar, in Arabic its button is on the left.</li>
+            <li>Screen reader: each card&apos;s button says the event (&quot;Participer à Leet Jam&quot;); the count is announced after a filter change; the event list and filters are named in the current language.</li>
+            <li>Arabic layout: card badge and date start on the right, the back arrow points right, the facts box icons sit on the right of each fact.</li>
+            <li>⌘K search: typing a category in the current language finds its events (&quot;musique&quot;, &quot;رياضة&quot;); English names still work.</li>
+            <li>Stays as written: event titles, descriptions, places, club names (data). Still English (next steps): calendar, clubs pages, login, profile, legal pages, page titles in the browser tab.</li>
           </ul>
         </div>
       </section>

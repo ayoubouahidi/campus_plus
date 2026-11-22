@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { EventItem } from '@/types/api';
 import { EventCard } from '@/components/events/EventCard';
 import { EventSchedule } from '@/lib/time';
@@ -24,6 +25,7 @@ export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
     { events, schedules, onRsvpToggle, emptyState, cardHeadingLevel = 'h2', eagerFirstRow = true, className = '', ...props },
     ref
   ) => {
+    const t = useTranslations('Feed');
     const listRef = useRef<HTMLUListElement>(null);
     // Set when something inside the empty state is activated (e.g. "Clear filters"). Clicks include
     // Enter/Space on a button, so this covers keyboard users too.
@@ -52,7 +54,7 @@ export const EventGrid = React.forwardRef<HTMLDivElement, EventGridProps>(
           <ul
             ref={listRef}
             tabIndex={-1}
-            aria-label="Events"
+            aria-label={t('list')}
             className="grid grid-cols-1 gap-6 focus:outline-none sm:grid-cols-2 lg:grid-cols-3"
           >
             {events.map((event, index) => (

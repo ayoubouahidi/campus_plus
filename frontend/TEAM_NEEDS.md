@@ -181,6 +181,21 @@ Meanwhile the frontend keeps working on what doesn't need the backend (languages
 | AH7 | Do events created by the dashboard (Ayoub) go through **your** serializer and validation, and trigger **your** broadcast? (same question as AY4–AY5, you two decide together) | One source of truth for events |
 | AH8 | WebSocket: confirm `POST /api/realtime/token/` accepts the Django token we get at login, and the JWT lifetime (5 min?) | The student site's server sets the `ws_access` cookie and must refresh it (Phase 6) |
 
+**Ahmed's answers (2026-11-22, checked against branch `Ahmed` at `9f55a6d`):**
+
+| # | Answer | Status | What it means for the student site |
+| --- | --- | --- | --- |
+| AH1 | Events, clubs, departments, health and realtime are ready at the contract level. RSVP and attendees are still pending. Endpoint names are frozen **after our integration tests pass**. | 🟡 partly | Map events/clubs/departments now; RSVP/attendees stay on mocks. The freeze date depends on the integration tests (E1) |
+| AH2 | Ahmed will send representative list, detail and error JSON from the integrated backend before the freeze. Current endpoints are documented in `API_SPEC.md`. | ⏳ waiting | Until the samples arrive, the mapping layer is written against `API_SPEC.md` and checked again with the samples |
+| AH3 | The RSVP model exists, but its migration and endpoints are not done. Ahmed starts them once Ayoub's custom User model and the database integration are validated. | ⏳ blocked on Ayoub (AY7) | RSVP stays on the mock fallback (DOCS §9.4). It is the main feature, so AY7 is the critical path |
+| AH4 | **Agreed:** attendee names and avatars for signed-in users only; anonymous visitors see the RSVP count. | ✅ agreed | Matches what the site already does (DOCS §9.3) and the Privacy Policy |
+| AH5 | Events stay paginated. Clubs and departments stay **bare arrays** for now. | ✅ final for now | The mapping layer reads `{count, next, previous, results}` for events and a plain array for clubs/departments |
+| AH6 | Migration `0008` adds **nullable** unique slugs. A safe backfill and validation are still needed before every public club is guaranteed a slug. | 🟡 not yet | Until the backfill lands, the mapping layer must handle `slug: null` (fall back to an id-based link or hide the club link) |
+| AH7 | **Agreed:** Ayoub's dashboard must use the shared `ClubEvent` records, validation and realtime broadcast. Checked during integration. | ✅ agreed (to verify) | One source of truth: what the dashboard creates appears on the student site and is broadcast live |
+| AH8 | **Confirmed:** `POST /api/realtime/token/` takes the Django DRF token and returns a WebSocket JWT. Default lifetime **300 s (5 min)**. The student site's server handles the secure `ws_access` cookie, refresh and reconnection. | ✅ confirmed | Phase 6: the frontend server refreshes the token before 5 min and reconnects when it expires |
+
+Also from Ahmed: migrations `0007`, `0008` and `0009` are pushed and passed isolated SQLite rehearsals. They are **not applied** to the shared database yet, because the custom-user integration with Ayoub comes first. **E2:** Ahmed supports a shared `integration` branch before `master`. **E1:** freeze and merge dates to be set from Ayoub's remaining dashboard work, with time left for end-to-end tests. **E5:** Ahmed writes his backend part of the README.
+
 ### 1c.4 Hamza (infrastructure)
 
 | # | Question | Why it matters |

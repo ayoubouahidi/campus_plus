@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { EventItem } from '@/types/api';
 import { Card, CardBanner, CardTitle, CardFooter } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -9,7 +10,6 @@ import { Avatar, AvatarGroup } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { CheckIcon, MapPinIcon, NAV_ICONS } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
-import { CATEGORY_LABELS } from '@/lib/events';
 import { loginHref } from '@/lib/login';
 import type { SessionStatus } from '@/types/session';
 import { EventSchedule } from '@/lib/time';
@@ -56,6 +56,8 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
     const { session } = useSession();
     const attendees = session.status === 'signed-in' ? event.attendees_preview : [];
     const rsvpState = getCardRsvpState(session.status, isGoing);
+    const t = useTranslations('Rsvp');
+    const tCategory = useTranslations('Categories');
 
     return (
       <Card ref={ref} isHoverable className={`relative flex h-full flex-col ${className}`} {...props}>
@@ -72,7 +74,7 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
 
         <div className="flex-1 space-y-2 p-5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Badge variant={event.category}>{CATEGORY_LABELS[event.category]}</Badge>
+            <Badge variant={event.category}>{tCategory(event.category)}</Badge>
             <time dateTime={event.start_time} className="text-xs font-semibold text-violet-600 dark:text-violet-400">
               {schedule.day} · {schedule.time}
             </time>
@@ -114,11 +116,11 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
               </AvatarGroup>
             )}
             <span className="truncate text-sm text-slate-500 dark:text-slate-400">
-              {event.rsvps_count === 0 ? 'No RSVPs yet' : `${event.rsvps_count} going`}
+              {t('cardCount', { count: event.rsvps_count })}
             </span>
           </div>
 
-          {rsvpActions(rsvpState, event, onRsvpToggle)}
+          {rsvpActions(rsvpState, event, onRsvpToggle, t)}
         </CardFooter>
       </Card>
     );
@@ -128,21 +130,26 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
 EventCard.displayName = 'EventCard';
 
 // One entry per state (exhaustive Record, no nested ternaries). Built per call: each entry needs the event.
+// `t` = the Rsvp messages, passed in by the card (hooks can't run here).
 const rsvpActions = (
   state: CardRsvpState,
   event: EventItem,
-  onRsvpToggle: (event: EventItem) => void
+  onRsvpToggle: (event: EventItem) => void,
+  t: ReturnType<typeof useTranslations<'Rsvp'>>
 ): React.ReactNode => {
   // Six "RSVP" buttons are indistinguishable in a screen reader's button list without the title.
+  const toTitle = <span className="sr-only">{t('srTitle', { title: event.title })}</span>;
   const actions: Record<CardRsvpState, React.ReactNode> = {
     loading: (
       <Button size="sm" disabled className="relative z-10 shrink-0">
-        RSVP<span className="sr-only">{` to ${event.title}`}</span>
+        {t('rsvp')}
+        {toTitle}
       </Button>
     ),
     signedOut: (
       <Link href={loginHref(`/events/${event.id}`)} className={loginLinkStyles}>
-        Log in to RSVP<span className="sr-only">{` to ${event.title}`}</span>
+        {t('loginToRsvp')}
+        {toTitle}
       </Link>
     ),
     going: (
@@ -153,12 +160,14 @@ const rsvpActions = (
         onClick={() => onRsvpToggle(event)}
         className="relative z-10 shrink-0"
       >
-        Going<span className="sr-only">{` to ${event.title}, cancel RSVP`}</span>
+        {t('going')}
+        <span className="sr-only">{t('srCancel', { title: event.title })}</span>
       </Button>
     ),
     notGoing: (
       <Button size="sm" onClick={() => onRsvpToggle(event)} className="relative z-10 shrink-0">
-        RSVP<span className="sr-only">{` to ${event.title}`}</span>
+        {t('rsvp')}
+        {toTitle}
       </Button>
     ),
   };

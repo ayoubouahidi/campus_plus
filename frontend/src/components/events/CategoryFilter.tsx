@@ -1,7 +1,8 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { EventCategory } from '@/types/api';
 import { FilterChip } from '@/components/ui/FilterChip';
-import { CATEGORY_LABELS, CategoryFilter as CategoryFilterValue, EVENT_CATEGORIES } from '@/lib/events';
+import { CategoryFilter as CategoryFilterValue, EVENT_CATEGORIES } from '@/lib/events';
 
 export interface CategoryFilterProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
   value: CategoryFilterValue;
@@ -23,29 +24,33 @@ const categoryDots: Record<EventCategory, string> = {
 // screen edge (negative margin = page padding). py-1 leaves room for the focus ring, which the scroll box
 // would otherwise clip. From md: the chips wrap onto more lines instead.
 export const CategoryFilter = React.forwardRef<HTMLDivElement, CategoryFilterProps>(
-  ({ value, onChange, className = '', ...props }, ref) => (
-    <div
-      ref={ref}
-      role="group"
-      aria-label="Filter by category"
-      className={`-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden ${className}`}
-      {...props}
-    >
-      <FilterChip isSelected={value === 'all'} onClick={() => onChange('all')}>
-        All
-      </FilterChip>
-      {EVENT_CATEGORIES.map((category) => (
-        <FilterChip
-          key={category}
-          isSelected={value === category}
-          dotClassName={categoryDots[category]}
-          onClick={() => onChange(category)}
-        >
-          {CATEGORY_LABELS[category]}
+  ({ value, onChange, className = '', ...props }, ref) => {
+    const t = useTranslations('Feed');
+    const tCategory = useTranslations('Categories');
+    return (
+      <div
+        ref={ref}
+        role="group"
+        aria-label={t('categories')}
+        className={`-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden ${className}`}
+        {...props}
+      >
+        <FilterChip isSelected={value === 'all'} onClick={() => onChange('all')}>
+          {t('allCategories')}
         </FilterChip>
-      ))}
-    </div>
-  )
+        {EVENT_CATEGORIES.map((category) => (
+          <FilterChip
+            key={category}
+            isSelected={value === category}
+            dotClassName={categoryDots[category]}
+            onClick={() => onChange(category)}
+          >
+            {tCategory(category)}
+          </FilterChip>
+        ))}
+      </div>
+    );
+  }
 );
 
 CategoryFilter.displayName = 'CategoryFilter';

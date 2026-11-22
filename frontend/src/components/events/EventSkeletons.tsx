@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardFooter } from '@/components/ui/Card';
 import { Skeleton, SkeletonRegion } from '@/components/ui/Skeleton';
 
@@ -66,7 +67,7 @@ EventGridSkeleton.displayName = 'EventGridSkeleton';
 // Mirrors EventFeed: heading + count · campus toggle · category chips · grid. For app/loading.tsx.
 export const EventFeedSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <SkeletonRegion ref={ref} label="Loading events" className={`space-y-8 ${className}`} {...props}>
+    <SkeletonRegion ref={ref} label={useTranslations('Feed')('loading')} className={`space-y-8 ${className}`} {...props}>
       <div className="space-y-4" aria-hidden="true">
         <div className="flex items-center justify-between gap-4">
           <Skeleton className="h-8 w-52 rounded-lg" />
@@ -95,7 +96,7 @@ EventFeedSkeleton.displayName = 'EventFeedSkeleton';
 // For app/events/[id]/loading.tsx.
 export const EventPageSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <SkeletonRegion ref={ref} label="Loading event" className={className} {...props}>
+    <SkeletonRegion ref={ref} label={useTranslations('EventPage')('loading')} className={className} {...props}>
       <div aria-hidden="true">
         <Skeleton className="mb-6 h-5 w-24 rounded" />
 

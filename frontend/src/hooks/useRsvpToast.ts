@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { useToast } from '@/components/ui/Toast';
 import type { EventItem } from '@/types/api';
 
@@ -6,14 +7,15 @@ import type { EventItem } from '@/types/api';
 // *before* the toggle, and call it outside state updaters (they run twice in Strict Mode).
 export const useRsvpToast = () => {
   const { showToast } = useToast();
+  const t = useTranslations('Rsvp');
 
   return useCallback(
     (before: EventItem) =>
       showToast(
         before.has_user_rsvpd
-          ? { title: 'RSVP cancelled', description: before.title, variant: 'info' }
-          : { title: "You're going", description: before.title, variant: 'success' }
+          ? { title: t('toastCancelled'), description: before.title, variant: 'info' }
+          : { title: t('toastGoing'), description: before.title, variant: 'success' }
       ),
-    [showToast]
+    [showToast, t]
   );
 };

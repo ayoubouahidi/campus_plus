@@ -2,6 +2,7 @@
 
 import React, { useId, useState } from 'react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import type { AttendeePreview, EventItem } from '@/types/api';
 import type { SessionStatus } from '@/types/session';
 import { Avatar, AvatarGroup } from '@/components/ui/Avatar';
@@ -12,6 +13,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { LockIcon } from '@/components/ui/layout/navIcons';
 import { useSession } from '@/components/providers/SessionProvider';
 import { loginHref } from '@/lib/login';
+import { intlLocale } from '@/i18n/config';
 
 /* --------------------------------- Types ---------------------------------- */
 
@@ -28,16 +30,20 @@ const MAX_AVATARS = 6;
 
 /* --------------------------------- Helpers -------------------------------- */
 
-// "You", "You and Salma Idrissi", "Salma Idrissi, Youssef Benali and 40 others". Written out so the
-// avatar stack can be aria-hidden: this sentence is what screen readers hear.
-const summarize = (names: string[], total: number): string => {
-  if (names.length === 0) return `${total} ${total === 1 ? 'person' : 'people'}`;
+// "You", "You and Salma Idrissi", "Salma Idrissi, Youssef Benali, and 40 others" ("… et 40 autres",
+// "… و40 شخصًا آخر"). Written out so the avatar stack can be aria-hidden: this sentence is what screen readers
+// hear. Intl.ListFormat joins the parts with each language's commas and "and"; the counts come from the
+// Attendees messages (plural rules per language).
+type AttendeesT = ReturnType<typeof useTranslations<'Attendees'>>;
+
+const summarize = (names: string[], total: number, t: AttendeesT, locale: string): string => {
+  if (names.length === 0) return t('people', { count: total });
   const rest = total - names.length;
-  if (rest <= 0) return names.join(' and ');
-  return `${names.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'}`;
+  const parts = rest > 0 ? [...names, t('others', { count: rest })] : names;
+  return new Intl.ListFormat(intlLocale(locale), { type: 'conjunction' }).format(parts);
 };
 
-const HEADINGS = { upcoming: "Who's going", ended: 'Who went' } as const;
+const HEADINGS = { upcoming: 'headingUpcoming', ended: 'headingEnded' } as const;
 
 // Names are for signed-in students only (Privacy Policy, DOCS.md §9.3). 'empty' wins: with nobody going there
 // is nothing to hide. 'loading' shows a skeleton so names never flash in and out.
@@ -59,6 +65,8 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
     const headingId = useId();
     const [isOpen, setIsOpen] = useState(false);
     const { session } = useSession();
+    const t = useTranslations('Attendees');
+    const locale = useLocale();
 
     // "You" first when signed in and going; the session decides, so Phase 5 auth needs no change here.
     const me = session.status === 'signed-in' && event.has_user_rsvpd ? session.user : null;
@@ -66,14 +74,14 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
       ? [{ id: me.id, full_name: me.full_name, avatar_url: me.avatar_url, isMe: true }, ...attendees]
       : attendees;
     const total = event.rsvps_count;
-    const heading = HEADINGS[hasEnded ? 'ended' : 'upcoming'];
-    const names = people.slice(0, 2).map((person) => (person.isMe ? 'You' : person.full_name));
+    const heading = t(HEADINGS[hasEnded ? 'ended' : 'upcoming']);
+    const names = people.slice(0, 2).map((person) => (person.isMe ? t('you') : person.full_name));
     const state = getAttendeesState(total, session.status);
 
     const body: Record<AttendeesState, React.ReactNode> = {
       empty: (
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          {hasEnded ? 'Nobody RSVP’d to this event.' : 'Nobody has RSVP’d yet.'}
+          {t(hasEnded ? 'emptyEnded' : 'emptyUpcoming')}
         </p>
       ),
       loading: (
@@ -90,10 +98,10 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
             <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
-            Names are only shown to signed-in students.
+            {t('locked')}
           </p>
           <Link href={loginHref(`/events/${event.id}`)} className={loginLinkStyles}>
-            {hasEnded ? 'Log in to see who went' : 'Log in to see who’s going'}
+            {t(hasEnded ? 'loginEnded' : 'loginUpcoming')}
           </Link>
         </div>
       ),
@@ -104,9 +112,9 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
               <Avatar key={person.id} size="sm" name={person.full_name} src={person.avatar_url} />
             ))}
           </AvatarGroup>
-          <p className="min-w-0 flex-1 text-sm text-slate-600 dark:text-slate-400">{summarize(names, total)}</p>
+          <p className="min-w-0 flex-1 text-sm text-slate-600 dark:text-slate-400">{summarize(names, total, t, locale)}</p>
           <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setIsOpen(true)}>
-            See all
+            {t('seeAll')}
           </Button>
         </div>
       ),
@@ -135,7 +143,7 @@ export const AttendeesSection = React.forwardRef<HTMLElement, AttendeesSectionPr
                   <span className="min-w-0 flex-1 truncate font-medium text-slate-900 dark:text-slate-100">
                     {person.full_name}
                   </span>
-                  {person.isMe && <Badge variant="success">You</Badge>}
+                  {person.isMe && <Badge variant="success">{t('you')}</Badge>}
                 </li>
               ))}
             </ul>

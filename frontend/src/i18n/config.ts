@@ -14,14 +14,19 @@ export const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year, in seconds
 
 // `name` is written in its own language (a French speaker looks for "Français", not "French"); `short` is the
 // navbar code. `dir` drives <html dir>: everything that uses logical classes (ms-, ps-, text-start…) mirrors.
-export const LOCALE_INFO: Record<Locale, { name: string; short: string; dir: Direction }> = {
-  en: { name: 'English', short: 'EN', dir: 'ltr' },
-  fr: { name: 'Français', short: 'FR', dir: 'ltr' },
-  ar: { name: 'العربية', short: 'ع', dir: 'rtl' },
+// `intl` is the tag given to Intl formatters (dates, times, lists; Step 12.3): Arabic uses Morocco's
+// month names ("نونبر", not the Middle-East "نوفمبر"), which only the ar-MA data has.
+export const LOCALE_INFO: Record<Locale, { name: string; short: string; dir: Direction; intl: string }> = {
+  en: { name: 'English', short: 'EN', dir: 'ltr', intl: 'en' },
+  fr: { name: 'Français', short: 'FR', dir: 'ltr', intl: 'fr' },
+  ar: { name: 'العربية', short: 'ع', dir: 'rtl', intl: 'ar-MA' },
 };
 
 export const isLocale = (value: unknown): value is Locale =>
   typeof value === 'string' && (LOCALES as readonly string[]).includes(value);
+
+// The Intl tag for a locale (see `intl` above). Anything else is passed through unchanged.
+export const intlLocale = (locale: string): string => (isLocale(locale) ? LOCALE_INFO[locale].intl : locale);
 
 // First visit (no cookie): the browser's Accept-Language, e.g. "fr-FR,fr;q=0.9,en;q=0.8" → 'fr'. Only the
 // language part counts (fr-CA, ar-MA → fr, ar). Entries are tried by q weight; nothing usable → English.

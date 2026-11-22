@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { IconBase } from '@/components/ui/layout/navIcons';
 import { calendarHref, type CalendarLocation } from '@/lib/calendar';
 
@@ -11,9 +12,10 @@ export interface EventBackLinkProps extends Omit<React.AnchorHTMLAttributes<HTML
 
 type BackTarget = 'feed' | 'calendar';
 
-const BACK_LABELS: Record<BackTarget, string> = {
-  feed: 'All events',
-  calendar: 'Back to calendar',
+// Keys of the EventPage messages.
+const BACK_LABELS: Record<BackTarget, 'allEvents' | 'backToCalendar'> = {
+  feed: 'allEvents',
+  calendar: 'backToCalendar',
 };
 
 // The "back" link above an event. A real link (not history.back()), so it also works for people who
@@ -23,6 +25,7 @@ export const EventBackLink = React.forwardRef<HTMLAnchorElement, EventBackLinkPr
   ({ calendar, className = '', ...props }, ref) => {
     const target: BackTarget = calendar ? 'calendar' : 'feed';
     const href = calendar ? calendarHref(calendar) : '/';
+    const t = useTranslations('EventPage');
 
     return (
       <Link
@@ -35,7 +38,7 @@ export const EventBackLink = React.forwardRef<HTMLAnchorElement, EventBackLinkPr
         <IconBase className="h-4 w-4 rtl:-scale-x-100">
           <path d="m15 18-6-6 6-6" />
         </IconBase>
-        {BACK_LABELS[target]}
+        {t(BACK_LABELS[target])}
       </Link>
     );
   }

@@ -1,5 +1,5 @@
 import type { EventItem } from '@/types/api';
-import { CAMPUS_TIME_ZONE } from '@/lib/time';
+import { CAMPUS_TIME_ZONE, cachedFormatter, eventTimeFormatter } from '@/lib/time';
 
 // A calendar date in campus time, 'YYYY-MM-DD'. A plain string so it crosses the server → client
 // boundary as-is, compares with ===, and sorts with < (lexical order = date order).
@@ -244,41 +244,47 @@ export const getEventTimes = (events: EventItem[]): Record<string, EventTimes> =
     })
   );
 
-// Date and time lines for the event page, in campus time. Server only.
-//   One day:   "Thursday, November 5, 2026"                        · "5:00 PM – 8:00 PM"
-//   Multi-day: "Friday, November 13 – Sunday, November 15, 2026"   · "Starts 8:00 AM, ends 5:00 PM"
-// The year is written once when both days share it. Built by hand (not formatRange) for the same reason
-// as formatWeekTitle: ICU versions disagree on the spacing.
+// Date and time lines for the event page, in campus time and the visitor's language. Server only.
+//   One day:   "Thursday, November 5, 2026"                      · "5:00 – 8:00 PM"
+//              "jeudi 5 novembre 2026"                           · "17:00 – 20:00"
+//   Multi-day: "Friday, November 13 – Sunday, November 15, 2026" · start and end times, worded by
+//              <EventDetails> ("Starts 8:00 AM, ends 5:00 PM", EventPage.startsEnds)
+// Intl's formatRange writes the range: each language has its own grammar for it (French writes the shared
+// month once, Arabic puts the year after a comma), which a hand-built "a – b, year" would get wrong outside
+// English. Its spacing differs between ICU versions, which is fine here: this runs on the server only, the
+// browser receives the finished string (the calendar's week title is built by hand because it runs in both).
 export interface EventDateDetails {
   date: string;
-  time: string;
+  time: string; // one-day events: the time range
+  start: string; // start time alone (multi-day events)
+  end: string; // end time alone (multi-day events)
   isMultiDay: boolean;
 }
 
-const campusLongDayFormatter = new Intl.DateTimeFormat('en', {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
-  timeZone: CAMPUS_TIME_ZONE,
-});
+const longDayFormatter = cachedFormatter(
+  (tag) =>
+    new Intl.DateTimeFormat(tag, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: CAMPUS_TIME_ZONE,
+    })
+);
 
-export const getEventDateDetails = (event: EventItem): EventDateDetails => {
+export const getEventDateDetails = (event: EventItem, locale = 'en'): EventDateDetails => {
   const { first, last } = getEventDaySpan(event);
   const startMs = Date.parse(event.start_time);
   const endMs = Date.parse(event.end_time);
-  const [start, end] = [campusTimeFormatter.format(startMs), campusTimeFormatter.format(endMs)];
-  const [startYear, endYear] = [first.slice(0, 4), last.slice(0, 4)];
+  const times = eventTimeFormatter(locale);
+  const [start, end] = [times.format(startMs), times.format(endMs)];
 
   if (first === last) {
-    return { date: `${campusLongDayFormatter.format(startMs)}, ${startYear}`, time: `${start} – ${end}`, isMultiDay: false };
+    return { date: longDayFormatter(locale).format(startMs), time: times.formatRange(startMs, endMs), start, end, isMultiDay: false };
   }
-
-  const startDay = campusLongDayFormatter.format(startMs);
   // The last day is the one before an exclusive midnight end (see getEventDaySpan).
-  const endDay = campusLongDayFormatter.format(Math.max(startMs, endMs - 1));
-  const date =
-    startYear === endYear ? `${startDay} – ${endDay}, ${endYear}` : `${startDay}, ${startYear} – ${endDay}, ${endYear}`;
-  return { date, time: `Starts ${start}, ends ${end}`, isMultiDay: true };
+  const date = longDayFormatter(locale).formatRange(startMs, Math.max(startMs, endMs - 1));
+  return { date, time: `${start} – ${end}`, start, end, isMultiDay: true };
 };
 
 /* ------------------------- Agenda time label (any runtime) ------------------------- */

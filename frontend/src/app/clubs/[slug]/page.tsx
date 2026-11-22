@@ -2,6 +2,7 @@ import { cache } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale } from 'next-intl/server';
 import { getSessionState } from '@/auth';
 import { ClubEvents } from '@/components/clubs/ClubEvents';
 import { ClubHeader } from '@/components/clubs/ClubHeader';
@@ -70,7 +71,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
         // Signed out: no attendee names, no "Going" (DOCS.md §9.3, §9.4).
         upcoming={eventsForVisitor(upcoming, isSignedIn)}
         past={eventsForVisitor(past, isSignedIn)}
-        schedules={getEventSchedules([...upcoming, ...past])}
+        schedules={getEventSchedules([...upcoming, ...past], await getLocale())}
       />
     </div>
   );

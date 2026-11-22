@@ -2,6 +2,7 @@
 
 import React, { useId } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
 import type { SessionStatus } from '@/types/session';
 import { Button } from '@/components/ui/Button';
@@ -31,18 +32,13 @@ const getRsvpState = (event: EventItem, hasEnded: boolean, session: SessionStatu
   return event.has_user_rsvpd ? 'going' : 'notGoing';
 };
 
-// The status line above the count; null = no status line.
-const STATUS: Record<RsvpState, { text: string; tone: string } | null> = {
-  ended: { text: 'This event has ended', tone: 'text-slate-700 dark:text-slate-300' },
+// The status line above the count (a key of the Rsvp messages); null = no status line.
+const STATUS: Record<RsvpState, { key: 'ended' | 'youreGoing'; tone: string } | null> = {
+  ended: { key: 'ended', tone: 'text-slate-700 dark:text-slate-300' },
   loading: null,
   signedOut: null,
-  going: { text: "You're going", tone: 'text-emerald-700 dark:text-emerald-400' },
+  going: { key: 'youreGoing', tone: 'text-emerald-700 dark:text-emerald-400' },
   notGoing: null,
-};
-
-const describeCount = (count: number, state: RsvpState): string => {
-  if (state === 'ended') return count === 0 ? 'Nobody RSVP’d' : `${count} went`;
-  return count === 0 ? 'Be the first to RSVP' : `${count} going`;
 };
 
 // Mirrors Button's primary/md styles: "Log in to RSVP" navigates, so it is a link, not a button.
@@ -61,25 +57,26 @@ export const RsvpCard = React.forwardRef<HTMLElement, RsvpCardProps>(
     const { session } = useSession();
     const state = getRsvpState(event, hasEnded, session.status);
     const status = STATUS[state];
+    const t = useTranslations('Rsvp');
 
     const actions: Record<RsvpState, React.ReactNode> = {
       ended: null,
       loading: (
         <Button isLoading disabled>
-          RSVP
+          {t('rsvp')}
         </Button>
       ),
       signedOut: (
         <Link href={`/auth/login?next=/events/${event.id}`} className={LOGIN_LINK_STYLES}>
-          Log in to RSVP
+          {t('loginToRsvp')}
         </Link>
       ),
       going: (
         <Button variant="secondary" onClick={() => onRsvpToggle(event)}>
-          Cancel RSVP
+          {t('cancel')}
         </Button>
       ),
-      notGoing: <Button onClick={() => onRsvpToggle(event)}>RSVP</Button>,
+      notGoing: <Button onClick={() => onRsvpToggle(event)}>{t('rsvp')}</Button>,
     };
 
     return (
@@ -95,15 +92,15 @@ export const RsvpCard = React.forwardRef<HTMLElement, RsvpCardProps>(
               id={headingId}
               className="sr-only lg:not-sr-only lg:mb-2 lg:text-base lg:font-semibold lg:text-slate-900 lg:dark:text-slate-100"
             >
-              RSVP
+              {t('heading')}
             </h2>
             {status && (
               <p className={`flex items-center gap-1.5 text-sm font-semibold ${status.tone}`}>
                 {state === 'going' && <CheckIcon className="h-4 w-4" />}
-                {status.text}
+                {t(status.key)}
               </p>
             )}
-            <p className="text-sm text-slate-500 dark:text-slate-400">{describeCount(event.rsvps_count, state)}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t(state === 'ended' ? 'countEnded' : 'countUpcoming', { count: event.rsvps_count })}</p>
           </div>
 
           {actions[state] && <div className="shrink-0 lg:[&>*]:w-full">{actions[state]}</div>}

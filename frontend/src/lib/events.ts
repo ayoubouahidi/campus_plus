@@ -12,12 +12,14 @@ export interface EventFilters {
 
 export const DEFAULT_EVENT_FILTERS: EventFilters = { campus: 'all', category: 'all', query: '' };
 
-// Tab order in the feed toolbar.
-export const CAMPUS_FILTERS: { value: CampusFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: '1337', label: '1337' },
-  { value: 'emines', label: 'EMINES' },
-];
+// Tab order in the campus toggle (feed, clubs directory).
+export const CAMPUS_FILTERS: CampusFilter[] = ['all', '1337', 'emines'];
+
+// Campus names stay as they are in every language (proper names). "All" is UI text: Feed.allCampuses.
+export const CAMPUS_NAMES: Record<Campus, string> = {
+  '1337': '1337',
+  emines: 'EMINES',
+};
 
 // Events don't carry a department slug yet, so campus is matched on department_name.
 // Phase 7: switch to a slug once the API sends one.
@@ -37,6 +39,9 @@ export const EVENT_CATEGORIES: EventCategory[] = [
   'EventsOrganization',
 ];
 
+// English labels, used by the ⌘K search so "sports" finds Sports events in every language (lib/search.ts).
+// What the screen shows comes from the Categories messages instead (Step 12.3); the calendar agenda still uses
+// these until Step 12.4.
 export const CATEGORY_LABELS: Record<EventCategory, string> = {
   Tech: 'Tech',
   Media: 'Media',
@@ -103,10 +108,6 @@ export const toggleRsvp = (event: EventItem): EventItem => ({
   has_user_rsvpd: !event.has_user_rsvpd,
   rsvps_count: Math.max(0, event.rsvps_count + (event.has_user_rsvpd ? -1 : 1)),
 });
-
-// Result count for the feed toolbar: "No events", "1 event", "6 events".
-export const formatEventCount = (count: number): string =>
-  count === 0 ? 'No events' : `${count} ${count === 1 ? 'event' : 'events'}`;
 
 // Lookups for /events/[id]. Phase 7 replaces them with GET /api/events/:id (and the club embedded or fetched).
 export const getEventById = (events: EventItem[], id: string): EventItem | undefined =>

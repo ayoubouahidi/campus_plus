@@ -1,3 +1,4 @@
+import { getLocale } from 'next-intl/server';
 import { getSessionState } from '@/auth';
 import { EventFeed } from '@/components/events/EventFeed';
 import { eventsForVisitor, getUpcomingEvents } from '@/lib/events';
@@ -19,7 +20,7 @@ export default async function Home() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <EventFeed initialEvents={upcomingEvents} schedules={getEventSchedules(upcomingEvents)} />
+      <EventFeed initialEvents={upcomingEvents} schedules={getEventSchedules(upcomingEvents, await getLocale())} />
     </div>
   );
 }
