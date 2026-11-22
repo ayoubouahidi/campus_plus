@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
@@ -14,15 +14,15 @@ from .serializers import SignupSerializer
 User = get_user_model()
 
 
-class SignupEmailSerializerTests(SimpleTestCase):
+class SignupEmailSerializerTests(TestCase):
     def test_new_email_is_accepted_case_insensitively(self):
         with patch.object(User.objects, 'filter') as filter_mock:
             filter_mock.return_value.exists.return_value = False
 
             email = SignupSerializer().validate_email('New.User@example.com')
 
-        self.assertEqual(email, 'New.User@example.com')
-        filter_mock.assert_called_once_with(email__iexact='New.User@example.com')
+        self.assertEqual(email, 'new.user@example.com')
+        filter_mock.assert_called_once_with(email__iexact='new.user@example.com')
 
     def test_exact_duplicate_email_has_field_specific_error(self):
         with patch.object(User.objects, 'filter') as filter_mock:
@@ -47,7 +47,7 @@ class SignupEmailSerializerTests(SimpleTestCase):
             serializer.errors['email'][0],
             'An account with this email already exists.',
         )
-        filter_mock.assert_called_once_with(email__iexact='USED@EXAMPLE.COM')
+        filter_mock.assert_called_once_with(email__iexact='used@example.com')
 
     def test_successful_create_preserves_existing_fields_and_password_handling(self):
         department = Department(id=1, title='Technology')

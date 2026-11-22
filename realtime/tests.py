@@ -188,10 +188,9 @@ class AutomaticEventBroadcastTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-        self.admin = User.objects.create_user(
+        self.admin = User.objects.create_superuser(
             username="test_admin",
             password="test_password",
-            is_staff=True,
         )
 
         self.client.force_authenticate(user=self.admin)
@@ -209,6 +208,9 @@ class AutomaticEventBroadcastTests(TestCase):
                     "name": "Python Workshop",
                     "description": "Introduction to Python",
                     "parent_id": self.department.id,
+                    "category": "Tech",
+                    "starts_at": "2026-12-01T10:00:00Z",
+                    "ends_at": "2026-12-01T12:00:00Z",
                     "location": "1337 Campus",
                     "status": "planned",
                 },

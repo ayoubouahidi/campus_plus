@@ -60,7 +60,8 @@ class FrontendEventCompatibilityTests(SimpleTestCase):
             'club_id', 'club_name', 'club_slug', 'parent',
             'department_name', 'department_slug', 'flyer_url', 'starts_at',
             'ends_at', 'start_time', 'end_time', 'location', 'category',
-            'status', 'capacity', 'created_at', 'updated_at',
+            'status', 'capacity', 'rsvps_count', 'has_user_rsvpd',
+            'attendees_preview', 'created_at', 'updated_at',
         })
         self.assertEqual(data['title'], data['name'])
         self.assertEqual(data['start_time'], data['starts_at'])
@@ -378,23 +379,31 @@ class FrontendOpenApiCompatibilityTests(SimpleTestCase):
         self.assertNotIn('president_email', club)
         self.assertNotIn('president_phone', club)
 
-    def test_planned_rsvp_and_authentication_contracts_are_not_advertised(self):
+    def test_rsvp_and_integrated_auth_routes_are_present(self):
         paths = self.schema['paths']
-        for unavailable_path in (
+        for implemented_path in (
             '/api/club-events/{id}/rsvp/',
             '/api/club-events/{id}/attendees/',
-            '/api/me/rsvps/',
+        ):
+            with self.subTest(path=implemented_path):
+                self.assertIn(implemented_path, paths)
+
+        self.assertNotIn('/api/me/rsvps/', paths)
+
+        for implemented_path in (
+            '/api/auth/login/',
+            '/api/auth/logout/',
             '/api/me/',
             '/auth/sync',
         ):
-            with self.subTest(path=unavailable_path):
-                self.assertNotIn(unavailable_path, paths)
+            with self.subTest(path=implemented_path):
+                self.assertIn(implemented_path, paths)
 
         event = self.schema['components']['schemas']['ClubEvent']['properties']
-        for unavailable_field in (
+        for implemented_field in (
             'rsvps_count', 'has_user_rsvpd', 'attendees_preview',
         ):
-            self.assertNotIn(unavailable_field, event)
+            self.assertIn(implemented_field, event)
 
     def test_realtime_token_openapi_matches_a11_contract(self):
         operation = self.schema['paths']['/api/realtime/token/']

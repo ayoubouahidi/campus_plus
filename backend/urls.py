@@ -65,6 +65,9 @@ router.register(
 urlpatterns = [
     path("admin/", admin.site.urls),
 
+    path("", include("accounts.urls")),
+    path("", include("dashboard.urls")),
+
     # [ahmed] Public liveness probes; neither endpoint touches external services.
     path("api/health/", HealthView.as_view(), name="health"),
     path("api/health/live", HealthLiveView.as_view(), name="health-live"),

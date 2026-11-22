@@ -1,5 +1,3 @@
-from rest_framework import serializers
-
 import secrets
 
 from django.contrib.auth import get_user_model
@@ -170,24 +168,74 @@ class ClubEventSerializer(serializers.ModelSerializer):
     flyer_url = serializers.SerializerMethodField()
     start_time = serializers.DateTimeField(source='starts_at', read_only=True)
     end_time = serializers.DateTimeField(source='ends_at', read_only=True)
+    rsvps_count = serializers.SerializerMethodField()
+    has_user_rsvpd = serializers.SerializerMethodField()
+    attendees_preview = serializers.SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_flyer_url(self, event):
         return absolute_file_url(event.image_path, self.context, '')
 
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_rsvps_count(self, event):
+        annotated_count = getattr(event, 'rsvps_count', None)
+        if annotated_count is not None:
+            return annotated_count
+        return 0
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_has_user_rsvpd(self, event):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return False
+        annotated_status = getattr(event, 'has_user_rsvpd', None)
+        if annotated_status is not None:
+            return annotated_status
+        return False
+
+    @extend_schema_field(
+        {
+            'type': 'array',
+            'maxItems': 3,
+            'items': {'$ref': '#/components/schemas/Attendee'},
+        }
+    )
+    def get_attendees_preview(self, event):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated or event.pk is None:
+            return []
+        rsvps = getattr(event, 'attendees_preview_rsvps', None)
+        if rsvps is None:
+            return []
+        return AttendeeSerializer(
+            [rsvp.user for rsvp in rsvps],
+            many=True,
+            context=self.context,
+        ).data
+
     def validate(self, attrs):
         request = self.context.get('request')
         user = getattr(request, 'user', None)
-        if self.instance is not None and not (user and user.is_staff):
+        is_superadmin = bool(
+            user
+            and user.is_authenticated
+            and (
+                getattr(user, 'role', None) == 'SUPERADMIN'
+                or user.is_superuser
+            )
+        )
+        if self.instance is not None and not is_superadmin:
             relationship_errors = {}
             protected_relationships = {
                 'club': (
                     self.instance.club_id,
-                    "Only Django staff may change or remove an event's club.",
+                    "Only a superadmin may change or remove an event's club.",
                 ),
                 'parent_id': (
                     self.instance.parent_id_id,
-                    "Only Django staff may change an event's department.",
+                    "Only a superadmin may change an event's department.",
                 ),
             }
             for field_name, (current_id, message) in protected_relationships.items():
@@ -289,6 +337,9 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'category',
             'status',
             'capacity',
+            'rsvps_count',
+            'has_user_rsvpd',
+            'attendees_preview',
             'created_at',
             'updated_at',
         ]
@@ -296,6 +347,28 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class AttendeeSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    full_name = serializers.SerializerMethodField()
+    avatar_url = serializers.CharField(read_only=True)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_full_name(self, user):
+        return user.get_full_name() or user.username
+
+
+class RsvpStatusSerializer(serializers.Serializer):
+    rsvps_count = serializers.IntegerField(read_only=True)
+    has_user_rsvpd = serializers.BooleanField(read_only=True)
+
+
+class PaginatedAttendeeSerializer(serializers.Serializer):
+    count = serializers.IntegerField(read_only=True)
+    next = serializers.URLField(read_only=True, allow_null=True)
+    previous = serializers.URLField(read_only=True, allow_null=True)
+    results = AttendeeSerializer(many=True, read_only=True)
 
 
 class UserMemberSerializer(serializers.ModelSerializer):
@@ -334,11 +407,12 @@ class SignupSerializer(serializers.Serializer):
     )
 
     def validate_email(self, email):
-        if User.objects.filter(email__iexact=email).exists():
+        normalized_email = email.strip().lower()
+        if User.objects.filter(email__iexact=normalized_email).exists():
             raise serializers.ValidationError(
                 'An account with this email already exists.'
             )
-        return email
+        return normalized_email
 
     def validate(self, attrs):
         club = attrs.get('club_id')
