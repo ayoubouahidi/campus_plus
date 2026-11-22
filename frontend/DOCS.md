@@ -4501,7 +4501,7 @@ Backend side: Ahmed's WebSocket on branch `Ahmed` (`/ws/calendar/`, `POST /api/r
 | Step | Scope | Status |
 | --- | --- | --- |
 | 15.1 | Credential cookie (`ws_access`), one WebSocket per signed-in tab, acknowledgment, 4401 refresh, backoff, message parsing | ✅ validated 2026-11-22 |
-| 15.2 | Pages apply live messages (feed, calendar, event page, club page), keeping RSVP state; reload on `resync` | ⏳ |
+| 15.2 | Pages apply live messages (feed, calendar, event page, club page), keeping RSVP state; reload on `resync` | ✅ validated 2026-11-22 |
 | 15.3 | Notifications from Ahmed's chosen design (BE8) | ⏳ waiting for Ahmed |
 
 ### 15.1 The realtime connection (Step 15.1, 2026-11-22)
@@ -4580,4 +4580,48 @@ Undo: `docker network disconnect transcendence_default campusbe-web-1 && docker 
 
 **Also cleaned:** the `[api] event 4: unknown category "Workshops"` lines in the browser console came from the 14.1 mapper examples on `/test` (Next forwards server logs to the browser in dev). That panel and `apiSamples.ts` are removed; the mapper behaviour stays documented in §14.1. The Firefox notice "the execution of microtasks on this page was reordered" is Firefox's own and not caused by the site.
 
+**Firefox "preloaded but not used" for Geist and even the main stylesheet: a Firefox quirk, not ours.** After the fix Firefox still printed the warning for Geist (`605ce…woff2`) **and for our main CSS file**, which is obviously used (it styles the page). Next sends preloads as an HTTP `Link` header (`rel=preload; as="font"; crossorigin=""`); Firefox doesn't always match those with the page's own requests, warns, and may fetch the file again. Chrome doesn't warn. Left as is; don't chase it. The other Firefox console lines are not ours either: `-webkit-text-size-adjust` (Tailwind's base styles, a property Firefox doesn't support), `:host:not(button)`, `::-moz-focus-inner`, `:global(.icon)` (Next's dev tools panel, dev only), "microtasks reordered" (Firefox itself).
+
+**Follow-up (same day): Geist Mono is no longer preloaded** (`preload: false` in `layout.tsx`). Firefox kept warning on `/clubs`: that page has no `font-mono` text, so the preloaded Geist Mono file really was unused. Only a few codes and keyboard keys use it; it still loads on pages that show them. The preload `Link` header now lists Geist only.
+
 **Verified.** Compiled CSS: `--default-font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif` (whole page), `.font-mono { font-family: var(--font-geist-mono), … }`, `html:lang(ar) { font-family: var(--font-arabic), var(--font-geist-sans), … }`. `tsc` passes; ESLint: the same 6 old findings. In the browser: no more "preloaded but not used" warning; the text is in Geist.
+
+### 15.2 Pages update live (Step 15.2, 2026-11-22)
+
+**Files:** `src/hooks/useLiveRefresh.ts` (new), `src/hooks/useSyncedState.ts` (new), `src/components/ui/layout/AppShell.tsx` (calls `useLiveRefresh`), `src/components/events/{EventFeed,EventPageShell}.tsx`, `src/components/clubs/ClubEvents.tsx`, `src/components/profile/ProfileActivity.tsx` (state follows new server props). Test: `src/app/test/page.tsx`; demo script outside the repo (below).
+**Status:** ✅ Validated (2026-11-22). Mouad ran the demo with the feed open: "Live Demo Night" appeared, moved, got the "Cancelled" badge and disappeared without a reload. Server log: one `GET /` refresh after each message, 8 s apart (19:46:51, 19:46:59, 19:47:07, 19:47:15 UTC).
+
+**Business purpose.** A student with the feed, the calendar or an event page open sees a new event appear, a changed place or time, a cancellation or a removal within a second or two, without reloading.
+
+**Core concepts & decisions.**
+- **A live message re-renders the page on the server (`router.refresh()`), it doesn't patch it in the browser.** Our dates are formatted on the server in campus time (§5.2: the browser's time-zone data can disagree), the event page's details are a Server Component, and RSVP state comes from Django with the student's token. `router.refresh()` re-runs the page's server code and merges the result into the current page: same code path as a page load, so a new or changed event looks exactly as it would after a reload, with nothing duplicated in the browser. Client state that isn't data (feed filters, calendar day and view, scroll position) is kept.
+- **One hook in the shell** (`useLiveRefresh`). On `created` / `updated` / `deleted`, and on `resync` after a reconnect (the first `resync` after opening the page is skipped: it was just rendered), it refreshes the current page if it shows events (`/`, `/calendar`, `/clubs…`, `/events/…`, `/profile`). Messages within 500 ms share one refresh (a board member's save can send several).
+- **State follows the server** (`useSyncedState`). The feed, the event page, club events and `/profile` copy their events into state (for optimistic RSVP). `useState(prop)` keeps its first value forever, so a refresh would change nothing on screen; `useSyncedState(prop)` replaces the copy whenever the server sends a new value (React's "adjust state when a prop changes" pattern, already used by `/profile`, now shared).
+- **RSVP state is never reset by a live message:** the refresh reads it from Django with the student's token, and `mergeLiveEvent` (§15.1) is not needed on this path. A refresh that lands while an RSVP request is still running shows Django's state at that moment; the RSVP's own answer then sets the final count (§14.3).
+- **Deleted event while on its page:** the refresh runs `getEvent` → 404 → `notFound()`: the page becomes "Event not found".
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| `router.refresh()` | Upsert the message's event into client state | Server-side date formatting (no hydration risk), server-rendered details and per-student RSVP state come for free; no second copy of filtering and sorting rules in the browser. Cost: one server render per burst of messages, fine at campus scale. |
+| Refresh the whole page | Only the changed parts | Next merges the new server output into the page; only what changed re-renders. |
+| One hook in the shell | Each page subscribes | One place to read, one debounce; pages stay unaware of realtime. |
+| 500 ms debounce | Refresh on every message | One request per save instead of several. |
+
+**Contract.**
+```ts
+// src/hooks/useLiveRefresh.ts (called once, in AppShell)
+useLiveRefresh(): void;
+// src/hooks/useSyncedState.ts
+useSyncedState<T>(serverValue: T): readonly [T, Dispatch<SetStateAction<T>>]; // resets when serverValue changes
+```
+
+**Usage.**
+```tsx
+const [events, setEvents] = useSyncedState(initialEvents); // instead of useState(initialEvents)
+```
+
+**Local demo** (outside the repo, copied into the frontend container): `docker compose exec -T frontend node /tmp/live_demo.js [seconds]`: the seeded board member creates "Live Demo Night" (capacity 40) for the day after tomorrow, moves it to Agora Hall, cancels it, then deletes it, with a pause between steps (8 s by default). Dry run with 1 s pauses: all four requests accepted (created #10).
+
+**Verified.** `tsc` passes; ESLint: the same 6 old findings (four "missing dependency `setEvents`" warnings fixed by listing the setter). The server side of a refresh is the page render verified in §14.2–14.4. The browser side (message → refresh → new card, badge, "Event not found") is the checklist on `/test`.

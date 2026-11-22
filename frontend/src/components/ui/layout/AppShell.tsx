@@ -24,6 +24,7 @@ import {
   MobileTabBarSpacer,
 } from '@/components/ui/layout/MobileNav';
 import { FooterLegal, FooterNav } from '@/components/ui/layout/Footer';
+import { useLiveRefresh } from '@/hooks/useLiveRefresh';
 import { useSession } from '@/components/providers/SessionProvider';
 import { SearchPalette } from '@/components/search/SearchPalette';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
@@ -46,6 +47,7 @@ export interface AppShellProps {
 // (search palette, notification feed) and reads the session. Pages render inside <main>.
 export const AppShell = ({ children, footer, initialNotifications }: AppShellProps) => {
   const { session } = useSession();
+  useLiveRefresh(); // live event changes re-render the current page from the server (Step 15.2)
   const t = useTranslations('MobileNav');
 
   // Phase 6: the WebSocket layer adds to this feed.

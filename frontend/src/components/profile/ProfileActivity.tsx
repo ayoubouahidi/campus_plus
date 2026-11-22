@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
+import { useSyncedState } from '@/hooks/useSyncedState';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
@@ -104,15 +105,9 @@ const countChip = (isActive: boolean) =>
 // the spot); the counts use has_user_rsvpd.
 export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityProps>(
   ({ upcoming, past, schedules, dateTiles, className = '', ...props }, ref) => {
-    const [events, setEvents] = useState(upcoming);
-    // New list from the server (navigation, refresh after an action): start over from it, otherwise the old
-    // cards would be paired with the new `schedules` map ("schedule is undefined"). React's documented
-    // "reset state when a prop changes" pattern.
-    const [sourceList, setSourceList] = useState(upcoming);
-    if (sourceList !== upcoming) {
-      setSourceList(upcoming);
-      setEvents(upcoming);
-    }
+    // New list from the server (navigation, a live refresh, a refresh after an action): start over from it,
+    // otherwise the old cards would be paired with the new `schedules` map (useSyncedState, Step 15.2).
+    const [events, setEvents] = useSyncedState(upcoming);
     const [tab, setTab] = useState('going');
     const t = useTranslations('Profile');
 
@@ -123,7 +118,7 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
     const handleRsvpToggle = useRsvp(
       useCallback<UpdateEvent>(
         (id, change) => setEvents((current) => current.map((item) => (item.id === id ? change(item) : item))),
-        []
+        [setEvents]
       )
     );
 

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
+import { useSyncedState } from '@/hooks/useSyncedState';
 import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
 import { EventGrid } from '@/components/events/EventGrid';
@@ -24,14 +25,14 @@ const CalendarIcon = NAV_ICONS.calendar;
 // events as a compact list. Owns the RSVP state for these cards, like EventFeed does on `/`.
 export const ClubEvents = React.forwardRef<HTMLDivElement, ClubEventsProps>(
   ({ upcoming, past, schedules, className = '', ...props }, ref) => {
-    const [events, setEvents] = useState(upcoming);
+    const [events, setEvents] = useSyncedState(upcoming); // follows live refreshes (Step 15.2)
     const t = useTranslations('Clubs');
 
     // Saved in Django, optimistic with rollback (useRsvp, Step 14.3).
     const handleRsvpToggle = useRsvp(
       useCallback<UpdateEvent>(
         (id, change) => setEvents((current) => current.map((item) => (item.id === id ? change(item) : item))),
-        []
+        [setEvents]
       )
     );
 

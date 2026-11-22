@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
+import { useSyncedState } from '@/hooks/useSyncedState';
 import { useTranslations } from 'next-intl';
 import { EventItem } from '@/types/api';
 import { CategoryFilter } from '@/components/events/CategoryFilter';
@@ -24,7 +25,7 @@ const CalendarIcon = NAV_ICONS.calendar;
 // chips and the grid. Everything time-dependent (which events are upcoming, how times read) was decided on
 // the server and arrives as props, so server and browser render the same HTML.
 export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
-  const [events, setEvents] = useState<EventItem[]>(initialEvents);
+  const [events, setEvents] = useSyncedState<EventItem[]>(initialEvents); // follows live refreshes (Step 15.2)
   const [filters, setFilters] = useState<EventFilters>(DEFAULT_EVENT_FILTERS);
   const t = useTranslations('Feed');
 
@@ -34,7 +35,7 @@ export const EventFeed = ({ initialEvents, schedules }: EventFeedProps) => {
   const handleRsvpToggle = useRsvp(
     useCallback<UpdateEvent>(
       (id, change) => setEvents((current) => current.map((item) => (item.id === id ? change(item) : item))),
-      []
+      [setEvents]
     )
   );
 

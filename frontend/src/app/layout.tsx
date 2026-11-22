@@ -18,9 +18,12 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+// Not preloaded (DOCS.md §15.1b): only a few small codes and keyboard keys use it, and most pages have none, so a
+// preload would download it for nothing (Firefox: "preloaded but not used"). It still loads where it's used.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
 });
 
 // Arabic pages only (globals.css: html:lang(ar)). Not preloaded: English and French pages never download it.
