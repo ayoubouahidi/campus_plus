@@ -11,6 +11,8 @@ from django.utils.dateparse import parse_date, parse_datetime
 
 # [ahmed] Broadcast calendar events through Redis.
 from realtime.broadcast import broadcast_calendar_event
+from notifications.models import Notification
+from notifications.services import NotificationService
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -519,11 +521,29 @@ class ClubEventViewSet(viewsets.ModelViewSet):
                             },
                             status=status.HTTP_409_CONFLICT,
                         )
-                    Rsvp.objects.create(event=event, user=request.user)
+                    rsvp = Rsvp.objects.create(event=event, user=request.user)
+                    NotificationService.create(
+                        recipient=request.user,
+                        notification_type=Notification.Type.RSVP_CONFIRMED,
+                        title="RSVP confirmed",
+                        message=f'You are registered for "{event.name}".',
+                        event=event,
+                        deduplication_key=f"rsvp-confirmed:{rsvp.pk}",
+                    )
                     response_status = status.HTTP_201_CREATED
                 has_user_rsvpd = True
             else:
-                existing.delete()
+                existing_rsvp = existing.first()
+                if existing_rsvp is not None:
+                    NotificationService.create(
+                        recipient=request.user,
+                        notification_type=Notification.Type.RSVP_CANCELLED,
+                        title="RSVP cancelled",
+                        message=f'Your registration for "{event.name}" was cancelled.',
+                        event=event,
+                        deduplication_key=f"rsvp-cancelled:{existing_rsvp.pk}",
+                    )
+                    existing_rsvp.delete()
                 response_status = status.HTTP_200_OK
                 has_user_rsvpd = False
 
@@ -563,44 +583,149 @@ class ClubEventViewSet(viewsets.ModelViewSet):
 
     # [ahmed] Automatically broadcast new events after creation.
     def perform_create(self, serializer):
+        # Validation has already succeeded. Persist the event and its personal
+        # notification records as one transaction.
+        if isinstance(serializer, ClubEventSerializer):
+            with transaction.atomic():
+                return self._perform_create(serializer)
+        # Preserve the lightweight hook contract used by broadcast unit tests.
+        return self._perform_create(serializer)
+
+    def _perform_create(self, serializer):
         # [ahmed] Save the new event.
         serializer.save()
-        self.hydrate_rsvp_state(serializer.instance)
+        event = serializer.instance
+        self.hydrate_rsvp_state(event)
 
         # [ahmed] Get the saved event's serialized data.
         event_data = public_event_broadcast_data(serializer.data)
 
+        # The explicit membership link is the recipient policy. No platform-wide fanout.
+        if isinstance(event, ClubEvent) and event.club_id:
+            member_user_ids = UserMember.objects.filter(
+                club_id=event.club_id,
+                user__isnull=False,
+                user__is_active=True,
+            ).values_list("user_id", flat=True)
+            NotificationService.create_for_users(
+                recipients=member_user_ids,
+                notification_type=Notification.Type.NEW_EVENT,
+                title="New club event",
+                message=f'Your club published "{event.name}".',
+                event=event,
+                deduplication_key=f"new-event:{event.pk}",
+            )
+
         # [ahmed] Broadcast only after a successful database commit.
         transaction.on_commit(
-            lambda: broadcast_calendar_event(
-                "event_created",
-                event_data,
-            ),
+            lambda: broadcast_calendar_event("event_created", event_data),
             robust=True,
         )
 
     # [ahmed] Broadcast changes when an event is updated.
     def perform_update(self, serializer):
+        if isinstance(serializer, ClubEventSerializer):
+            with transaction.atomic():
+                return self._perform_update(serializer)
+        return self._perform_update(serializer)
+
+    def _perform_update(self, serializer):
+        if not isinstance(serializer.instance, ClubEvent):
+            serializer.save()
+            event_data = public_event_broadcast_data(serializer.data)
+            transaction.on_commit(
+                lambda: broadcast_calendar_event("event_updated", event_data),
+                robust=True,
+            )
+            return
+
+        meaningful_fields = {
+            "name", "description", "starts_at", "ends_at", "location",
+            "status", "category", "capacity", "club", "parent_id",
+        }
+        changed_fields = {
+            field
+            for field, value in serializer.validated_data.items()
+            if field in meaningful_fields and getattr(serializer.instance, field) != value
+        }
+        old_status = serializer.instance.status
+
         # [ahmed] Save the modified event in the database.
         serializer.save()
-        self.hydrate_rsvp_state(serializer.instance)
-
-        # [ahmed] Get the event's updated information.
+        event = serializer.instance
+        self.hydrate_rsvp_state(event)
         event_data = public_event_broadcast_data(serializer.data)
+
+        if changed_fields:
+            recipient_ids = Rsvp.objects.filter(
+                event=event,
+                user__is_active=True,
+            ).values_list("user_id", flat=True)
+            cancelled = old_status != "cancelled" and event.status == "cancelled"
+            notification_type = (
+                Notification.Type.EVENT_CANCELLED
+                if cancelled else Notification.Type.EVENT_UPDATED
+            )
+            title = "Event cancelled" if cancelled else "Event updated"
+            message = (
+                f'"{event.name}" was cancelled.'
+                if cancelled
+                else f'An event you registered for, "{event.name}", changed.'
+            )
+            change_version = event.updated_at.isoformat()
+            NotificationService.create_for_users(
+                recipients=recipient_ids,
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                event=event,
+                deduplication_key=(
+                    f"event-change:{event.pk}:{change_version}:{notification_type}"
+                ),
+            )
 
         # [ahmed] Notify clients after a successful commit.
         transaction.on_commit(
-            lambda: broadcast_calendar_event(
-                "event_updated",
-                event_data,
-            ),
+            lambda: broadcast_calendar_event("event_updated", event_data),
             robust=True,
         )
 
     # [ahmed] Broadcast when an event is deleted.
     def perform_destroy(self, instance):
+        if isinstance(instance, ClubEvent):
+            with transaction.atomic():
+                # Use the current locked row so status and RSVP eligibility
+                # cannot be based on a stale pre-permission-check instance.
+                locked_event = ClubEvent.objects.select_for_update().get(
+                    pk=instance.pk,
+                )
+                return self._perform_destroy(locked_event)
+        # Preserve the lightweight hook contract used by broadcast unit tests.
+        return self._perform_destroy(instance)
+
+    def _perform_destroy(self, instance):
         # [ahmed] Keep the event ID before deleting it.
         event_id = instance.pk
+
+        if (
+            isinstance(instance, ClubEvent)
+            and instance.status in {"planned", "ongoing"}
+        ):
+            recipient_ids = list(
+                instance.rsvps.filter(user__is_active=True)
+                .values_list("user_id", flat=True)
+            )
+            NotificationService.create_for_users(
+                recipients=recipient_ids,
+                notification_type=Notification.Type.EVENT_CANCELLED,
+                title="Event removed",
+                message=(
+                    f'"{instance.name}" was removed and is no longer available.'
+                ),
+                event=instance,
+                deduplication_key=f"event-deleted:{event_id}",
+                delivery_event_id=None,
+            )
 
         # [ahmed] Delete the event from the database.
         instance.delete()

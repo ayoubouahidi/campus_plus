@@ -5,6 +5,8 @@ from contextlib import suppress
 from time import time
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.db import database_sync_to_async
+from notifications.delivery import user_group_name
 
 
 logger = logging.getLogger(__name__)
@@ -140,6 +142,58 @@ class CalendarConsumer(AsyncJsonWebsocketConsumer):
         if getattr(self, "expired", False) or not self.joined_group:
             return
         # [ahmed] Queued broadcasts must not bypass a delayed expiry notification.
+        if self.jwt_exp is not None and self.jwt_exp <= time():
+            await self.expire_connection()
+            return
+        await self.send_json(event["data"])
+
+
+class NotificationConsumer(CalendarConsumer):
+    """Authenticated, server-to-client stream for one user's notifications."""
+
+    async def connect(self):
+        self.joined_group = False
+        self.expired = False
+        self.expiration_cleanup_started = False
+        self.expiration_task = None
+        self.jwt_exp = self.scope.get("jwt_exp")
+        user = self.scope.get("user")
+
+        if user is None or not user.is_authenticated or not user.is_active:
+            await self.close(code=4401)
+            return
+        if self.jwt_exp is not None and self.jwt_exp <= time():
+            await self.close(code=4401)
+            return
+
+        # The group is derived exclusively from the middleware-authenticated user.
+        self.group_name = user_group_name(user.pk)
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        self.joined_group = True
+        await self.accept()
+        await self.send_json({
+            "type": "connection_established",
+            "message": "Subscribed to personal notifications",
+        })
+        await self.send_json({
+            "type": "notification.unread_count",
+            "data": {"unread_count": await self.get_unread_count(user.pk)},
+        })
+
+        if self.jwt_exp is not None:
+            self.expiration_task = asyncio.create_task(self.wait_for_jwt_expiry())
+
+    @database_sync_to_async
+    def get_unread_count(self, user_id):
+        from notifications.models import Notification
+        return Notification.objects.filter(
+            recipient_id=user_id,
+            is_read=False,
+        ).count()
+
+    async def notification_delivery(self, event):
+        if getattr(self, "expired", False) or not self.joined_group:
+            return
         if self.jwt_exp is not None and self.jwt_exp <= time():
             await self.expire_connection()
             return

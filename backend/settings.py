@@ -202,6 +202,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django_filters',
     'core_data',
+    'notifications.apps.NotificationsConfig',
 
     'realtime.apps.RealtimeConfig',  # [ahmed] Registers our real-time Django app.
 
