@@ -77,19 +77,24 @@ export const getEventSchedules = (
 ): Record<string, EventSchedule> =>
   Object.fromEntries(events.map((event) => [event.id, formatEventSchedule(event.start_time, locale)]));
 
-// Calendar-style date tile ("NOV" over "14") for event rows (/profile, Step 5.4). Server only (campus time zone).
+// Calendar-style date tile ("NOV" over "14"; "NOV." in French, "نونبر" in Arabic) for event rows (/profile,
+// Step 5.4; language since Step 12.6). Server only (campus time zone).
 export interface DateTile {
   month: string; // "NOV"
   day: string; // "14" (2 digits)
 }
 
-const tileMonthFormatter = new Intl.DateTimeFormat('en', { month: 'short', timeZone: CAMPUS_TIME_ZONE });
-const tileDayFormatter = new Intl.DateTimeFormat('en', { day: '2-digit', timeZone: CAMPUS_TIME_ZONE });
+const tileMonthFormatter = cachedFormatter((tag) => new Intl.DateTimeFormat(tag, { month: 'short', timeZone: CAMPUS_TIME_ZONE }));
+const tileDayFormatter = cachedFormatter((tag) => new Intl.DateTimeFormat(tag, { day: '2-digit', timeZone: CAMPUS_TIME_ZONE }));
 
-export const formatDateTile = (iso: string): DateTile => {
+// toUpperCase is a no-op on Arabic letters, so the same code serves all three languages.
+export const formatDateTile = (iso: string, locale = 'en'): DateTile => {
   const date = new Date(iso);
-  return { month: tileMonthFormatter.format(date).toUpperCase(), day: tileDayFormatter.format(date) };
+  return {
+    month: tileMonthFormatter(locale).format(date).toLocaleUpperCase(intlLocale(locale)),
+    day: tileDayFormatter(locale).format(date),
+  };
 };
 
-export const getDateTiles = (events: { id: string; start_time: string }[]): Record<string, DateTile> =>
-  Object.fromEntries(events.map((event) => [event.id, formatDateTile(event.start_time)]));
+export const getDateTiles = (events: { id: string; start_time: string }[], locale = 'en'): Record<string, DateTile> =>
+  Object.fromEntries(events.map((event) => [event.id, formatDateTile(event.start_time, locale)]));

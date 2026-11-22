@@ -1,7 +1,7 @@
 // Email sign-up (Step 11.2, DOCS.md §11.2). Pure helpers shared by the form (browser check), the server
 // action (the check that counts) and the dev fallback. Field names = Django's POST /api/signup/ body.
 
-import { EMAIL_PATTERN } from '@/lib/login';
+import { EMAIL_PATTERN, type FieldError } from '@/lib/login';
 
 export interface RegisterValues {
   first_name: string;
@@ -15,7 +15,7 @@ export interface RegisterValues {
 }
 
 export type RegisterField = keyof RegisterValues;
-export type RegisterFieldErrors = Partial<Record<RegisterField, string>>;
+export type RegisterFieldErrors = Partial<Record<RegisterField, FieldError>>; // keys of Validation, or Django's text
 
 // What the form gets back after a failed attempt. Passwords are never sent back.
 export type RegisterPublicValues = Omit<RegisterValues, 'password' | 'password_confirm'>;
@@ -42,30 +42,15 @@ export const EMPTY_REGISTER_VALUES: RegisterPublicValues = {
 
 export const REGISTER_INITIAL_STATE: RegisterState = { error: null, fieldErrors: {}, values: EMPTY_REGISTER_VALUES };
 
-export const REGISTER_ERROR_MESSAGES: Record<RegisterError, { title: string; description: string }> = {
-  'email-taken': {
-    title: 'An account with this email already exists',
-    description: 'Log in with it instead, or sign up with another email.',
-  },
-  rejected: {
-    title: 'We couldn’t create your account',
-    description: 'Check the fields below and try again.',
-  },
-  unavailable: {
-    title: 'Sign-up is temporarily unavailable',
-    description: 'Something is wrong on our side. Please try again in a few minutes.',
-  },
-};
+// Words: Auth.registerErrors.<error>.title / description (Step 12.6).
 
 // Same limits as Django's SignupSerializer (names ≤ 150, password ≥ 8, year 1–7). 128 = Django's password
 // field size, so a longer one would be cut.
 export const NAME_MAX_LENGTH = 150;
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
-export const YEAR_OPTIONS = [1, 2, 3, 4, 5, 6, 7].map((year) => ({
-  value: String(year),
-  label: `${year}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[year] ?? 'th'} year`,
-}));
+// Select values; the labels ("1st year", "1re année", "السنة الأولى") are Auth.yearOption.
+export const YEARS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export const readRegisterForm = (formData: FormData): RegisterValues => {
   const text = (name: RegisterField) => String(formData.get(name) ?? '');
@@ -94,22 +79,23 @@ export const toPublicValues = (values: RegisterValues): RegisterPublicValues => 
 // Messages say what to do. Order = form order, so the first error is the first field to fix.
 export const validateRegistration = (values: RegisterValues): RegisterFieldErrors => {
   const errors: RegisterFieldErrors = {};
-  if (!values.first_name.trim()) errors.first_name = 'Enter your first name.';
-  else if (values.first_name.trim().length > NAME_MAX_LENGTH) errors.first_name = `Use at most ${NAME_MAX_LENGTH} characters.`;
-  if (!values.last_name.trim()) errors.last_name = 'Enter your last name.';
-  else if (values.last_name.trim().length > NAME_MAX_LENGTH) errors.last_name = `Use at most ${NAME_MAX_LENGTH} characters.`;
+  const tooLongName = { key: 'nameTooLong', values: { max: NAME_MAX_LENGTH } } as const;
+  if (!values.first_name.trim()) errors.first_name = { key: 'firstNameRequired' };
+  else if (values.first_name.trim().length > NAME_MAX_LENGTH) errors.first_name = tooLongName;
+  if (!values.last_name.trim()) errors.last_name = { key: 'lastNameRequired' };
+  else if (values.last_name.trim().length > NAME_MAX_LENGTH) errors.last_name = tooLongName;
 
-  if (!values.email.trim()) errors.email = 'Enter your email.';
-  else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = 'Enter a valid email, like name@example.com.';
+  if (!values.email.trim()) errors.email = { key: 'emailRequired' };
+  else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = { key: 'emailInvalid' };
 
-  if (!values.password) errors.password = 'Choose a password.';
-  else if (values.password.length < PASSWORD_MIN_LENGTH) errors.password = `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
-  else if (values.password.length > PASSWORD_MAX_LENGTH) errors.password = `Use at most ${PASSWORD_MAX_LENGTH} characters.`;
-  if (!values.password_confirm) errors.password_confirm = 'Type your password again.';
-  else if (values.password && values.password_confirm !== values.password) errors.password_confirm = 'The passwords don’t match.';
+  if (!values.password) errors.password = { key: 'passwordChoose' };
+  else if (values.password.length < PASSWORD_MIN_LENGTH) errors.password = { key: 'passwordTooShort', values: { min: PASSWORD_MIN_LENGTH } };
+  else if (values.password.length > PASSWORD_MAX_LENGTH) errors.password = { key: 'passwordTooLong', values: { max: PASSWORD_MAX_LENGTH } };
+  if (!values.password_confirm) errors.password_confirm = { key: 'passwordConfirmRequired' };
+  else if (values.password && values.password_confirm !== values.password) errors.password_confirm = { key: 'passwordMismatch' };
 
-  if (!YEAR_OPTIONS.some((option) => option.value === values.year_of_study)) errors.year_of_study = 'Choose your year of study.';
-  if (!values.department_id) errors.department_id = 'Choose your school.';
+  if (!YEARS.some((year) => String(year) === values.year_of_study)) errors.year_of_study = { key: 'yearRequired' };
+  if (!values.department_id) errors.department_id = { key: 'schoolRequired' };
   return errors;
 };
 
@@ -129,7 +115,8 @@ export const firstErrorField = (errors: RegisterFieldErrors): RegisterField | un
   REGISTER_FIELD_ORDER.find((field) => errors[field]);
 
 // Django REST Framework 400 body → our field errors. DRF sends { field: ["message", …] } and
-// { non_field_errors: [...] }. An email "already exists" message becomes the email-taken state.
+// { non_field_errors: [...] }. Django's messages are shown as Django wrote them ({ text }), except an email
+// "already exists" message, which becomes the email-taken state with our translated wording.
 const DJANGO_FIELDS: readonly RegisterField[] = ['first_name', 'last_name', 'email', 'password', 'year_of_study', 'department_id', 'club_id'];
 
 export const fromDjangoErrors = (body: unknown): { error: RegisterError; fieldErrors: RegisterFieldErrors } => {
@@ -138,11 +125,12 @@ export const fromDjangoErrors = (body: unknown): { error: RegisterError; fieldEr
     for (const field of DJANGO_FIELDS) {
       const messages = (body as Record<string, unknown>)[field];
       const first = Array.isArray(messages) ? messages[0] : messages;
-      if (typeof first === 'string') fieldErrors[field] = first;
+      if (typeof first === 'string') fieldErrors[field] = { text: first };
     }
   }
-  if (fieldErrors.email && /already|exist|taken|unique/i.test(fieldErrors.email)) {
-    return { error: 'email-taken', fieldErrors: { ...fieldErrors, email: 'This email already has an account.' } };
+  const emailError = fieldErrors.email;
+  if (emailError && 'text' in emailError && /already|exist|taken|unique/i.test(emailError.text)) {
+    return { error: 'email-taken', fieldErrors: { ...fieldErrors, email: { key: 'emailTaken' } } };
   }
   return { error: 'rejected', fieldErrors };
 };

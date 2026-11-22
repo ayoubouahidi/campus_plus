@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useActionState, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useFieldError } from '@/hooks/useFieldError';
 import {
-  EMAIL_LOGIN_ERROR_MESSAGES,
   EMAIL_LOGIN_INITIAL_STATE,
   hasFieldErrors,
   validateEmailLogin,
@@ -36,7 +37,8 @@ export const EmailLoginForm = React.forwardRef<HTMLFormElement, EmailLoginFormPr
     // Browser check wins while it has something to say; otherwise the server's (same rules, in case JS was
     // off or the check was skipped).
     const fieldErrors = hasFieldErrors(clientErrors) ? clientErrors : state.fieldErrors;
-    const message = state.error ? EMAIL_LOGIN_ERROR_MESSAGES[state.error] : null;
+    const t = useTranslations('Auth');
+    const errorText = useFieldError();
 
     const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
       onSubmit?.(event);
@@ -59,18 +61,18 @@ export const EmailLoginForm = React.forwardRef<HTMLFormElement, EmailLoginFormPr
         action={formAction}
         onSubmit={handleSubmit}
         noValidate // our messages instead of the browser's bubbles: same look, read by screen readers
-        aria-label="Log in with email"
+        aria-label={t('emailForm')}
         className={`space-y-4 ${className}`}
         {...props}
       >
-        {message && (
+        {state.error && (
           // role="alert": announced as soon as it appears after the failed attempt.
           <div
             role="alert"
             className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm dark:border-rose-500/30 dark:bg-rose-950/40"
           >
-            <p className="font-semibold text-rose-800 dark:text-rose-200">{message.title}</p>
-            <p className="mt-1 text-rose-700 dark:text-rose-300">{message.description}</p>
+            <p className="font-semibold text-rose-800 dark:text-rose-200">{t(`emailErrors.${state.error}.title`)}</p>
+            <p className="mt-1 text-rose-700 dark:text-rose-300">{t(`emailErrors.${state.error}.description`)}</p>
           </div>
         )}
 
@@ -79,12 +81,12 @@ export const EmailLoginForm = React.forwardRef<HTMLFormElement, EmailLoginFormPr
           ref={emailRef}
           name="email"
           type="email"
-          label="Email"
+          label={t('email')}
           autoComplete="email"
           inputMode="email"
           spellCheck={false}
           defaultValue={state.email}
-          error={fieldErrors.email}
+          error={errorText(fieldErrors.email)}
           onChange={clearError('email')}
           required
         />
@@ -92,14 +94,14 @@ export const EmailLoginForm = React.forwardRef<HTMLFormElement, EmailLoginFormPr
           ref={passwordRef}
           name="password"
           type="password"
-          label="Password"
+          label={t('password')}
           autoComplete="current-password"
-          error={fieldErrors.password}
+          error={errorText(fieldErrors.password)}
           onChange={clearError('password')}
           required
         />
         <Button type="submit" isLoading={isPending} className="w-full">
-          {isPending ? 'Logging in…' : 'Log in'}
+          {t(isPending ? 'loggingIn' : 'logIn')}
         </Button>
       </form>
     );

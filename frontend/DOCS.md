@@ -3815,8 +3815,8 @@ Two accessibility modules of the subject: **≥ 3 languages with a switcher** (a
 | 12.3 | Feed, event cards, event page, RSVP, attendees; event dates in the active language (Moroccan Arabic month names) | ✅ validated 2026-11-22 |
 | 12.4 | Calendar (weekday names, month and week titles, agenda, times); server-made names so the browser re-renders the same text | ✅ validated 2026-11-22 |
 | 12.5 | Clubs directory and club pages; "since" month in the active language | ✅ validated 2026-11-22 |
-| 12.6 | Login, sign-up (validation and error messages), profile | ⏳ |
-| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), the remaining `Intl` formatters on the active locale (`formatDateTile` on /profile; calendar and club ones done in 12.4–12.5) | ⏳ |
+| 12.6 | Login, sign-up (validation and error messages as keys), logout, the rest of `/profile` (stats, tabs, date tiles) | ✅ validated 2026-11-22 |
+| 12.7 | Privacy / Terms, error, loading and 404 pages, page titles (`metadata`), drop the `locale = 'en'` defaults once every caller passes a locale (all formatters take one since 12.6) | ⏳ |
 | 12.8 | RTL audit (every `left/right/ml/mr/pl/pr` class, icons that point somewhere), check that no English string is left | ⏳ |
 
 ### 12.1 i18n setup and `LanguageSwitcher` (Step 12.1, 2026-11-21)
@@ -4149,3 +4149,55 @@ const locale = await getLocale();
 ```
 
 **Verified (2026-11-22, server HTML fetched inside the container).** `/clubs`: "6 clubs" / "6 clubs" / "6 أندية", intro sentence, "Filter clubs" / "Filtrer les clubs" / "تصفية الأندية", card footers "1 upcoming event" / "1 événement à venir" / "فعالية قادمة واحدة". `/clubs/leet-dev`: "All clubs" / "Tous les clubs" / "كل الأندية", "Since January 2026" / "Depuis janvier 2026" / "منذ يناير 2026", About / À propos / نبذة, contact lock text and login link, "Upcoming events" / "Événements à venir" / "الفعاليات القادمة", empty state, "Past events" with "Fri, Nov 13" / "ven. 13 nov." / "الجمعة، 13 نونبر". `/clubs/nope` in Arabic: "النادي غير موجود", "تصفّح الأندية", "اكتشف الفعاليات". `tsc` passes; ESLint: the same 6 old findings.
+
+### 12.6 Login, sign-up and profile in three languages (Step 12.6, 2026-11-22)
+
+**Files:** `src/i18n/messages/{en,fr,ar}.ts` (new `Auth`, `Validation`; `Profile` extended), `src/lib/login.ts` (`ValidationKey`, `FieldError`; `LOGIN_ERROR_MESSAGES` and `EMAIL_LOGIN_ERROR_MESSAGES` removed), `src/lib/register.ts` (`RegisterFieldErrors` holds `FieldError`s, `YEARS` replaces `YEAR_OPTIONS`, `REGISTER_ERROR_MESSAGES` removed, `fromDjangoErrors` wraps Django text), `src/app/auth/register/actions.ts`, `src/hooks/useFieldError.ts` (new), `src/components/auth/{LoginLayout,LoginPanel,FortyTwoButton,EmailLoginForm,RegisterPanel,RegisterForm,LogoutForm}.tsx`, `src/app/auth/login/page.tsx`, `src/lib/time.ts` (`formatDateTile` / `getDateTiles` take a locale), `src/components/profile/{ProfileView,ProfileActivity,AttendedEventList,ProfileSkeleton}.tsx`. Test: `src/app/test/page.tsx`.
+**Status:** ✅ Validated on `/test` (2026-11-22). Live on `/auth/login`, `/auth/register`, `/profile`.
+
+**Business purpose.** A student's first contact with Campus Hub is often the login or sign-up page; a French or Arabic speaker can now create an account, read every error and log in without English. Their profile then shows their stats and events in the same language.
+
+**Core concepts & decisions.**
+- **Errors travel as keys, not sentences.** The validation rules in `lib/login.ts` and `lib/register.ts` run in two places: the browser (instant messages) and the server action (the check that counts). Both now return a `FieldError`: `{ key: ValidationKey, values? }` (e.g. `{ key: 'passwordTooShort', values: { min: 8 } }`). The key is plain data, so it crosses the server action → form boundary unchanged, and the form turns it into text in the visitor's language with `useFieldError()`. One rule, one key, three languages; the server never needs to know which language the form displays.
+- **Django's own messages stay as written.** `fromDjangoErrors` wraps each DRF message as `{ text }`, shown as is: we can't translate free text from the backend. The one case the site recognises ("already exists") becomes our `emailTaken` key and is translated. If the team wants Django errors translated, the backend must send codes or use Django's own i18n (to raise at the merge).
+- **Error boxes by kind.** `LoginErrorKind` (42 errors), `EmailLoginError` and `RegisterError` stay as the state the server returns; their title and description are nested messages (`Auth.loginErrors.<kind>.title`), read with template-literal keys that next-intl type-checks, so a new kind without words fails `tsc`.
+- **Links inside sentences with `t.rich`.** "With 42, just <link>continue with 42 Intra</link>: it creates your account." and the terms sentence keep their links where each language puts them; `inlineLink(href)` renders each tag.
+- **Ordinals per language.** The year list uses ICU `selectordinal` in English ("1st, 2nd, 3rd, 4th year") and French ("1re, 2e année"); Arabic uses `select` on the number with the ordinal words ("السنة الأولى" … "السابعة"), which a plural rule can't produce.
+- **Profile.** "My profile", the stats (labels, short labels on phones, "Coming soon"), the event tabs, empty states, "Recently attended" with "Latest 3 of N events" (plural), the "Attended" chip, and the date tiles: `formatDateTile(iso, locale)` writes "NOV" / "NOV." / "نونبر" (`toLocaleUpperCase`, a no-op on Arabic letters).
+- **RTL fix found here:** the login page's "←" back link now flips in Arabic (`rtl:-scale-x-100`), like the other back links.
+- **Not translated on purpose:** the dev login button (developers only, never shown in production), school and club names in the sign-up selects (data).
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Keys in `FieldError`, translated in the form | Translate in the server action (`getTranslations`) and return text | The browser check runs without the server; with keys both checks share one output type and the form translates both the same way. The state stays language-free. |
+| `{ text }` for Django messages | Map every DRF message to a key | DRF messages are open-ended; mapping a few would leave the rest untranslated anyway. Shown as is until the backend sends codes. |
+| `t.rich` for sentences with links | Split the sentence into before / link / after | Word order differs between languages (the link moves); one message per sentence keeps it whole for translators. |
+| `select` for Arabic years | Cardinal "السنة 1" | Ordinal words are how Arabic speakers name school years. |
+
+**Contract.**
+```ts
+// src/lib/login.ts
+type ValidationKey = 'emailRequired' | 'emailInvalid' | 'emailTaken' | 'passwordRequired' | 'passwordChoose' | 'passwordTooShort'
+  | 'passwordTooLong' | 'passwordConfirmRequired' | 'passwordMismatch' | 'firstNameRequired' | 'lastNameRequired' | 'nameTooLong'
+  | 'yearRequired' | 'schoolRequired';
+type FieldError = { key: ValidationKey; values?: { min?: number; max?: number } } | { text: string };
+interface EmailLoginFieldErrors { email?: FieldError; password?: FieldError }
+// src/lib/register.ts
+type RegisterFieldErrors = Partial<Record<RegisterField, FieldError>>;
+const YEARS: readonly [1, 2, 3, 4, 5, 6, 7];
+// src/hooks/useFieldError.ts
+useFieldError(): (error: FieldError | undefined) => string | undefined;
+// src/lib/time.ts
+formatDateTile(iso: string, locale = 'en'): DateTile; getDateTiles(events, locale = 'en');
+```
+
+**Usage.**
+```tsx
+const errorText = useFieldError();
+<Input name="email" label={t('email')} error={errorText(fieldErrors.email)} />
+{state.error && <p>{t(`emailErrors.${state.error}.title`)}</p>}
+```
+
+**Verified (2026-11-22, server HTML fetched inside the container).** `/auth/login?registered=1`: "Welcome back" / "Bon retour" / "مرحبًا بعودتك", the intro, the notice, "Continue with 42 Intra" / "Continuer avec 42 Intra" / "المتابعة باستخدام 42 Intra", "or with email" / "ou par e-mail", labels, "Log in" / "Se connecter" / "تسجيل الدخول", "No account and no 42?" link, the 42 note, form label. `/auth/login?error=AccessDenied`: the three error boxes. `/auth/register`: labels, "At least 8 characters." / "Au moins 8 caractères." / "8 أحرف على الأقل.", years "1st year…7th year" / "1re année, 2e année…" / "السنة الأولى…السابعة", "Choose your school first", "Create account", the intro and terms sentences with their links. `tsc` passes; ESLint: the same 6 old findings (one new `react/display-name` from the first `t.rich` helper, fixed with the named `InlineLink`). Signed-in `/profile`, the form errors (browser and server) and the logout button: in the browser (checklist on `/test`).

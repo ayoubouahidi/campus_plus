@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { EventCardSkeleton } from '@/components/events/EventSkeletons';
 import { Skeleton, SkeletonRegion } from '@/components/ui/Skeleton';
 import { PROFILE_PANEL } from './profileStyles';
@@ -7,7 +8,7 @@ import { PROFILE_PANEL } from './profileStyles';
 // header + 3 cards, recently attended rows) so nothing jumps. Change the profile components → change this.
 export const ProfileSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <SkeletonRegion ref={ref} label="Loading profile" className={className} {...props}>
+    <SkeletonRegion ref={ref} label={useTranslations('Profile')('loading')} className={className} {...props}>
       <div aria-hidden="true" className="space-y-6">
         <div className="flex items-center justify-between">
           <Skeleton className="h-4 w-20 rounded" />

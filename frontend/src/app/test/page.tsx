@@ -41,7 +41,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 12.5, the clubs directory and club pages in EN / FR / AR</p>
+        <p className="font-semibold">Test page: Step 12.6, login, sign-up and the profile in EN / FR / AR</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -118,43 +118,54 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">Pages to open (Step 12.5 is live on them)</h3>
+          <h3 className="font-semibold">Pages to open (Step 12.6 is live on them)</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             <li>
-              <Link href="/clubs" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Clubs directory
+              <Link href="/auth/login" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Login
               </Link>
             </li>
             <li>
-              <Link href="/clubs/leet-dev" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Club with past events
+              <Link href="/auth/login?registered=1" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Login after sign-up
               </Link>
             </li>
             <li>
-              <Link href="/clubs/leet-frame" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Another club
+              <Link href="/auth/login?error=AccessDenied" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                42 refused
               </Link>
             </li>
             <li>
-              <Link href="/clubs/nope" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
-                Unknown club (404)
+              <Link href="/auth/login?error=Configuration" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Login unavailable
+              </Link>
+            </li>
+            <li>
+              <Link href="/auth/register" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Sign-up
+              </Link>
+            </li>
+            <li>
+              <Link href="/profile" className="inline-flex rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                Profile (signed in)
               </Link>
             </li>
           </ul>
+          <p className="mt-2 text-slate-500 dark:text-slate-400">The login pages redirect when you are signed in: sign out first (box above) to see them.</p>
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 12.5), in Français then العربية</h3>
+          <h3 className="font-semibold">What to check (Step 12.6), in Français then العربية</h3>
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Directory: heading, count (&quot;6 clubs&quot;, &quot;6 أندية&quot;), intro sentence, campus toggle (&quot;Tous&quot;), each card&apos;s footer (&quot;1 événement à venir&quot;, &quot;لا توجد فعاليات قادمة&quot;). Club names, departments and descriptions stay as written.</li>
-            <li>Pick a campus with no clubs (if any): empty state and &quot;Voir tous les clubs&quot; translated.</li>
-            <li>Club page: back link &quot;Tous les clubs&quot; / &quot;كل الأندية&quot; (arrow points back: right in Arabic), &quot;Depuis janvier 2026&quot; / &quot;منذ يناير 2026&quot;, &quot;À propos&quot;, Contact card, &quot;Événements à venir&quot; / &quot;Événements passés&quot;, the empty upcoming state.</li>
-            <li>Contact card signed out: lock line + &quot;Se connecter pour les voir&quot;. Signed in (session switcher above): &quot;Président&quot;; in Arabic the email and the phone (&quot;+212 6 …&quot;) still read left to right.</li>
-            <li>Past events list: dates in the language (&quot;ven. 13 nov.&quot;, &quot;الجمعة، 13 نونبر&quot;) on one line, titles lined up; in Arabic the date column sits on the right.</li>
-            <li>Arabic layout: the logo overlaps the banner on the right, name beside it; card logos on the right; the contact card is on the left of About from 1024px.</li>
-            <li>Unknown club: &quot;Club introuvable&quot;, &quot;Parcourir les clubs&quot;, &quot;Découvrir les événements&quot;.</li>
-            <li>Screen reader: loading label (&quot;Chargement des clubs&quot;), the count is announced after a campus change, the filter landmark is named.</li>
-            <li>Still English (next steps): login, sign-up, the rest of /profile, legal pages, page titles in the browser tab.</li>
+            <li>Login: heading, intro, &quot;Continuer avec 42 Intra&quot; (and &quot;Ouverture de 42 Intra…&quot; while it loads), &quot;ou par e-mail&quot;, field labels, button, &quot;Pas de compte et pas de 42 ?&quot;, the 42 note at the bottom. The back arrow at the top points right in Arabic. The dev login button stays English (developers only).</li>
+            <li>Error and notice boxes: ?error=AccessDenied, ?error=Configuration, ?registered=1 (links above).</li>
+            <li>Email login, browser check: submit empty → &quot;Saisissez votre e-mail.&quot; / &quot;أدخل بريدك الإلكتروني.&quot;, then a bad email → the &quot;valid email&quot; message. A wrong password (with Django off, any unknown email) → &quot;E-mail ou mot de passe incorrect&quot;.</li>
+            <li>Sign-up: labels, &quot;Au moins 8 caractères.&quot;, year list &quot;1re année, 2e année…&quot; / &quot;السنة الأولى…&quot;, &quot;Choisissez d’abord votre école&quot;, the intro and terms sentences with their links in the right place. Submit empty: every field shows its message, focus goes to the first one; mismatched passwords → &quot;Les mots de passe ne correspondent pas.&quot;</li>
+            <li>Sign up twice with the same email → the &quot;Un compte existe déjà&quot; box, &quot;Cet e-mail a déjà un compte.&quot; under the field, and &quot;Se connecter plutôt&quot;.</li>
+            <li>/profile (signed in): &quot;Mon profil&quot;, &quot;Se déconnecter&quot; (&quot;Déconnexion…&quot; while it runs), stats (&quot;Participations à venir&quot;, &quot;Événements suivis&quot;, &quot;Clubs suivis · Bientôt&quot;), &quot;Vos événements&quot; with the J’y vais / J’y suis allé tabs, empty states, &quot;Récemment suivis&quot; + &quot;Les 3 derniers sur N événements&quot;, the &quot;Suivi&quot; chip, date tiles &quot;NOV.&quot; / &quot;نونبر&quot;.</li>
+            <li>Arabic /profile: stats, tabs and rows mirror; the row chevrons and the logout icon point the other way; the date tile month fits in its box.</li>
+            <li>Messages that come from Django itself (a field it rejects) stay in Django&apos;s language: expected until the backend sends keys or translated text.</li>
+            <li>Still English (next step 12.7): Privacy / Terms, error and 404 pages, page titles in the browser tab.</li>
           </ul>
         </div>
       </section>

@@ -2,15 +2,16 @@
 
 import React, { useActionState, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useFieldError } from '@/hooks/useFieldError';
 import { loginHref } from '@/lib/login';
 import {
   PASSWORD_MIN_LENGTH,
-  REGISTER_ERROR_MESSAGES,
   REGISTER_INITIAL_STATE,
-  YEAR_OPTIONS,
+  YEARS,
   firstErrorField,
   readRegisterForm,
   validateRegistration,
@@ -47,7 +48,8 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
     const formRef = useRef<HTMLFormElement | null>(null);
 
     const fieldErrors = Object.keys(clientErrors).length > 0 ? clientErrors : state.fieldErrors;
-    const message = state.error ? REGISTER_ERROR_MESSAGES[state.error] : null;
+    const t = useTranslations('Auth');
+    const errorText = useFieldError();
     const values = state.values;
     const departmentClubs = clubs.filter((club) => club.department_id === departmentId);
 
@@ -81,20 +83,20 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
         action={formAction}
         onSubmit={handleSubmit}
         noValidate // our messages instead of the browser's bubbles
-        aria-label="Create your account"
+        aria-label={t('registerTitle')}
         className={`space-y-4 ${className}`}
         {...props}
       >
-        {message && (
+        {state.error && (
           <div
             role="alert"
             className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm dark:border-rose-500/30 dark:bg-rose-950/40"
           >
-            <p className="font-semibold text-rose-800 dark:text-rose-200">{message.title}</p>
-            <p className="mt-1 text-rose-700 dark:text-rose-300">{message.description}</p>
+            <p className="font-semibold text-rose-800 dark:text-rose-200">{t(`registerErrors.${state.error}.title`)}</p>
+            <p className="mt-1 text-rose-700 dark:text-rose-300">{t(`registerErrors.${state.error}.description`)}</p>
             {state.error === 'email-taken' && (
               <Link href={loginHref(next)} className={`mt-2 inline-block ${linkStyles}`}>
-                Log in instead
+                {t('loginInstead')}
               </Link>
             )}
           </div>
@@ -105,19 +107,19 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             name="first_name"
-            label="First name"
+            label={t('firstName')}
             autoComplete="given-name"
             defaultValue={values.first_name}
-            error={fieldErrors.first_name}
+            error={errorText(fieldErrors.first_name)}
             onChange={clearError('first_name')}
             required
           />
           <Input
             name="last_name"
-            label="Last name"
+            label={t('lastName')}
             autoComplete="family-name"
             defaultValue={values.last_name}
-            error={fieldErrors.last_name}
+            error={errorText(fieldErrors.last_name)}
             onChange={clearError('last_name')}
             required
           />
@@ -126,31 +128,31 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
         <Input
           name="email"
           type="email"
-          label="Email"
+          label={t('email')}
           autoComplete="email"
           inputMode="email"
           spellCheck={false}
           defaultValue={values.email}
-          error={fieldErrors.email}
+          error={errorText(fieldErrors.email)}
           onChange={clearError('email')}
           required
         />
         <Input
           name="password"
           type="password"
-          label="Password"
+          label={t('password')}
           autoComplete="new-password" // password managers offer a strong one
-          helperText={`At least ${PASSWORD_MIN_LENGTH} characters.`}
-          error={fieldErrors.password}
+          helperText={t('passwordHelp', { min: PASSWORD_MIN_LENGTH })}
+          error={errorText(fieldErrors.password)}
           onChange={clearError('password')}
           required
         />
         <Input
           name="password_confirm"
           type="password"
-          label="Confirm password"
+          label={t('confirmPassword')}
           autoComplete="new-password"
-          error={fieldErrors.password_confirm}
+          error={errorText(fieldErrors.password_confirm)}
           onChange={clearError('password_confirm')}
           required
         />
@@ -158,21 +160,21 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
         <div className="grid gap-4 sm:grid-cols-2">
           <Select
             name="year_of_study"
-            label="Year of study"
-            placeholder="Choose…"
-            options={YEAR_OPTIONS}
+            label={t('year')}
+            placeholder={t('choose')}
+            options={YEARS.map((year) => ({ value: String(year), label: t('yearOption', { year }) }))}
             defaultValue={values.year_of_study}
-            error={fieldErrors.year_of_study}
+            error={errorText(fieldErrors.year_of_study)}
             onChange={clearError('year_of_study')}
             required
           />
           <Select
             name="department_id"
-            label="School"
-            placeholder="Choose…"
+            label={t('school')}
+            placeholder={t('choose')}
             options={departments.map((department) => ({ value: department.id, label: department.name }))}
             defaultValue={values.department_id}
-            error={fieldErrors.department_id}
+            error={errorText(fieldErrors.department_id)}
             onChange={(event) => {
               setDepartmentId(event.target.value);
               clearError('department_id')();
@@ -185,20 +187,20 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
         <Select
           key={departmentId}
           name="club_id"
-          label="Club (optional)"
+          label={t('club')}
           options={[
-            { value: '', label: departmentId ? 'No club' : 'Choose your school first' },
+            { value: '', label: t(departmentId ? 'noClub' : 'chooseSchoolFirst') },
             ...departmentClubs.map((club) => ({ value: club.id, label: club.name })),
           ]}
           defaultValue={departmentClubs.some((club) => club.id === values.club_id) ? values.club_id : ''}
-          helperText="The club you’re a member of, if any."
+          helperText={t('clubHelp')}
           disabled={!departmentId || departmentClubs.length === 0}
-          error={fieldErrors.club_id}
+          error={errorText(fieldErrors.club_id)}
           onChange={clearError('club_id')}
         />
 
         <Button type="submit" isLoading={isPending} className="w-full">
-          {isPending ? 'Creating your account…' : 'Create account'}
+          {t(isPending ? 'creating' : 'create')}
         </Button>
       </form>
     );

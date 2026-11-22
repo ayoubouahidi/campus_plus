@@ -1,6 +1,7 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { FortyTwoButton } from '@/components/auth/FortyTwoButton';
-import { LOGIN_ERROR_MESSAGES, type LoginErrorKind } from '@/lib/login';
+import type { LoginErrorKind } from '@/lib/login';
 
 export interface LoginPanelProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   // Server action that starts the 42 sign-in. Receives the form data, including `redirectTo` (= next).
@@ -23,13 +24,13 @@ export interface LoginPanelProps extends Omit<React.HTMLAttributes<HTMLDivElemen
 // a server action, so it works before JavaScript loads and with JavaScript off.
 export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
   ({ action, next, error = null, notice, children, className = '', ...props }, ref) => {
-    const message = error ? LOGIN_ERROR_MESSAGES[error] : null;
+    const t = useTranslations('Auth');
 
     return (
       <div ref={ref} className={className} {...props}>
-        <h1 className="text-[1.75rem] font-bold tracking-tight text-slate-900 dark:text-slate-100">Welcome back</h1>
+        <h1 className="text-[1.75rem] font-bold tracking-tight text-slate-900 dark:text-slate-100">{t('welcome')}</h1>
         <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-          Log in to Campus Hub to RSVP to events, see who&apos;s going and reach club contacts.
+          {t('loginIntro')}
         </p>
 
         {notice && (
@@ -42,14 +43,14 @@ export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
           </div>
         )}
 
-        {message && (
+        {error && (
           // role="alert": announced when it appears; also read first because it sits above the button.
           <div
             role="alert"
             className="mt-7 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm dark:border-rose-500/30 dark:bg-rose-950/40"
           >
-            <p className="font-semibold text-rose-800 dark:text-rose-200">{message.title}</p>
-            <p className="mt-1 text-rose-700 dark:text-rose-300">{message.description}</p>
+            <p className="font-semibold text-rose-800 dark:text-rose-200">{t(`loginErrors.${error}.title`)}</p>
+            <p className="mt-1 text-rose-700 dark:text-rose-300">{t(`loginErrors.${error}.description`)}</p>
           </div>
         )}
 
@@ -61,8 +62,7 @@ export const LoginPanel = React.forwardRef<HTMLDivElement, LoginPanelProps>(
         {children}
 
         <p className="mt-5 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-          First time with 42? Signing in creates your account. We receive your 42 login, name, email, campus and
-          photo, nothing else.
+          {t('firstTime')}
         </p>
       </div>
     );
@@ -73,10 +73,13 @@ LoginPanel.displayName = 'LoginPanel';
 
 // "or" between the 42 button and the email form. A plain line with text: decorative for screen readers,
 // which already hear two separate forms ("Continue with 42 Intra", then the "Log in with email" form).
-export const LoginDivider = ({ className = '' }: { className?: string }) => (
-  <div aria-hidden="true" className={`my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 ${className}`}>
-    <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-    or with email
-    <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-  </div>
-);
+export const LoginDivider = ({ className = '' }: { className?: string }) => {
+  const t = useTranslations('Auth');
+  return (
+    <div aria-hidden="true" className={`my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 ${className}`}>
+      <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+      {t('orEmail')}
+      <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+    </div>
+  );
+};

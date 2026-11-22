@@ -52,29 +52,36 @@ export const getLoginErrorKind = (code: string | string[] | undefined | null): L
   return 'generic';
 };
 
-export const LOGIN_ERROR_MESSAGES: Record<LoginErrorKind, { title: string; description: string }> = {
-  'access-denied': {
-    title: 'We couldn’t sign you in',
-    description:
-      'Your 42 account isn’t linked to a 1337 or EMINES campus we support. If you think this is a mistake, contact the Campus Hub team.',
-  },
-  unavailable: {
-    title: 'Login is temporarily unavailable',
-    description: 'Something is wrong on our side. Please try again in a few minutes.',
-  },
-  generic: {
-    title: 'Sign-in didn’t finish',
-    description: 'The 42 sign-in was cancelled or interrupted. Try again.',
-  },
-};
+// The words for each kind are the Auth.loginErrors.<kind>.title / description messages (Step 12.6).
 
 /* ------------------------- Email + password login (Step 11.1) ------------------------- */
+
+// A field's error (Step 12.6): a key of the Validation messages, translated by the form in the visitor's
+// language, with the numbers it needs; or `text`, a message as the backend wrote it (Django's own words,
+// shown as is). Plain data, so it crosses the server action → form boundary.
+export type ValidationKey =
+  | 'emailRequired'
+  | 'emailInvalid'
+  | 'emailTaken'
+  | 'passwordRequired'
+  | 'passwordChoose'
+  | 'passwordTooShort'
+  | 'passwordTooLong'
+  | 'passwordConfirmRequired'
+  | 'passwordMismatch'
+  | 'firstNameRequired'
+  | 'lastNameRequired'
+  | 'nameTooLong'
+  | 'yearRequired'
+  | 'schoolRequired';
+
+export type FieldError = { key: ValidationKey; values?: { min?: number; max?: number } } | { text: string };
 
 // The form's fields, checked the same way in the browser (before posting) and in the server action
 // (the browser check can be skipped). Messages say what to do, not what went wrong.
 export interface EmailLoginFieldErrors {
-  email?: string;
-  password?: string;
+  email?: FieldError;
+  password?: FieldError;
 }
 
 // Loose on purpose: "something@something.tld". The real check is Django's (EmailField) and the login itself.
@@ -82,9 +89,9 @@ export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const validateEmailLogin = (email: string, password: string): EmailLoginFieldErrors => {
   const errors: EmailLoginFieldErrors = {};
-  if (!email.trim()) errors.email = 'Enter your email.';
-  else if (!EMAIL_PATTERN.test(email.trim())) errors.email = 'Enter a valid email, like name@example.com.';
-  if (!password) errors.password = 'Enter your password.';
+  if (!email.trim()) errors.email = { key: 'emailRequired' };
+  else if (!EMAIL_PATTERN.test(email.trim())) errors.email = { key: 'emailInvalid' };
+  if (!password) errors.password = { key: 'passwordRequired' };
   return errors;
 };
 
@@ -103,16 +110,7 @@ export interface EmailLoginState {
 
 export const EMAIL_LOGIN_INITIAL_STATE: EmailLoginState = { error: null, fieldErrors: {}, email: '' };
 
-export const EMAIL_LOGIN_ERROR_MESSAGES: Record<EmailLoginError, { title: string; description: string }> = {
-  invalid: {
-    title: 'Wrong email or password',
-    description: 'Check both and try again. Students with a 42 account can use “Continue with 42 Intra”.',
-  },
-  unavailable: {
-    title: 'Login is temporarily unavailable',
-    description: 'Something is wrong on our side. Please try again in a few minutes.',
-  },
-};
+// Words: Auth.emailErrors.<error>.title / description (Step 12.6).
 
 // CredentialsSignin `code` that src/auth.ts uses when Django can't be reached (vs. a wrong password).
 export const BACKEND_UNAVAILABLE_CODE = 'backend_unavailable';

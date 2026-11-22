@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useFormStatus } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { Button, type ButtonProps } from '@/components/ui/Button';
 
 // The 42 mark, drawn as a small dark tile (same look as the organizer dashboard's button).
@@ -22,6 +23,7 @@ export type FortyTwoButtonProps = Omit<ButtonProps, 'type' | 'isLoading' | 'left
 export const FortyTwoButton = React.forwardRef<HTMLButtonElement, FortyTwoButtonProps>(
   ({ variant = 'secondary', size = 'md', className = '', ...props }, ref) => {
     const { pending } = useFormStatus();
+    const t = useTranslations('Auth');
 
     return (
       <Button
@@ -34,7 +36,7 @@ export const FortyTwoButton = React.forwardRef<HTMLButtonElement, FortyTwoButton
         className={`w-full ${className}`}
         {...props}
       >
-        {pending ? 'Opening 42 Intra…' : 'Continue with 42 Intra'}
+        {t(pending ? 'fortyTwoPending' : 'fortyTwo')}
       </Button>
     );
   }

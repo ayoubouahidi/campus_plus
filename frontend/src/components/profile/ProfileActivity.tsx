@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { EventItem } from '@/types/api';
 import { EventGrid } from '@/components/events/EventGrid';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
@@ -30,10 +31,11 @@ interface StatProps {
   label: string; // desktop label
   shortLabel: string; // phone label
   extra?: React.ReactNode; // "Coming soon"
+  extraShort?: string; // the same note on phones, under the label
 }
 
 // Desktop: icon tile + value + label in a row. Phone: centered value over a short label (Figma phone frame).
-const Stat = ({ icon, value, label, shortLabel, extra }: StatProps) => (
+const Stat = ({ icon, value, label, shortLabel, extra, extraShort }: StatProps) => (
   <div className="flex flex-1 flex-col items-center gap-1 px-2 py-5 text-center sm:flex-row sm:gap-2 sm:px-6 sm:text-start">
     <span className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600 sm:flex dark:bg-violet-500/10 dark:text-violet-400">
       {icon}
@@ -47,7 +49,7 @@ const Stat = ({ icon, value, label, shortLabel, extra }: StatProps) => (
         <span className="sm:hidden">{shortLabel}</span>
         <span className="hidden sm:inline">{label}</span>
       </p>
-      {extra && <p className="text-[11px] text-slate-500 sm:hidden dark:text-slate-500">Coming soon</p>}
+      {extraShort && <p className="text-[11px] text-slate-500 sm:hidden dark:text-slate-500">{extraShort}</p>}
     </div>
   </div>
 );
@@ -57,26 +59,33 @@ const Stat = ({ icon, value, label, shortLabel, extra }: StatProps) => (
 const DISCOVER_LINK =
   'inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 text-sm font-semibold text-white ring-4 ring-violet-500/20 transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-violet-500/50';
 
-const GoingEmpty = () => (
-  <div className={`flex flex-col items-center px-6 py-10 text-center ${PROFILE_PANEL}`}>
-    <span className="flex size-16 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
-      <StatCalendarIcon width={28} height={28} />
-    </span>
-    <p className="mt-5 text-lg font-semibold text-slate-900 dark:text-slate-100">No upcoming events yet</p>
-    <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-400">Find your next workshop, match, or campus night out.</p>
-    <Link href="/" className={`mt-6 ${DISCOVER_LINK}`}>
-      <span aria-hidden="true" className="rtl:-scale-x-100">→</span>
-      Discover events
-    </Link>
-  </div>
-);
+const GoingEmpty = () => {
+  const t = useTranslations('Profile');
+  const tEvent = useTranslations('EventPage');
+  return (
+    <div className={`flex flex-col items-center px-6 py-10 text-center ${PROFILE_PANEL}`}>
+      <span className="flex size-16 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+        <StatCalendarIcon width={28} height={28} />
+      </span>
+      <p className="mt-5 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('goingEmptyTitle')}</p>
+      <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-400">{t('goingEmptyBody')}</p>
+      <Link href="/" className={`mt-6 ${DISCOVER_LINK}`}>
+        <span aria-hidden="true" className="rtl:-scale-x-100">→</span>
+        {tEvent('discover')}
+      </Link>
+    </div>
+  );
+};
 
-const PastEmpty = () => (
-  <div className={`p-5 ${PROFILE_PANEL}`}>
-    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">No past events yet</p>
-    <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">The events you attend will appear here.</p>
-  </div>
-);
+const PastEmpty = () => {
+  const t = useTranslations('Profile');
+  return (
+    <div className={`p-5 ${PROFILE_PANEL}`}>
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('pastEmptyTitle')}</p>
+      <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{t('pastEmptyBody')}</p>
+    </div>
+  );
+};
 
 /* ------------------------------ Activity ----------------------------- */
 
@@ -104,6 +113,7 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
     }
     const [tab, setTab] = useState('going');
     const announceRsvp = useRsvpToast();
+    const t = useTranslations('Profile');
 
     const goingCount = events.filter((event) => event.has_user_rsvpd).length;
     const recent = past.slice(0, RECENT_LIMIT);
@@ -115,15 +125,16 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
 
     return (
       <div ref={ref} className={`space-y-6 ${className}`} {...props}>
-        <section aria-label="Your stats" className={`flex ${PROFILE_PANEL}`}>
-          <Stat icon={<StatCalendarIcon />} value={goingCount} label="Upcoming RSVPs" shortLabel="Upcoming" />
-          <Stat icon={<StatCheckIcon />} value={past.length} label="Events attended" shortLabel="Attended" />
+        <section aria-label={t('stats')} className={`flex ${PROFILE_PANEL}`}>
+          <Stat icon={<StatCalendarIcon />} value={goingCount} label={t('upcomingRsvps')} shortLabel={t('upcomingShort')} />
+          <Stat icon={<StatCheckIcon />} value={past.length} label={t('attended')} shortLabel={t('attendedShort')} />
           <Stat
             icon={<StatClubIcon />}
-            value={<span aria-label="not available yet">—</span>}
-            label="Clubs followed"
-            shortLabel="Clubs"
-            extra={<span className={profileChip('neutral')}>Coming soon</span>}
+            value={<span aria-label={t('notAvailable')}>—</span>}
+            label={t('clubsFollowed')}
+            shortLabel={t('clubsShort')}
+            extra={<span className={profileChip('neutral')}>{t('comingSoon')}</span>}
+            extraShort={t('comingSoon')}
           />
         </section>
 
@@ -132,16 +143,16 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
               <div className="min-w-0 flex-1">
                 <h2 id="profile-events" className="text-xl font-semibold leading-[30px] text-slate-900 dark:text-slate-100">
-                  Your events
+                  {t('yourEvents')}
                 </h2>
-                <p className="hidden text-sm text-slate-600 sm:block dark:text-slate-400">Good plans start here. See you on campus.</p>
+                <p className="hidden text-sm text-slate-600 sm:block dark:text-slate-400">{t('eventsTagline')}</p>
               </div>
-              <TabsList aria-label="Your events" className="w-full gap-1 sm:w-auto">
+              <TabsList aria-label={t('yourEvents')} className="w-full gap-1 sm:w-auto">
                 <TabsTrigger value="going" className={TAB_TRIGGER}>
-                  Going <span className={countChip(tab === 'going')}>{goingCount}</span>
+                  {t('going')} <span className={countChip(tab === 'going')}>{goingCount}</span>
                 </TabsTrigger>
                 <TabsTrigger value="went" className={TAB_TRIGGER}>
-                  Went to <span className={countChip(tab === 'went')}>{past.length}</span>
+                  {t('wentTo')} <span className={countChip(tab === 'went')}>{past.length}</span>
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -165,16 +176,12 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
         <section aria-labelledby="profile-recent" className="space-y-4 pt-2">
           <div className="flex items-center justify-between gap-4">
             <h2 id="profile-recent" className="text-lg font-semibold leading-[27px] text-slate-900 dark:text-slate-100">
-              Recently attended
+              {t('recent')}
             </h2>
             {past.length > 0 && (
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                <span className="sm:hidden">
-                  {recent.length} of {past.length}
-                </span>
-                <span className="hidden sm:inline">
-                  Latest {recent.length} of {past.length} {past.length === 1 ? 'event' : 'events'}
-                </span>
+                <span className="sm:hidden">{t('recentShort', { shown: recent.length, total: past.length })}</span>
+                <span className="hidden sm:inline">{t('recentLong', { shown: recent.length, total: past.length })}</span>
               </p>
             )}
           </div>

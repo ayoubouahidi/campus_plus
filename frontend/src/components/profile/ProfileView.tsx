@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { LogoutForm } from '@/components/auth/LogoutForm';
 import type { EventItem, User } from '@/types/api';
 import { getDateTiles, getEventSchedules } from '@/lib/time';
@@ -21,18 +21,19 @@ export interface ProfileViewProps extends React.HTMLAttributes<HTMLDivElement> {
 export const ProfileView = React.forwardRef<HTMLDivElement, ProfileViewProps>(
   ({ user, login, campus, upcoming, past, logoutAction, className = '', ...props }, ref) => {
     const all = [...upcoming, ...past];
-    const locale = useLocale(); // card dates in the active language (Step 12.3); the rest of /profile is 12.6
+    const locale = useLocale(); // dates in the active language (cards: Step 12.3, tiles: Step 12.6)
+    const t = useTranslations('Profile');
 
     return (
       <div ref={ref} className={`space-y-6 ${className}`} {...props}>
         <div className="flex items-center justify-between gap-4">
-          <p className="text-base font-medium text-slate-600 dark:text-slate-400">My profile</p>
+          <p className="text-base font-medium text-slate-600 dark:text-slate-400">{t('myProfile')}</p>
           <LogoutForm action={logoutAction} />
         </div>
 
         <ProfileHero user={user} login={login} campus={campus} />
 
-        <ProfileActivity upcoming={upcoming} past={past} schedules={getEventSchedules(all, locale)} dateTiles={getDateTiles(all)} />
+        <ProfileActivity upcoming={upcoming} past={past} schedules={getEventSchedules(all, locale)} dateTiles={getDateTiles(all, locale)} />
       </div>
     );
   }

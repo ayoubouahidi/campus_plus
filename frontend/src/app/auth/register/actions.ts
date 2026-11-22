@@ -27,7 +27,7 @@ async function createAccount(values: RegisterValues): Promise<SignupResult> {
     const created = addDevAccount({ email: values.email, password: values.password, full_name: `${values.first_name} ${values.last_name}` });
     return created
       ? { ok: true }
-      : { ok: false, state: { error: 'email-taken', fieldErrors: { email: 'This email already has an account.' } } };
+      : { ok: false, state: { error: 'email-taken', fieldErrors: { email: { key: 'emailTaken' } } } };
   }
 
   let res: Response;

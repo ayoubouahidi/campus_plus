@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { DEV_LOGIN_ENABLED, auth, signIn } from '@/auth';
 import { DevLoginForm } from '@/components/auth/DevLoginForm';
 import { EmailLoginForm } from '@/components/auth/EmailLoginForm';
@@ -44,6 +45,7 @@ export default async function LoginPage({
 
   // Already signed in (e.g. Back after logging in): nothing to do here.
   if (await auth()) redirect(next);
+  const t = await getTranslations('Auth');
 
   return (
     <LoginLayout>
@@ -51,17 +53,17 @@ export default async function LoginPage({
         action={signInWith42}
         next={next}
         error={getLoginErrorKind(params.error)}
-        notice={params.registered === '1' ? 'Your account was created. Log in with your email and password.' : null}
+        notice={params.registered === '1' ? t('registered') : null}
       >
         <LoginDivider />
         <EmailLoginForm action={signInWithEmail} next={next} />
         <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
-          No account and no 42?{' '}
+          {t('noAccount')}{' '}
           <Link
             href={registerHref(next)}
             className="rounded font-medium text-violet-700 underline underline-offset-2 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400 dark:hover:text-violet-300"
           >
-            Create an account
+            {t('createAccountLink')}
           </Link>
         </p>
         {DEV_LOGIN_ENABLED && <DevLoginForm action={signInWithDevLogin} next={next} />}

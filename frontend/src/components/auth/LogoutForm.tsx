@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useFormStatus } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { LogoutIcon } from '@/components/profile/profileIcons';
 
 export interface LogoutFormProps extends Omit<React.FormHTMLAttributes<HTMLFormElement>, 'action'> {
@@ -12,6 +13,7 @@ export interface LogoutFormProps extends Omit<React.FormHTMLAttributes<HTMLFormE
 // Figma "Button · Log out": 44px secondary button with the out-arrow icon.
 const LogoutSubmit = () => {
   const { pending } = useFormStatus(); // pending while the server action runs
+  const t = useTranslations('Auth');
   return (
     <button
       type="submit"
@@ -23,7 +25,7 @@ const LogoutSubmit = () => {
       ) : (
         <LogoutIcon className="rtl:-scale-x-100" />
       )}
-      {pending ? 'Logging out…' : 'Log out'}
+      {t(pending ? 'loggingOut' : 'logOut')}
     </button>
   );
 };
