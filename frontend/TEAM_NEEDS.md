@@ -155,6 +155,22 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 
 Still open but **not blocking the merge**: BE1 (club contact), BE2 (`/api/me/rsvps/`), BE9 (doc fix), BE10 (notifications in FR/AR), BE11 (club members). BE8 is answered.
 
+## 1e-bis. Ahmed's answers (Mouad, 2026-11-23, branch `feat/ahmed-final-requirements` at `236494f`, not merged into `Ahmed` yet)
+
+Thank you Ahmed: almost every row of §1e is answered.
+
+| # | Answer | Student site |
+| --- | --- | --- |
+| BE1 | ✅ `president_email` / `president_phone` in `GET /api/clubs/{slug}/` for signed-in users only (`Cache-Control: private, no-store`) | Nothing to change: the mapper already copies them when present |
+| BE2 | ✅ `GET /api/club-events/?rsvped=true` (signed in; past and upcoming; `attendees_preview` empty) instead of `/api/me/rsvps/` | `/profile` switches to it (small change, Mouad) |
+| BE3 | ✅ Docs say 1337 only. The 42 campus allow-list (`ALLOWED_42_CAMPUSES`) is still Ayoub's | Nothing |
+| BE4 | ✅ Django side: `DJANGO_PUBLIC_MEDIA_BASE_URL` builds image URLs from a public origin. **Hamza:** set it to the site's HTTPS origin (`https://localhost` locally, not the `http://localhost:8080` of `.env.example`) and serve `/media/` in nginx (already in `nginx.conf`) | Check images after the merge |
+| BE5 | ✅ Migration `core_data.0012` fills missing club slugs and makes them required; new clubs get a slug from their name | Nothing (the "no slug" guard stays, harmless) |
+| BE8 | ✅ Stored notifications (PR #5) | Done, DOCS §15.3 |
+| BE9 | ✅ Handoff fixed: `rsvps_count` is a real public count in broadcasts; `has_user_rsvpd` always false, `attendees_preview` always empty | Nothing: pages reload RSVP state from Django (DOCS §15.2) |
+| BE10 | ✅ `event_title` on notifications (REST and socket), kept after the event is deleted; null on older rows | Nothing: the bell already translates the sentence when `event_title` is there (DOCS §15.3) |
+| BE11 | ⏳ Not answered: "new event" notifications still go to club members only | Open question for Ahmed + Ayoub |
+
 ## 1e. Backend merge review (Mouad, 2026-11-22, branch `Ahmed` at `e04d4a3`, PR #4 `integration/ahmed-ayoub-final`)
 
 Ahmed and Ayoub merged accounts, dashboard, RSVP and realtime. **Thank you: most of what the student site waited for is there**, with our field names (`title`, `start_time`, `rsvps_count`, `has_user_rsvpd`, `attendees_preview`…). The student site now builds its data layer against this API (DOCS §14). What is still missing or different:
