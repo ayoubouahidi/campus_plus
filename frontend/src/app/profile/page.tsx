@@ -32,9 +32,8 @@ export default async function ProfilePage() {
   if (session.status !== 'signed-in') return null; // unreachable: the layout redirects first
   const authSession = await auth(); // 42 login + campus (not part of our User shape)
 
-  // Until Django has /api/me/rsvps/ (TEAM_NEEDS BE2): every event read with the student's token, kept where
-  // has_user_rsvpd is true. Correct, just heavier than a dedicated endpoint.
-  const { upcoming, past } = getMyEvents(await listEvents({}, await getBackendToken()), now);
+  // Only the student's RSVPs, past and upcoming (Django: ?rsvped=true, TEAM_NEEDS BE2), split at `now`.
+  const { upcoming, past } = getMyEvents(await listEvents({ rsvped: true }, await getBackendToken()), now);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">

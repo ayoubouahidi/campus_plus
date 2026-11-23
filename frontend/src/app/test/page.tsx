@@ -7,6 +7,9 @@ import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { LOCALE_INFO } from '@/i18n/config';
 import { hasBackend } from '@/lib/api/client';
 import { listClubs, listEvents } from '@/lib/data';
+import { getBackendToken } from '@/lib/api/token';
+import { getMyEvents } from '@/lib/events';
+import { getRequestTime } from '@/lib/requestTime';
 import { RealtimeMonitor } from './RealtimeMonitor';
 import { SessionSwitcher } from './SessionSwitcher';
 
@@ -37,6 +40,12 @@ export default async function TestPage() {
   const format = await getFormatter();
   const sampleDate = new Date('2026-11-13T17:00:00Z'); // hackathon opening, a fixed date (no hydration drift)
   const [liveEvents, liveClubs] = await Promise.all([listEvents(), listClubs()]);
+  // Step 16.1 check: the profile's RSVPs from ?rsvped=true vs the old way (every event, has_user_rsvpd).
+  const token = await getBackendToken();
+  const [rsvpedNew, rsvpedOld] = await Promise.all([listEvents({ rsvped: true }, token), listEvents({}, token)]);
+  const now = await getRequestTime();
+  const myNew = getMyEvents(rsvpedNew, now);
+  const myOld = getMyEvents(rsvpedOld, now);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -45,7 +54,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: ready for the next step (15.3 notifications are live in the navbar bell)</p>
+        <p className="font-semibold">Test page: Step 16.1, /profile reads ?rsvped=true</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -130,6 +139,21 @@ export default async function TestPage() {
               <>Mocks (no <code>BACKEND_URL</code>): {liveEvents.length} events and {liveClubs.length} clubs from lib/mockData.ts, the dev fallback.</>
             )}
           </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold">What to check (Step 16.1), signed in as student@1337.ma</h3>
+          <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
+            <li>
+              Your RSVPs, new way (<code>?rsvped=true</code>): <strong>{myNew.upcoming.length}</strong> upcoming,{' '}
+              <strong>{myNew.past.length}</strong> past ({myNew.upcoming.concat(myNew.past).map((e) => e.title).join(', ') || 'none'}). Old way
+              (every event, kept where you&apos;re going): <strong>{myOld.upcoming.length}</strong> upcoming, <strong>{myOld.past.length}</strong> past. Both must match.
+            </li>
+            <li>/profile: &quot;Going&quot; and &quot;Went to&quot; show the same events as before. RSVP to an event on the feed, then open /profile: it&apos;s there; cancel it: it&apos;s gone.</li>
+            <li>Signed out, this page says 0 / 0 and nothing breaks. With a dev login (no Django token) /profile shows empty lists, not an error.</li>
+            <li>Club page /clubs/leet-dev, signed in: the contact card now shows the president&apos;s email (Django sends it since Ahmed&apos;s BE1). Signed out: no contact.</li>
+            <li>New notifications (run <code>! docker compose exec -T frontend node /tmp/notify_demo.js 3</code>) now have the event&apos;s name, so in Français and العربية the sentence is translated too. Older ones stay in English.</li>
+          </ul>
         </div>
 
         <div>

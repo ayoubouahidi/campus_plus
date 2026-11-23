@@ -77,7 +77,8 @@ export const splitEventsByTime = (events: EventItem[], now: number): { upcoming:
   };
 };
 
-// The events the signed-in student RSVP'd to, split at `now` (/profile). Phase 7: GET /api/me/rsvps/ instead.
+// The events the signed-in student RSVP'd to, split at `now` (/profile). The list comes from listEvents({ rsvped:
+// true }); the filter stays as a guard (and for the mocks).
 export const getMyEvents = (events: EventItem[], now: number) =>
   splitEventsByTime(events.filter((event) => event.has_user_rsvpd), now);
 

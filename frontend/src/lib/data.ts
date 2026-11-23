@@ -27,6 +27,7 @@ const PAGE = 'page_size=200'; // Django's maximum (ClubEventPagination.max_page_
 export interface EventQuery {
   upcoming?: boolean; // only events that haven't ended (Django: ?upcoming=true)
   club?: string; // a club's slug
+  rsvped?: boolean; // only the signed-in student's RSVPs, past and upcoming (Django: ?rsvped=true, TEAM_NEEDS BE2)
 }
 
 // Mocks: every event; pages already filter by time (getUpcomingEvents, splitEventsByTime), so the result is the
@@ -34,11 +35,14 @@ export interface EventQuery {
 export const listEvents = cache(async (query: EventQuery = {}, token: string | null = null): Promise<EventItem[]> => {
   if (mocksOnly()) {
     const club = query.club ? mockClubs.find((item) => item.slug === query.club) : undefined;
-    return query.club ? mockEvents.filter((event) => event.club_id === club?.id) : mockEvents;
+    const events = query.club ? mockEvents.filter((event) => event.club_id === club?.id) : mockEvents;
+    return query.rsvped ? events.filter((event) => event.has_user_rsvpd) : events;
   }
+  if (query.rsvped && !token) return []; // Django answers 401: no token, no RSVPs (e.g. a dev login)
   const params = new URLSearchParams(PAGE);
   if (query.upcoming) params.set('upcoming', 'true');
   if (query.club) params.set('club', query.club);
+  if (query.rsvped) params.set('rsvped', 'true');
   const raws = await apiFetchAll<RawEvent>(`/api/club-events/?${params}`, { token });
   return raws.map(toEventItem);
 });

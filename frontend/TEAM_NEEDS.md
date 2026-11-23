@@ -344,8 +344,8 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | Web Minor: SSR (Next.js Server Components) | 1 | ✅ |
 | Web Minor: custom design system (≥10 components, palette, typography, icons) | 1 | ✅ 13 `ui/` components + tokens + `navIcons` (needs a showcase page) |
 | User Mgmt Minor: OAuth 2.0 (42) | 1 | ⚠️ frontend done; 42 keys + `/auth/sync` missing |
-| Web Major: real-time WebSockets | 2 | ⚠️ backend done (Ahmed); frontend Phase 6 |
-| Web Minor: notification system (all create/update/delete) | 1 | ⚠️ popover UI done; needs WebSockets + backend |
+| Web Major: real-time WebSockets | 2 | ✅ **Done (2026-11-22):** Ahmed's `/ws/calendar/` + the student site's live pages (DOCS §15.1–15.2). Show it on the merged stack |
+| Web Minor: notification system (all create/update/delete) | 1 | ✅ **Done (2026-11-23):** Ahmed's stored notifications (PR #5, `event_title` in his final branch) + the live bell (DOCS §15.3). ⚠️ BE11: "new event" only reaches club members |
 | Web Minor: advanced search (filters, sorting, **pagination**) | 1 | ⚠️ filters + ⌘K on mocks; sorting/pagination missing |
 | User Mgmt Major: advanced permissions (user CRUD, roles, views per role) | 2 | ⚠️ Ayoub: roles defined, superadmin user CRUD needed |
 | User Mgmt Major: organization system (clubs: create/edit/delete, add/remove members) | 2 | ⚠️ Ayoub dashboard (mock data) + Ahmed |

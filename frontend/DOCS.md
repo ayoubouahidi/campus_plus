@@ -4754,3 +4754,59 @@ const { notifications, unreadCount, markRead, markAllRead } = useNotifications(s
 - The seeded student is now a LEET Dev member (`UserMember.club_id`), so "new event" notifications reach them (seed script updated).
 - `live_demo.js` (15.2) now also gives the student one "New club event" notification, because the student is a LEET Dev member. It stays unread until it is read. The other steps notify nobody, because the student didn't RSVP.
 - Demo: `docker compose exec -T frontend node /tmp/notify_demo.js [seconds]`. It runs 7 steps that produce 9 notifications: new event, going, updated, cancelled, then a second event (new + going), RSVP cancelled + going again, removed.
+
+## 16. Ahmed's final backend answers (2026-11-23)
+
+Ahmed answered TEAM_NEEDS BE1–BE10 on branch `feat/ahmed-final-requirements` (`236494f`, not merged into `Ahmed` yet). The full list is in TEAM_NEEDS §1e-bis. Most answers need nothing from the student site; this section covers the ones that do.
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 16.1 | `/profile` reads `?rsvped=true`; local backend moved to Ahmed's branch (club contact and `event_title` checked) | ✅ validated 2026-11-23 |
+
+### 16.1 `/profile` reads the student's RSVPs directly (Step 16.1, 2026-11-23)
+
+**Files:**
+- `src/lib/data.ts`: `EventQuery.rsvped`;
+- `src/app/profile/page.tsx`: `listEvents({ rsvped: true }, token)`;
+- `src/lib/events.ts`: comment;
+- test: `src/app/test/page.tsx` compares the new way and the old way.
+
+**Status:** ✅ Validated by Mouad (2026-11-23). The president's contact stays on the club page only (decision: not on the event page). Signed in as the seeded student, against Ahmed's `236494f`:
+- **RSVPs:** the new and old ways give the same 3 events (2 upcoming, 1 past). `/profile` lists them under "Going" / "Went to".
+- **Club contact:** `/clubs/leet-dev` shows `board@1337.ma` signed in, and no contact signed out.
+- **Checks:** `tsc` passes, and ESLint shows the same 6 old findings.
+
+**Business purpose.** The profile lists "Going" and "Went to" from one request for the student's own RSVPs, instead of downloading every event on campus and keeping the student's. The answer stays fast as the number of events grows.
+
+**Core concepts & decisions.**
+- **One option on the existing data function**, not a new one. Django answers `GET /api/club-events/?rsvped=true` with the same event shape, pagination and order as the other lists, so `listEvents` gets an option, `rsvped`.
+  - `getMyEvents` still filters on `has_user_rsvpd` and splits at the request time. The filter is a guard (Django's answer is already filtered) and the way the mocks work.
+- **Without a Django token, no request.** `?rsvped=true` returns 401 without a token. A dev login with a backend set has no Django token, so `listEvents` returns `[]` and the profile shows empty lists instead of the error page.
+- **Attendee previews are empty** on this answer (Django leaves them out so other students' names aren't sent for nothing). The profile doesn't show them.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| `rsvped` option on `listEvents` | New `listMyEvents` function | Same endpoint, same mapping, same pagination: one more URL parameter, no copied code. |
+| Keep the `has_user_rsvpd` filter | Trust Django's filter only | Free, keeps the mocks working, and protects against a missing parameter. |
+
+**Contract.**
+```ts
+interface EventQuery { upcoming?: boolean; club?: string; rsvped?: boolean } // rsvped: needs a token, else []
+```
+
+**Usage.**
+```ts
+const { upcoming, past } = getMyEvents(await listEvents({ rsvped: true }, await getBackendToken()), now);
+```
+
+**Other answers checked locally** (no code change needed):
+- **BE1:** `president_email` arrives for signed-in requests only. `president_phone` is `""` when unset, which the mapper treats as absent.
+- **BE10:** notifications carry `event_title`, so new notifications get a fully translated sentence. Older rows have null and keep Django's English sentence (§15.3).
+- **BE4:** image URLs use `DJANGO_PUBLIC_MEDIA_BASE_URL`, set to `https://localhost` in the local override. No seeded club or event has an image yet, so images are still to check after the merge.
+
+**Local test wiring.**
+- Ahmed's backend was moved to `236494f`, with `DJANGO_PUBLIC_MEDIA_BASE_URL: https://localhost` added to `docker-compose.override.yml`, then rebuilt.
+- The new migrations (`core_data.0012`, `notifications.0002`) ran automatically on start.
+- The network was re-wired as in §15.3 (gotcha: a rebuild drops the `web` / `ahmed-web` names).
