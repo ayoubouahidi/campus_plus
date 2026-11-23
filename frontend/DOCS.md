@@ -5530,3 +5530,33 @@ Adding `remotePatterns` wouldn't be enough, for two reasons:
 3. Why must a render never call `Date.now()`? Where does the bell take its time now?
 4. Why did the first event with a flyer crash the feed, and why wasn't `remotePatterns` the right fix?
 5. When is a plain `<img>` the better choice than `next/image`?
+
+## 21. Finishing the profile (2026-11-23)
+
+The profile (`/profile`, §7.7–7.8) had three placeholders from the Figma design: "Edit profile · Soon", "Change photo · Soon" and a "Clubs followed · Coming soon" stat. Backend needs for the two buttons are in TEAM_NEEDS §1h (BE12, BE16–BE18).
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 21.1 | Remove the campus chip and the "Clubs" stat (decision) | ✅ done 2026-11-23 |
+| 21.2 | Edit profile: phone number, validated in the browser and by Django (`PATCH /api/me/`) | ⏳ next |
+| 21.3 | Change photo: picker, type/size checks, preview, progress, delete (file upload module) | ⏳ needs BE16 |
+
+### 21.1 No club and no campus on the profile (2026-11-23)
+
+**Decision (Mouad):** the profile doesn't show which club a student belongs to or which campus they come from.
+
+**Removed:**
+- **The campus chip** next to the role (the 42 campus name, e.g. "Benguerir"). `ProfileHero` and `ProfileView` lost their `campus` prop, and `/profile` no longer passes it.
+- **The third stat**, "Clubs followed — Coming soon". The stat row now has two: "Upcoming RSVPs" and "Attended". `Stat` lost its `extra` / `extraShort` props, which only that stat used.
+- **The messages** `Profile.clubsFollowed`, `clubsShort`, `notAvailable` and `comingSoon`, in the 3 languages.
+
+**Kept on purpose:**
+- **The campus in the login data** (`src/auth.ts`). Login uses it (1337-only check, `/auth/sync`); it's just no longer displayed.
+- **The "1337 Coding School" line in the phone banner**: the school's name, the same for everyone.
+- **`StatClubIcon`**, still listed among the icons of `/design-system`.
+
+**Effect on the backend requests:** the club-membership requests for the profile (BE13–BE15: see and cancel join requests, leave a club, decision notifications) were dropped in TEAM_NEEDS §1h.
+
+**Verified:**
+- `/profile` signed in shows the role chip, the email and the two stats; no campus, no clubs stat.
+- `tsc` passes; ESLint shows 0 problems.

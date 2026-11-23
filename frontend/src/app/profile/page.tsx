@@ -30,7 +30,7 @@ export default async function ProfilePage() {
 
   const session = await getSessionState();
   if (session.status !== 'signed-in') return null; // unreachable: the layout redirects first
-  const authSession = await auth(); // 42 login + campus (not part of our User shape)
+  const authSession = await auth(); // 42 login (not part of our User shape)
 
   // Only the student's RSVPs, past and upcoming (Django: ?rsvped=true, TEAM_NEEDS BE2), split at `now`.
   const { upcoming, past } = getMyEvents(await listEvents({ rsvped: true }, await getBackendToken()), now);
@@ -40,7 +40,6 @@ export default async function ProfilePage() {
       <ProfileView
         user={session.user}
         login={authSession?.user.login ?? null}
-        campus={authSession?.user.campus ?? null}
         upcoming={upcoming}
         past={past}
         logoutAction={logout}

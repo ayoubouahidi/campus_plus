@@ -7,7 +7,6 @@ import { PROFILE_PANEL, profileChip, type ProfileChipTone } from './profileStyle
 export interface ProfileHeroProps extends React.HTMLAttributes<HTMLElement> {
   user: User;
   login: string | null; // 42 login → "@mnajjar"
-  campus: string | null; // 42 campus → chip
   memberSince?: string | null; // "September 2024" once Django sends it (/api/me/); hidden when null
 }
 
@@ -17,12 +16,12 @@ const ROLE_TONES: Record<UserRole, ProfileChipTone> = { STUDENT: 'violet', BOARD
 const SOON_BUTTON =
   'inline-flex h-11 cursor-not-allowed items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
 
-// Figma "ProfileHero": violet gradient banner, 104px avatar overlapping it, name (the page h1), @login + role +
-// campus chips, email, member since; "Edit profile / Change photo · Soon" on the right (under, on phones).
+// Figma "ProfileHero": violet gradient banner, 104px avatar overlapping it, name (the page h1), @login + role chip,
+// email, member since. No campus chip and no club (Mouad's decision, 2026-11-23, DOCS.md §21.1); "Edit profile / Change photo · Soon" on the right (under, on phones).
 // Server Component. Arabic: everything mirrors with logical classes (ps-/pe-/start-), the avatar included, and
 // the banner gradient runs the other way (rtl:bg-gradient-to-l). Role labels: Profile.roles.<UserRole>.
 export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
-  ({ user, login, campus, memberSince = null, className = '', ...props }, ref) => {
+  ({ user, login, memberSince = null, className = '', ...props }, ref) => {
     const t = useTranslations('Profile');
     return (
       <header ref={ref} className={`relative overflow-hidden ${PROFILE_PANEL} ${className}`} {...props}>
@@ -59,7 +58,6 @@ export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
                 </span>
               )}
               <span className={profileChip(ROLE_TONES[user.role])}>{t(`roles.${user.role}`)}</span>
-              {campus && <span className={profileChip('neutral')}>{campus}</span>}
             </div>
             {user.email && <p className="truncate text-sm text-slate-600 dark:text-slate-400">{user.email}</p>}
             {memberSince && <p className="text-xs text-slate-500 dark:text-slate-500">{t('memberSince', { date: memberSince })}</p>}

@@ -156,6 +156,32 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 
 Still open but **not blocking the merge**: BE1 (club contact), BE2 (`/api/me/rsvps/`), BE9 (doc fix), BE10 (notifications in FR/AR), BE11 (club members). BE8 is answered.
 
+## 1h. Profile page: what the backend must add (Mouad, 2026-11-23)
+
+The student profile (`/profile`) still has two "Soon" placeholders: **Edit profile** and **Change photo**. **Decision (Mouad, 2026-11-23): the profile shows neither the student's club nor their campus.** The "Clubs" stat and the campus chip were removed (DOCS §21.1), so no club-membership work is requested for the profile. Checked against `feat/ahmed-final-requirements` (`792ac56`):
+
+| Placeholder | Backend today |
+|---|---|
+| Edit profile | `PATCH /api/me/` changes the **phone only**, and accepts any text up to 30 characters |
+| Change photo | **No endpoint.** `avatar_url` is only the 42 link, rewritten at every 42 login |
+
+The frontend builds each part as soon as its endpoint exists (Edit profile starts now, against what's already there). Please answer under each row or in the team chat.
+
+| # | Who | What we need (contract) | Why |
+|---|---|---|---|
+| BE12 | Ayoub | **Validate the phone on `PATCH /api/me/`.** Accept Moroccan numbers, `+2126XXXXXXXX` / `+2127XXXXXXXX` or `06…` / `07…` (10 digits), spaces allowed; store them normalized as `+212XXXXXXXXX`; `""` clears the number. Invalid → **400** `{"phone": ["Enter a valid Moroccan mobile number."]}` (DRF field-error shape) | Subject (mandatory): every form is validated in the frontend **and** the backend. Today `"abc"` is saved as a phone number. The student site applies the same rule in the browser |
+| BE13 | — | ~~Student club join requests (see / cancel)~~ **Dropped:** the profile doesn't show clubs (decision above) | — |
+| BE14 | — | ~~Leave a club~~ **Dropped** (same decision) | — |
+| BE15 | — | ~~Notify join decisions~~ **Dropped** (same decision) | — |
+| BE16 | Ayoub (+ Ahmed for media) | **Profile photo upload (file upload module, 1 pt):** `POST /api/me/avatar/` multipart field `file`. Accept JPEG, PNG and WebP only, **≤ 2 MB**. **Check the real content** (Pillow `verify()`, not just the extension or `Content-Type`), resize to ≤ 512 × 512, strip metadata (EXIF can contain GPS), store under `/media/avatars/`, set `avatar_url` to the public media URL (`DJANGO_PUBLIC_MEDIA_BASE_URL`), return the user (`UserSerializer`). Errors **400** `{"file": ["…"]}`, too big **413**. `DELETE /api/me/avatar/` removes the file and falls back to the 42 picture (or `""`), returns the user. Allow 2 MB through nginx (`client_max_body_size 10m` already covers it) | The module asks for type and size validation, preview, progress and delete. The frontend does the browser side (picker, checks, preview, progress bar, delete); the server **must** re-check, or anyone can upload anything with a renamed file |
+| BE17 | Ayoub | **Don't overwrite an uploaded photo on 42 login:** `/auth/sync` sets `user.avatar_url = imageUrl` at **every** login (accounts/views.py). Keep a flag (`avatar_is_custom`) or a separate `uploaded_avatar` field, and only copy the 42 picture when the student has none of their own | Otherwise a student's uploaded photo disappears the next time they log in with 42 |
+| BE18 | Ayoub | *(Optional)* **Edit the name for email accounts:** `PATCH /api/me/` with `first_name` / `last_name` (1–150 characters, letters, spaces, `-` and `'`), refused (**403**) for 42 accounts, whose name comes from 42 | Students who signed up with email and made a typo can't fix their name today |
+
+**What the student site does meanwhile:**
+- Edit profile (phone, browser-side validation with the BE12 rule) is built now.
+- The profile reads `/api/me/` on the server, so a change shows at once (the login cookie keeps the values from login time).
+- The photo upload is built behind a `hasAvatarUpload` switch and turned on when BE16 is merged.
+
 ## 1g. Review of `Developer` (Hamza) and Ahmed's BE11 answer (Mouad, 2026-11-23)
 
 ### Ahmed: `feat/ahmed-final-requirements` at `792ac56`, BE11 answered ✅

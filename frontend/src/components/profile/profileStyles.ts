@@ -1,4 +1,5 @@
-// Small tinted chips used across the profile (Figma "Badge · Student / Benguerir / Attended / Coming soon").
+// Small tinted chips used across the profile (Figma "Badge · Student / Attended"). The campus chip and the
+// "Coming soon" clubs stat were removed (DOCS.md §21.1).
 // Not the Badge primitive: its status/category colours don't include the violet "role" tint from the design.
 export type ProfileChipTone = 'violet' | 'neutral' | 'emerald';
 

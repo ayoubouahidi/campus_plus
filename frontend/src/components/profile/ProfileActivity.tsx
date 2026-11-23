@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useRsvp, type UpdateEvent } from '@/hooks/useRsvp';
 import type { DateTile, EventSchedule } from '@/lib/time';
 import { AttendedEventList } from './AttendedEventList';
-import { StatCalendarIcon, StatCheckIcon, StatClubIcon } from './profileIcons';
-import { PROFILE_PANEL, profileChip } from './profileStyles';
+import { StatCalendarIcon, StatCheckIcon } from './profileIcons';
+import { PROFILE_PANEL } from './profileStyles';
 
 export interface ProfileActivityProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   // getMyEvents on the server: RSVP'd events split at the request time.
@@ -30,12 +30,10 @@ interface StatProps {
   value: React.ReactNode;
   label: string; // desktop label
   shortLabel: string; // phone label
-  extra?: React.ReactNode; // "Coming soon"
-  extraShort?: string; // the same note on phones, under the label
 }
 
 // Desktop: icon tile + value + label in a row. Phone: centered value over a short label (Figma phone frame).
-const Stat = ({ icon, value, label, shortLabel, extra, extraShort }: StatProps) => (
+const Stat = ({ icon, value, label, shortLabel }: StatProps) => (
   <div className="flex flex-1 flex-col items-center gap-1 px-2 py-5 text-center sm:flex-row sm:gap-2 sm:px-6 sm:text-start">
     <span className="hidden size-11 shrink-0 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600 sm:flex dark:bg-violet-500/10 dark:text-violet-400">
       {icon}
@@ -43,13 +41,11 @@ const Stat = ({ icon, value, label, shortLabel, extra, extraShort }: StatProps) 
     <div className="min-w-0">
       <div className="flex items-center justify-center gap-2 sm:justify-start">
         <span className="text-2xl font-semibold leading-9 text-slate-900 dark:text-slate-100">{value}</span>
-        {extra && <span className="hidden sm:inline-flex">{extra}</span>}
       </div>
       <p className="text-[13px] leading-5 text-slate-600 dark:text-slate-400">
         <span className="sm:hidden">{shortLabel}</span>
         <span className="hidden sm:inline">{label}</span>
       </p>
-      {extraShort && <p className="text-[11px] text-slate-500 sm:hidden dark:text-slate-500">{extraShort}</p>}
     </div>
   </div>
 );
@@ -127,14 +123,6 @@ export const ProfileActivity = React.forwardRef<HTMLDivElement, ProfileActivityP
         <section aria-label={t('stats')} className={`flex ${PROFILE_PANEL}`}>
           <Stat icon={<StatCalendarIcon />} value={goingCount} label={t('upcomingRsvps')} shortLabel={t('upcomingShort')} />
           <Stat icon={<StatCheckIcon />} value={past.length} label={t('attended')} shortLabel={t('attendedShort')} />
-          <Stat
-            icon={<StatClubIcon />}
-            value={<span aria-label={t('notAvailable')}>—</span>}
-            label={t('clubsFollowed')}
-            shortLabel={t('clubsShort')}
-            extra={<span className={profileChip('neutral')}>{t('comingSoon')}</span>}
-            extraShort={t('comingSoon')}
-          />
         </section>
 
         <section aria-labelledby="profile-events" className="pt-2">
