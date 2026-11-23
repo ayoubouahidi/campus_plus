@@ -5745,3 +5745,72 @@ The subject requires the site to work for **many users at the same time, without
 3. Why must "RSVP" be idempotent, and what makes it so (database + frontend)?
 4. How does a notification reach only its own student?
 5. How do we know Next.js never shows one student's data to another under load?
+
+## 23. Form validation audit (mandatory item, 2026-11-23)
+
+The subject requires **every form to be validated in the frontend and in the backend**. This step checks each form of the student site at the three layers a value goes through:
+1. the browser, before sending;
+2. our server action, which is a public endpoint, so it checks again;
+3. Django, the final authority.
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 23.1 | Audit of the 6 inputs; sign-up without the club field; two password rules; RSVP action input guard; Django gaps requested (BE19, BE20) | ✅ validated 2026-11-23 |
+
+### 23.1 The audit (2026-11-23)
+
+**Files:**
+- `src/lib/register.ts`: no `club_id`; `isTooSimilar`; two new rules.
+- `src/lib/login.ts`: `ValidationKey` gets `passwordAllDigits` and `passwordTooSimilar`.
+- `src/components/auth/RegisterForm.tsx`: no club select, no school state.
+- `src/app/auth/register/{page,actions}.tsx|ts`: no clubs loaded, no `club_id` sent.
+- `src/app/events/actions.ts`: input guard.
+- The 3 message files: two `Validation` messages added, four `Auth.club…` messages removed.
+- `/test`.
+
+**Status:** 🧪 Checks run (below). `tsc` passes, ESLint 0 problems. Waiting for Mouad's check of the sign-up page.
+
+#### 1. Results, input by input
+
+| Input | Browser | Our server action | Django | Verdict |
+|---|---|---|---|---|
+| **Email login** (`/auth/login`) | Email required + format, password required (`validateEmailLogin`) | Same rules (`signInWithEmail`), one message for "wrong email or password" (doesn't reveal which emails exist) | `EmailField` + credentials | ✅ Both sides. Brute-force limit: nginx rule needed on `/api/auth/callback/` (TEAM_NEEDS H5) |
+| **Sign-up** (`/auth/register`) | Names required, ≤ 150; email format; password 8–128, **not only digits, not containing the name or email** (new); confirmation matches; year 1–7; school chosen | Same function (`validateRegistration`) on the submitted form data | Names ≤ 150; `EmailField` + unique (case-insensitive); password **≥ 8 only**; year 1–7; school exists | ⚠️ Our two layers are complete. Django accepts `12345678` (**BE19**) and a `club_id` (**BE20**), both proven with real requests |
+| **Phone number** (`/profile`, §21.2) | Moroccan mobile rule (`normalizePhone`) | Same rule; non-text refused | Max 30 characters only | ⚠️ Our two layers complete; Django's own rule requested (**BE12**) |
+| **Search** (`/search`, §18) | `maxLength=200` on the field; selects offer only valid values | `parseSearchParams`: every value checked, unknown → default; club checked against the real list | `search` ≤ 200, exact category / club / status, bad values → 400 (never reached) | ✅ |
+| **Language switcher** | 3 fixed choices | `setLocale` accepts only `en`, `fr`, `ar`; anything else is ignored | — (cookie only) | ✅ |
+| **RSVP** (cards, event page) | — (a button) | **New:** event id must look like an id, `going` must be a real boolean, else "not found" | Event exists (404), capacity (409), one RSVP per student (unique constraint), signed in (401) | ✅ |
+
+#### 2. Sign-up: the club field is gone (Mouad's decision)
+
+- **The problem:** the form had an optional "Club" choice. Django's `SignupSerializer` makes the new account a **member** of that club on the spot. No board approval, unlike the join requests of Ayoub's dashboard. It also contradicts the decision that the profile shows no club (§21.1).
+- **Proof:** a sign-up request with `club_id: 1` gave 201, and the new account's `UserMember.club_id` was 1 (LEET Dev). The test account was deleted.
+- **Change:** the form, its values, the server action and the page no longer have or send a club. The clubs list isn't even loaded for the sign-up page any more.
+- **Django:** BE20 asks Ayoub to remove the field, so a hand-made request can't do it either.
+
+#### 3. Passwords: two of Django's rules, mirrored
+
+Django has built-in validators (`AUTH_PASSWORD_VALIDATORS`): common passwords, only digits, similarity to the user, minimum length. But `SignupSerializer` doesn't call them; it only checks `min_length=8`. **Proof:** `12345678` → 201. BE19 asks Ayoub to call `validate_password`.
+
+Meanwhile our two layers apply the two cheapest rules:
+
+| Rule | Example refused | Message (en) |
+|---|---|---|
+| Not only digits | `12345678` | "Use letters too, not only numbers." |
+| Doesn't contain the first name, last name, or a part of the email before `@` (parts of ≥ 3 letters, any case) | `salma2026!`, `xIDRISSIx99`, `idrissi.2026` | "Don't use your name or email in your password." |
+
+`Al-pass-word-9` is accepted: parts shorter than 3 letters ("Al") are ignored, because they're too common to forbid. The common-passwords list (20,000 entries) stays Django's job; shipping it to the browser would be heavy.
+
+**Verified:** the real `register.ts`, compiled with TypeScript and run in Node, gives the table above. The form values have no `club_id`. The sign-up page has no `club_id` field and still has the school.
+
+#### 4. The RSVP action guard
+
+`rsvpAction(eventId, going)` is a server action, so anyone can call it with any arguments, not only our buttons. Before, a non-string id or a non-boolean `going` reached the Django request: the string `"false"` is truthy and would have meant "going". Now the id must match `^[\w-]{1,64}$` and `going` must be a boolean, or the answer is "not found" without calling Django.
+
+#### 5. Study questions
+
+1. Why isn't browser validation enough, even when every form has it?
+2. Why is a server action called "a public endpoint"?
+3. What could a student do with `club_id` in the sign-up request, and how was it fixed on each side?
+4. Which password rules run in the browser, and which should stay on the server (and why)?
+5. Why does the login form show one message for "wrong email" and "wrong password"?

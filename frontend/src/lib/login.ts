@@ -67,6 +67,8 @@ export type ValidationKey =
   | 'passwordChoose'
   | 'passwordTooShort'
   | 'passwordTooLong'
+  | 'passwordAllDigits'
+  | 'passwordTooSimilar'
   | 'passwordConfirmRequired'
   | 'passwordMismatch'
   | 'firstNameRequired'

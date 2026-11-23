@@ -27,9 +27,8 @@ export interface RegisterFormProps extends Omit<React.FormHTMLAttributes<HTMLFor
   // The register page passes registerWithEmail; /test passes a wrapper with extra fake cases.
   action: (previous: RegisterState, formData: FormData) => Promise<RegisterState>;
   next: string; // already cleaned with safeNextPath()
-  // From the server (Phase 7: GET /api/departments/ and /api/clubs/). Plain data, so this stays serializable.
+  // From the server (GET /api/departments/). Plain data, so this stays serializable.
   departments: { id: string; name: string }[];
-  clubs: { id: string; name: string; department_id: string }[];
 }
 
 const linkStyles =
@@ -39,21 +38,19 @@ const linkStyles =
 
 // Email sign-up (Step 11.2). Same pattern as EmailLoginForm: checked in the browser on submit (messages under
 // the fields, focus on the first wrong one, nothing posted), then again on the server. After a failed attempt
-// every field keeps its value except the two passwords. The club list follows the chosen school.
+// every field keeps its value except the two passwords. No club field (DOCS.md §23).
 export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>(
-  ({ action, next, departments, clubs, className = '', onSubmit, ...props }, ref) => {
+  ({ action, next, departments, className = '', onSubmit, ...props }, ref) => {
     const [state, formAction, isPending] = useActionState(action, REGISTER_INITIAL_STATE);
     const [clientErrors, setClientErrors] = useState<RegisterFieldErrors>({});
-    // One school today (1337 only, DOCS.md §13): it is chosen for the student, so its clubs show right away.
+    // One school today (1337 only, DOCS.md §13): it is chosen for the student.
     const onlyDepartment = departments.length === 1 ? departments[0].id : '';
-    const [departmentId, setDepartmentId] = useState(state.values.department_id || onlyDepartment);
     const formRef = useRef<HTMLFormElement | null>(null);
 
     const fieldErrors = Object.keys(clientErrors).length > 0 ? clientErrors : state.fieldErrors;
     const t = useTranslations('Auth');
     const errorText = useFieldError();
     const values = state.values;
-    const departmentClubs = clubs.filter((club) => club.department_id === departmentId);
 
     const setRefs = (node: HTMLFormElement | null) => {
       formRef.current = node;
@@ -177,29 +174,10 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
             options={departments.map((department) => ({ value: department.id, label: department.name }))}
             defaultValue={values.department_id || onlyDepartment}
             error={errorText(fieldErrors.department_id)}
-            onChange={(event) => {
-              setDepartmentId(event.target.value);
-              clearError('department_id')();
-            }}
+            onChange={clearError('department_id')}
             required
           />
         </div>
-
-        {/* key: a new school resets the club to "No club" (its clubs are different). */}
-        <Select
-          key={departmentId}
-          name="club_id"
-          label={t('club')}
-          options={[
-            { value: '', label: t(departmentId ? 'noClub' : 'chooseSchoolFirst') },
-            ...departmentClubs.map((club) => ({ value: club.id, label: club.name })),
-          ]}
-          defaultValue={departmentClubs.some((club) => club.id === values.club_id) ? values.club_id : ''}
-          helperText={t('clubHelp')}
-          disabled={!departmentId || departmentClubs.length === 0}
-          error={errorText(fieldErrors.club_id)}
-          onChange={clearError('club_id')}
-        />
 
         <Button type="submit" isLoading={isPending} className="w-full">
           {t(isPending ? 'creating' : 'create')}

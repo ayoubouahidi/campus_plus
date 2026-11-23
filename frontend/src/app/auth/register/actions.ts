@@ -43,7 +43,6 @@ async function createAccount(values: RegisterValues): Promise<SignupResult> {
         password: values.password,
         year_of_study: Number(values.year_of_study),
         department_id: values.department_id,
-        club_id: values.club_id || null,
       }),
       cache: 'no-store',
     });

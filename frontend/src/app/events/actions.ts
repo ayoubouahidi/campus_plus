@@ -11,6 +11,11 @@ import type { RsvpError, RsvpResult } from '@/lib/rsvp';
 // screen needs (the real count after success; an error kind, plus the real count when Django sent one).
 export async function rsvpAction(eventId: string, going: boolean): Promise<RsvpResult> {
   if ((await getSessionState()).status !== 'signed-in') return { ok: false, error: 'signed-out' };
+  // A server action is a public endpoint (DOCS.md §23): refuse what our cards never send. Event ids are Django's
+  // numeric ids (mock ids in dev); `going` must be a real boolean, not a truthy string like "false".
+  if (typeof eventId !== 'string' || !/^[\w-]{1,64}$/.test(eventId) || typeof going !== 'boolean') {
+    return { ok: false, error: 'not-found' };
+  }
 
   // Dev without BACKEND_URL: nothing to save, the screen keeps its optimistic state (as before Step 14.3).
   if (mocksOnly()) return { ok: true, state: null };

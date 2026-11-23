@@ -11,7 +11,8 @@ export interface RegisterValues {
   password_confirm: string; // ours only: never sent to Django
   year_of_study: string; // a <select> value; sent as a number
   department_id: string;
-  club_id: string; // '' = no club
+  // No club field (Mouad's decision, 2026-11-23, DOCS.md §23): Django would make the student a member with no
+  // board approval. Clubs are joined through the board, never at sign-up.
 }
 
 export type RegisterField = keyof RegisterValues;
@@ -37,7 +38,6 @@ export const EMPTY_REGISTER_VALUES: RegisterPublicValues = {
   email: '',
   year_of_study: '',
   department_id: '',
-  club_id: '',
 };
 
 export const REGISTER_INITIAL_STATE: RegisterState = { error: null, fieldErrors: {}, values: EMPTY_REGISTER_VALUES };
@@ -62,7 +62,6 @@ export const readRegisterForm = (formData: FormData): RegisterValues => {
     password_confirm: text('password_confirm'),
     year_of_study: text('year_of_study'),
     department_id: text('department_id'),
-    club_id: text('club_id'),
   };
 };
 
@@ -73,8 +72,20 @@ export const toPublicValues = (values: RegisterValues): RegisterPublicValues => 
   email: values.email,
   year_of_study: values.year_of_study,
   department_id: values.department_id,
-  club_id: values.club_id,
 });
+
+// The two password rules of Django's own validators that are cheap to mirror (Step 23.1, DOCS.md §23): not
+// only digits (NumericPasswordValidator), and not containing the student's name or the start of their email
+// (a simple form of UserAttributeSimilarityValidator). Parts shorter than 3 letters are ignored ("Al" is too
+// common to forbid). Django should run its full validators too (TEAM_NEEDS BE19).
+const SIMILARITY_MIN = 3;
+const isTooSimilar = ({ password, first_name, last_name, email }: RegisterValues): boolean => {
+  const lowered = password.toLowerCase();
+  const parts = [first_name, last_name, email.split('@')[0] ?? '']
+    .flatMap((part) => part.toLowerCase().split(/[\s._+-]+/))
+    .filter((part) => part.length >= SIMILARITY_MIN);
+  return parts.some((part) => lowered.includes(part));
+};
 
 // Messages say what to do. Order = form order, so the first error is the first field to fix.
 export const validateRegistration = (values: RegisterValues): RegisterFieldErrors => {
@@ -91,6 +102,8 @@ export const validateRegistration = (values: RegisterValues): RegisterFieldError
   if (!values.password) errors.password = { key: 'passwordChoose' };
   else if (values.password.length < PASSWORD_MIN_LENGTH) errors.password = { key: 'passwordTooShort', values: { min: PASSWORD_MIN_LENGTH } };
   else if (values.password.length > PASSWORD_MAX_LENGTH) errors.password = { key: 'passwordTooLong', values: { max: PASSWORD_MAX_LENGTH } };
+  else if (/^\d+$/.test(values.password)) errors.password = { key: 'passwordAllDigits' };
+  else if (isTooSimilar(values)) errors.password = { key: 'passwordTooSimilar' };
   if (!values.password_confirm) errors.password_confirm = { key: 'passwordConfirmRequired' };
   else if (values.password && values.password_confirm !== values.password) errors.password_confirm = { key: 'passwordMismatch' };
 
@@ -108,7 +121,6 @@ export const REGISTER_FIELD_ORDER: readonly RegisterField[] = [
   'password_confirm',
   'year_of_study',
   'department_id',
-  'club_id',
 ];
 
 export const firstErrorField = (errors: RegisterFieldErrors): RegisterField | undefined =>
@@ -117,7 +129,7 @@ export const firstErrorField = (errors: RegisterFieldErrors): RegisterField | un
 // Django REST Framework 400 body → our field errors. DRF sends { field: ["message", …] } and
 // { non_field_errors: [...] }. Django's messages are shown as Django wrote them ({ text }), except an email
 // "already exists" message, which becomes the email-taken state with our translated wording.
-const DJANGO_FIELDS: readonly RegisterField[] = ['first_name', 'last_name', 'email', 'password', 'year_of_study', 'department_id', 'club_id'];
+const DJANGO_FIELDS: readonly RegisterField[] = ['first_name', 'last_name', 'email', 'password', 'year_of_study', 'department_id'];
 
 export const fromDjangoErrors = (body: unknown): { error: RegisterError; fieldErrors: RegisterFieldErrors } => {
   const fieldErrors: RegisterFieldErrors = {};

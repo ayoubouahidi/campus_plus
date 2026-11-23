@@ -45,7 +45,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: ready for the next step (Edit profile is live on /profile)</p>
+        <p className="font-semibold">Test page: Step 23.1, form validation audit (sign-up)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -130,6 +130,16 @@ export default async function TestPage() {
               <>Mocks (no <code>BACKEND_URL</code>): {liveEvents.length} events and {liveClubs.length} clubs from lib/mockData.ts, the dev fallback.</>
             )}
           </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold">What to check (Step 23.1): <Link href="/auth/register" className="underline underline-offset-2">/auth/register</Link>, signed out</h3>
+          <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
+            <li>No &quot;Club&quot; field any more: name, email, password, confirm, year, school (already chosen: 1337).</li>
+            <li>Password <code>12345678</code> → &quot;Use letters too, not only numbers.&quot; Your first name, last name or the start of your email inside the password (any case) → &quot;Don&apos;t use your name or email in your password.&quot; Nothing is sent.</li>
+            <li><code>Campus-Hub-2026</code> with a new email creates the account and logs you in (it lands in Django; delete it afterwards or keep it as a test account).</li>
+            <li>Français / العربية: the two new messages are translated.</li>
+          </ul>
         </div>
 
         <div>

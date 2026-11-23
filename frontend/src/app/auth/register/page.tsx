@@ -6,7 +6,7 @@ import { LoginLayout } from '@/components/auth/LoginLayout';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 import { RegisterPanel } from '@/components/auth/RegisterPanel';
 import { safeNextPath } from '@/lib/login';
-import { listClubs, listDepartments } from '@/lib/data';
+import { listDepartments } from '@/lib/data';
 import { registerWithEmail } from './actions';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,14 +30,14 @@ export default async function RegisterPage({
   // Already signed in: no second account.
   if (await auth()) redirect(next);
 
-  // Django's departments and clubs (or the mocks in dev, lib/data.ts). Only what the form needs is sent.
+  // Django's departments (or the mocks in dev, lib/data.ts). Only what the form needs is sent. No clubs: sign-up
+  // has no club field (DOCS.md §23).
   const departments = (await listDepartments()).map(({ id, name }) => ({ id, name }));
-  const clubs = (await listClubs()).map(({ id, name, department_id }) => ({ id, name, department_id }));
 
   return (
     <LoginLayout>
       <RegisterPanel next={next}>
-        <RegisterForm action={registerWithEmail} next={next} departments={departments} clubs={clubs} />
+        <RegisterForm action={registerWithEmail} next={next} departments={departments} />
       </RegisterPanel>
     </LoginLayout>
   );
