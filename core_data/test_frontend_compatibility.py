@@ -1,7 +1,7 @@
 from datetime import datetime, time, timezone
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from drf_spectacular.generators import SchemaGenerator
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.request import Request
@@ -48,6 +48,7 @@ class FrontendEventCompatibilityTests(SimpleTestCase):
             capacity=150,
         )
 
+    @override_settings(PUBLIC_MEDIA_BASE_URL='')
     def test_event_shape_preserves_frontend_aliases_and_original_fields(self):
         request = APIRequestFactory().get('/api/club-events/3/')
         data = ClubEventSerializer(
