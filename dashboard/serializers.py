@@ -59,7 +59,7 @@ class BoardMemberSerializer(serializers.ModelSerializer):
         return obj.username
 
     def get_status(self, obj):
-        return "active" if not obj.user or obj.user.is_active else "inactive"
+        return "active" if obj.user and obj.user.is_active else "inactive"
 
 
 class OrganizationAdminSerializer(serializers.ModelSerializer):
