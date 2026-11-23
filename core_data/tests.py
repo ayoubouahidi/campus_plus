@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from PIL import Image
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.request import Request
@@ -97,6 +97,7 @@ class ClubEventPublicReadSerializerTests(SimpleTestCase):
         self.assertEqual(data['ends_at'], '2026-11-23T09:00:00Z')
         self.assertEqual(data['status'], 'planned')
 
+    @override_settings(PUBLIC_MEDIA_BASE_URL='')
     def test_flyer_url_is_absolute_when_request_is_available(self):
         self.event.image_path = 'events_pics/flyer.webp'
         request = APIRequestFactory().get('/api/club-events/3/')
@@ -763,6 +764,7 @@ class PublicClubSerializerTests(SimpleTestCase):
         self.club.event_count = 24
         self.club.upcoming_event_count = 3
 
+    @override_settings(PUBLIC_MEDIA_BASE_URL='')
     def test_public_contract_includes_documented_club_fields(self):
         request = APIRequestFactory().get('/api/clubs/leet-dev/')
 

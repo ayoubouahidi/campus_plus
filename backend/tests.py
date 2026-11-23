@@ -205,7 +205,13 @@ class EnvironmentConfigurationTests(SimpleTestCase):
         self.assertIn(f'uv venv .venv --python {expected}', setup_script)
 
     def test_environment_template_documents_required_names_without_real_secrets(self):
-        template = (self.project_root / '.env.example').read_text()
+        template_path = self.project_root / '.env.example'
+        if not template_path.is_file():
+            self.skipTest(
+                '.env.example is a source-only template intentionally excluded '
+                'from the production image.'
+            )
+        template = template_path.read_text()
         configured_names = {
             line.split('=', 1)[0]
             for line in template.splitlines()

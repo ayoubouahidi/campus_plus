@@ -233,7 +233,13 @@ print(json.dumps({
         self.assertIsInstance(websocket_application, OriginValidator)
 
     def test_environment_template_documents_security_configuration(self):
-        template = (self.project_root / '.env.example').read_text()
+        template_path = self.project_root / '.env.example'
+        if not template_path.is_file():
+            self.skipTest(
+                '.env.example is a source-only template intentionally excluded '
+                'from the production image.'
+            )
+        template = template_path.read_text()
 
         for name in (
             'DEBUG',
