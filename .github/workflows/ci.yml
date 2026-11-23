@@ -7,7 +7,7 @@ on:
     branches: ["Developer"]
 
 jobs:
-  verify_code:
+  backend_tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install Dependencies
         run: |
@@ -25,6 +25,18 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Django Tests
+        env:
+          DJANGO_SECRET_KEY: ci-test-secret-key
+          DEBUG: "True"
         run: |
-          cd infrastructure/app
           python manage.py test
+
+  frontend_build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Frontend Production Image
+        run: docker build ./frontend

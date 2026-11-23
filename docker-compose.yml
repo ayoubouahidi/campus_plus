@@ -2,21 +2,19 @@ services:
   backend:
     build: .
     restart: unless-stopped
-
     expose:
       - "8000"
-
     volumes:
       - static_data:/app/staticfiles
       - media_data:/app/media
-    
     depends_on:
       db:
         condition: service_healthy
-
+      redis:
+        condition: service_healthy
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DEBUG: ${DEBUG:-true}
+      DEBUG: ${DEBUG:-false}
       WS_AUTH_BACKEND: jwt
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -24,14 +22,26 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
-      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,web
-
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,web,campushub.ma}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://localhost,https://127.0.0.1,https://campushub.ma}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-https://localhost,https://127.0.0.1,https://campushub.ma}
+      DJANGO_PUBLIC_MEDIA_BASE_URL: ${DJANGO_PUBLIC_MEDIA_BASE_URL:-https://localhost}
+      BACKEND_INTERNAL_KEY: ${BACKEND_INTERNAL_KEY:-}
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     expose:
       - "3000"
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: ${AUTH_URL:-https://localhost}
+      AUTH_42_SCHOOL_ID: ${AUTH_42_SCHOOL_ID:-}
+      AUTH_42_SCHOOL_SECRET: ${AUTH_42_SCHOOL_SECRET:-}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
+      BACKEND_INTERNAL_KEY: ${BACKEND_INTERNAL_KEY:-}
+      AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-false}
 
   nginx:
     image: nginx:alpine
@@ -47,6 +57,7 @@ services:
     depends_on:
       - backend
       - frontend
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped

@@ -1,6 +1,14 @@
-.PHONY: up down logs clean
+.PHONY: all certs up down logs clean re
 
-up:
+all: up
+
+certs:
+	@if [ ! -f infrastructure/nginx/certs/cert.pem ] || [ ! -f infrastructure/nginx/certs/key.pem ]; then \
+		echo "Generating self-signed SSL certificates..."; \
+		sh infrastructure/nginx/gen-certs.sh; \
+	fi
+
+up: certs
 	docker compose up -d --build
 
 down:
@@ -11,3 +19,5 @@ logs:
 
 clean:
 	docker compose down -v --remove-orphans
+
+re: clean up
