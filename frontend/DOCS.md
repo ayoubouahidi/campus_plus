@@ -5278,3 +5278,164 @@ listEvents({ upcoming?, club?, rsvped?, category? }, token)
 1. Why is "See all results" an option of the combobox and not a separate link?
 2. Why does it open `/search` with `when=all`?
 3. What does Enter do when nothing matches, and why is that useful?
+
+## 19. Production Docker image (M2 + M3, 2026-11-23)
+
+The evaluation starts the project with **one command, `make up`**. Until this step that command started the frontend with `npm run dev`, the development server:
+- slow on first load of each page;
+- verbose, with development warnings and debugging tools enabled;
+- about 1.16 GB, with the whole source code and every dev tool inside.
+
+Step 19 makes `make up` run a real production build, keeps the dev server one command away (`make dev`), and checks the result against Ahmed's Django (TEAM_NEEDS M2 + M3).
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 19.1 | Multi-stage `Dockerfile` (prod by default, `dev` stage), `.dockerignore` for secrets, compose and Makefile changes, `poweredByHeader: false`, production run checked against Django | ✅ done 2026-11-23 |
+
+### 19.1 One Dockerfile, two modes (Step 19.1, 2026-11-23)
+
+**Files:**
+
+| File | Change |
+|---|---|
+| `frontend/Dockerfile` | Rewritten: 5 stages, `base → deps → dev` and `deps → builder → runner` |
+| `frontend/.dockerignore` | `.env`, `.env.*` (except `.env.example`), `.git`, `.vscode`, `*.md` excluded from the image |
+| `docker-compose.dev.yml` | `build.target: dev`, own image name `transcendence-frontend-dev` |
+| `Makefile` | `lint` / `typecheck` run in a throwaway dev container; new `build-check`; comments |
+| `frontend/next.config.ts` | `poweredByHeader: false` |
+| `TEAM_NEEDS.md` | M2 and M3 done; new M11 (nginx `Connection` header) for Hamza |
+
+**Status:** ✅ Done (2026-11-23), committed at Mouad's request. Built, run and checked against Ahmed's Django (`236494f`) through nginx/HTTPS. The local stack is back on `make dev` afterwards. Hamza's merge guide: `PRODUCTION_FRONTEND_README.md` (sent outside the repo).
+
+#### 1. Why a production build matters
+
+| | `next dev` (before) | `next build` + `node server.js` (now) |
+|---|---|---|
+| Work at request time | Compiles each page on its first visit | Compiled once, when the image is built |
+| Code | Unminified, with development checks and warnings | Minified, dead code removed, React's production build |
+| Type errors | Shown in the editor only | **Stop the build** (`next build` type-checks): a broken image can't be shipped |
+| Image | 1.16 GB (all of `node_modules`, source, tools) | **346 MB** (standalone server + static files only) |
+| Memory | Several hundred MB (compiler in memory) | **45 MB** measured, idle |
+| Debug tools | Dev overlay, `/test` page reachable | No overlay; `/test` → 404; dev login off |
+| Runs as | root | Unprivileged user `nextjs` (uid 1001) |
+
+#### 2. The Dockerfile, stage by stage
+
+A **multi-stage build** is one Dockerfile with several `FROM` sections ("stages"). Each stage can copy files from earlier ones, and only the **last** stage becomes the image, unless a `target` is named. Docker caches every step, so only the stages whose inputs changed are rebuilt.
+
+```
+base     node:22-alpine, WORKDIR /app, NEXT_TELEMETRY_DISABLED=1
+ └ deps     + libc6-compat, package.json + package-lock.json, npm ci      (all dependencies)
+    ├ dev      + COPY . .  → CMD npm run dev                              (make dev)
+    └ builder  + COPY . .  → NODE_ENV=production npm run build            (.next/standalone, .next/static)
+ runner   base + user nextjs + public/ + .next/standalone + .next/static  → CMD node server.js   (make up)
+```
+
+| Stage | What it does | Why this way |
+|---|---|---|
+| `base` | Node 22 on Alpine Linux; telemetry off | Alpine is small. Node pinned to a **major** version (22 = LTS): a new major is a deliberate upgrade, not a surprise. |
+| `deps` | Copies **only** `package.json` + `package-lock.json`, then `npm ci` | **Layer caching:** this slow step (about 1 min) is reused until a dependency changes. A source edit doesn't reinstall anything. `npm ci` installs exactly the lockfile and fails if it disagrees with `package.json`, so every build has the same versions. `libc6-compat` gives Alpine (musl libc) the glibc names some native packages expect. |
+| `dev` | Adds the source; runs `next dev` | Keeps today's workflow (`make dev`, hot reload). The compose file mounts the host source over `/app`, so the copied source only matters if run without the mount. |
+| `builder` | Adds the source; `NODE_ENV=production npm run build` | Type-checks, bundles and minifies. With `output: "standalone"` (next.config.ts) it writes `.next/standalone`: a small `server.js` plus only the files of `node_modules` the app actually imports (Next traces them). |
+| `runner` | Fresh `base`, an unprivileged user, and three copies from `builder`: `public/`, `.next/standalone/`, `.next/static/` | No source, no dev tools, no full `node_modules`. `public/` and `.next/static/` aren't part of standalone by design (a CDN usually serves them); placed next to `server.js`, the server serves them itself. `--chown=nextjs:nodejs` so the app can write its image cache. |
+
+**Settings of the runner:**
+- `NODE_ENV=production`;
+- `PORT=3000`;
+- `HOSTNAME=0.0.0.0`: listen on every interface of the container, otherwise nginx (another container) can't connect;
+- `EXPOSE 3000`: documentation only; compose's `expose` is what joins it to the network.
+
+**`USER nextjs`.** By default a container runs as root. If the app were ever exploited, the attacker would be root inside the container, one step from the host's Docker. A dedicated user with no shell and no password limits that. Standard practice; the official Next.js example does the same.
+
+**`HEALTHCHECK`.** Every 30 s Docker runs `node -e "fetch('http://127.0.0.1:3000/privacy')…"`. After 3 failures the container is marked `unhealthy` (`docker ps` shows it).
+- `/privacy` is a real page: it goes through the root layout, the session, the translations and the footer, so a broken app fails it.
+- It never calls Django, so **a Django outage doesn't mark the frontend unhealthy**. Verified: Django stopped, the frontend stayed `healthy`.
+- The check uses `node`, which is already in the image; `curl` and `wget` aren't installed.
+
+**`CMD ["node", "server.js"]`**, not `npm start`. With `npm`, npm becomes process 1 and doesn't always pass Docker's stop signal on. With `node` directly, Next's own SIGTERM handler runs (part 5).
+
+#### 3. Settings: build time vs run time (one image for every environment)
+
+- **No setting is baked into the image.** The site uses no `NEXT_PUBLIC_*` variables (checked with grep). Those are the only ones Next copies into the browser code at build time.
+- Everything else is read **when the server runs**, from the container's environment, which `docker-compose.yml` fills from the root `.env`: `AUTH_SECRET`, `AUTH_URL`, `BACKEND_URL`, `BACKEND_INTERNAL_KEY`, the 42 keys, `AUTH_DEV_LOGIN`.
+- So the same image works locally, on the evaluation machine or anywhere else; only the `.env` changes.
+- **Secrets never enter the image.** `.dockerignore` excludes `.env` and `.env.*` (except `.env.example`). Before this step a developer's `.env.local` would have been copied into the image by `COPY . .`, and anyone with the image could read it.
+- **Dev login is impossible in production.** `DEV_LOGIN_ENABLED = AUTH_DEV_LOGIN === 'true' && NODE_ENV !== 'production'` (`src/auth.ts`). The local `.env` has `AUTH_DEV_LOGIN=true`, and the production image still refuses it.
+- **Without `BACKEND_URL` in production**, data functions throw and pages show the error page, never mocks (§14.1, `mocksOnly`).
+
+#### 4. Switching modes
+
+| Command | What runs | Image |
+|---|---|---|
+| `make up` | Production (`runner` stage) | `transcendence-frontend` (346 MB) |
+| `make dev` | `next dev` + mounted source (`dev` stage via `docker-compose.dev.yml`) | `transcendence-frontend-dev` (1.51 GB) |
+| `make lint`, `make typecheck` | A throwaway `dev` container with the source mounted (`docker compose … run --rm --no-deps`) | dev image |
+| `make build-check` | Builds the production image without starting it (type check included) | prod image |
+
+- **Two image names on purpose.** With one tag, every switch between `make up` and `make dev` would replace the other image and rebuild it from scratch.
+- **Lint and typecheck no longer need a running dev server.** Before, they ran `docker compose exec frontend …` inside the running container, which fails with the production image: there's no TypeScript or ESLint inside. The first run builds the dev image (about 30 s), later runs reuse it.
+- **After a switch, restart nginx** (`docker compose restart nginx`). nginx looks up `frontend` once, when it starts. A recreated container can get a new address, and nginx keeps the old one. (Hamza can avoid this with a `resolver` in the nginx config.)
+- **Server action ids change with every build.** A browser tab opened before a rebuild calls action ids that no longer exist. The site handles it ("Server Action not found" counts as "unavailable", §17.2); reloading the tab fixes it.
+
+#### 5. Investigation: why stopping the container took 10 s
+
+`docker stop` (and `docker compose down`) sends **SIGTERM**, then kills the container after 10 s. The production container needed the full 10.2 s.
+
+1. **First guess: process 1 ignores signals.** Linux gives no default signal handling to process 1 of a container. A common fix is `tini`, a tiny init process that forwards signals. I tried it: still 10.25 s. So that wasn't the cause.
+2. **Reading Next's code** (`node_modules/next/dist/server/lib/start-server.js`): Next installs its **own** SIGTERM handler. It stops accepting connections (`server.close()`), **waits for open connections to finish**, then exits with code 143. Process 1 doesn't matter here, so `tini` was removed again.
+3. **Test with nginx stopped: 0.14 s.** So something open through nginx was being waited for. `netstat` in the frontend showed one `ESTABLISHED` connection from nginx.
+4. **Cause:** nginx's `location /` sends `proxy_set_header Connection "upgrade"` on **every** request, not only on WebSocket requests. Connections from browser tabs then stay open to the frontend, and a graceful shutdown waits for them.
+5. **Fix (nginx, Hamza: TEAM_NEEDS M11):** `map $http_upgrade $connection_upgrade { default upgrade; '' close; }` and `proxy_set_header Connection $connection_upgrade;`. With it, only real WebSocket requests are upgraded. Our image needs no change.
+
+Lesson: measure before adding a tool. The obvious explanation (process 1) was wrong. The real cause was in another container's config.
+
+#### 6. Verified (production image, through nginx/HTTPS, against Ahmed's Django `236494f`)
+
+| Check | Result |
+|---|---|
+| Build | `next build` OK in 1 min 40 s (cold), no warnings; every page server-rendered on demand (ƒ), except `/icon.svg` (static) |
+| Image / memory | 346 MB (dev image: 1.16 GB before, 1.51 GB now); 45 MiB in use, idle |
+| Process | `nextjs` user, `next-server` as process 1, no mounted source |
+| Public pages | `/`, `/calendar`, `/clubs`, `/clubs/leet-dev`, `/events/1`, `/search`, `/search?q=demo&page=2`, `/design-system`, `/privacy`, `/terms`, `/auth/login`, `/auth/register`: **200 in 12–120 ms** |
+| Guards | `/profile` signed out → 307 to login; `/test` → 404; unknown page → 404 |
+| Signed in (email login against Django) | Login 302 with `__Secure-authjs.session-token`; `/profile` lists the student's 3 RSVPs (same as Django's `?rsvped=true`) |
+| Server actions (ids from the production manifest) | `rsvpAction` on → `{rsvps_count: 1, has_user_rsvpd: true}`, off → `0 / false`; `connectRealtime` → `ws_access` cookie `Path=/ws/; Max-Age=295; Secure; HttpOnly; SameSite=strict`; `loadNotificationsAction` → the student's notifications (with `event_title`); `loadSearchData` → data |
+| Caching | Pages `Cache-Control: private, no-cache, no-store`; `/_next/static/*.css` `public, max-age=31536000, immutable` (file names change with each build) |
+| Images | `/_next/image?url=/campus.webp&w=640` → 200, resized |
+| Header | `X-Powered-By` gone after `poweredByHeader: false` |
+| Django stopped | `/`, `/clubs`, `/calendar`: error page through the stream (status 200, see below); `/search`: 500 + error page; `/privacy`: works; frontend stays `healthy`; back to normal when Django returns, no restart |
+| Shutdown | 10.2 s with nginx's connections open, 0.14 s without (part 5, M11) |
+| Dev again | `make dev` → `next dev`, 3 mounts, `/test` 200; `make typecheck` and `make lint` (same 6 old findings) work in a throwaway container |
+
+**Why some error pages answer 200.** Pages with a `loading.tsx` stream: the skeleton and the **200 status** are sent at once, before the server has asked Django anything. If Django then fails, the error page arrives in the stream, but the status was already sent. `/search` has no skeleton, so its status is still open and becomes 500. Visitors see the same error page either way. Only the HTTP status differs.
+
+#### 7. Gotchas found while testing (local setup)
+
+- **The old placeholder `web` container.** `make dev` / `make up` start every service in our `docker-compose.yml`, including the repo's old placeholder Django (`transcendence-web-1`). Locally, Ahmed's Django also answers to the network name `web` (§15.1 wiring), so nginx could send `/api/` to either one. Stop the placeholder after `make dev` (`docker stop transcendence-web-1`). After the real merge the placeholder disappears.
+- **Stale dev image.** The old single-stage image was 4 days old and had no `next-auth` / `next-intl`. The dev container only worked because its own `node_modules` volume had been updated inside it. The `dev` stage now uses `npm ci` from the lockfile, so a rebuild is always complete.
+
+#### 8. Tradeoffs ("Why this instead of alternatives?")
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| One multi-stage Dockerfile | Two Dockerfiles (`Dockerfile` / `Dockerfile.dev`) | One place for the base image and dependency step; the two modes can't drift apart. |
+| Production as the default (last stage) | Dev as the default, production opt-in | The evaluation runs `make up`; the safe choice must need no flag. |
+| `output: "standalone"` + `node server.js` | `next start` with the full `node_modules` | About a third of the size; fewer files means fewer things to patch. |
+| `npm ci` | `npm install` | Reproducible: exactly the lockfile, or the build fails. |
+| Alpine base | Debian-slim | Smaller; image resizing worked (sharp's musl build). If a native package ever fails on musl, Debian-slim is the fallback. |
+| Non-root user | Run as root | Least privilege, at no cost. |
+| No init process (tini) | `tini` as process 1 | Measured: no effect, Next handles SIGTERM itself (part 5). |
+| Healthcheck on `/privacy` | On `/` (needs Django) or a dedicated route | Tests the whole frontend without depending on Django. |
+| Lint and typecheck in a throwaway dev container | Install the tools in the production image | Keeps production small and free of dev tools; checks work in both modes. |
+
+#### 9. Study questions
+
+1. What is a multi-stage build, and which stage becomes the image when no target is given?
+2. Why are `package.json` and `package-lock.json` copied before the rest of the source?
+3. What does `output: "standalone"` produce, and why must `public/` and `.next/static/` be copied separately?
+4. Why can one image run on any machine? Which kind of variable would break that?
+5. Why does the container run as `nextjs` and not root?
+6. Why does the healthcheck use `/privacy` and not `/`?
+7. Stopping took 10 s. What was the first guess, why was it wrong, and what was the real cause?
+8. Why does `/` answer 200 when Django is down, while `/search` answers 500?
+9. Why do `make lint` and `make typecheck` now start a separate container?

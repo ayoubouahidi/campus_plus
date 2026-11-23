@@ -6,3 +6,14 @@ build
 tsconfig.tsbuildinfo
 *.log
 .DS_Store
+
+# Secrets stay on the host: settings reach the container as environment variables (docker-compose.yml), never
+# inside the image, where anyone with the image could read them (Step 19.1, DOCS.md §19).
+.env
+.env.*
+!.env.example
+
+# Not needed to build or run the site.
+.git
+.vscode
+*.md

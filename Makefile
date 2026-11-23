@@ -1,3 +1,4 @@
+# Production: the frontend's last Dockerfile stage (next build + standalone server).
 up:
 	docker compose up -d --build
 
@@ -10,11 +11,19 @@ down:
 dev:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --renew-anon-volumes
 
+# Checks run in a throwaway container of the `dev` stage, with the source mounted: they work whether the
+# production image (`make up`, no dev tools inside) or the dev server (`make dev`) is running (DOCS.md §19).
+DEV_RUN = docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -T frontend
+
 lint:
-	docker compose exec frontend npx eslint .
+	$(DEV_RUN) npx eslint .
 
 typecheck:
-	docker compose exec frontend npx tsc --noEmit
+	$(DEV_RUN) npx tsc --noEmit
+
+# Production build check without starting anything: builds the image up to its last stage (type check included).
+build-check:
+	docker compose build frontend
 
 # Drop Next's resized-image cache (needed after replacing a public/ image but keeping its file name).
 clear-images:
@@ -32,4 +41,4 @@ fclean: clean
 
 re: fclean up
 
-.PHONY: up dev down logs lint typecheck clear-images clean fclean re
+.PHONY: up dev down logs lint typecheck build-check clear-images clean fclean re

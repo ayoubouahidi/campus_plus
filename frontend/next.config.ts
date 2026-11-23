@@ -5,7 +5,9 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
-  output: "standalone", // required for the small Docker image
+  output: "standalone", // required for the small Docker image (frontend/Dockerfile, DOCS.md §19)
+  // No "X-Powered-By: Next.js" header: it tells anyone scanning the site which framework (and attacks) to try.
+  poweredByHeader: false,
   // Dev server is reached through nginx: the hostname, or this machine's IP on any private network (phones on the same
   // Wi-Fi). Wildcards (one `*` per label) so a new network IP keeps working without editing this file.
   allowedDevOrigins: ["campushub.ma", "10.*.*.*", "172.*.*.*", "192.168.*.*"],
