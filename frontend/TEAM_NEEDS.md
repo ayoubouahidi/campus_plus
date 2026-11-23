@@ -342,7 +342,7 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | Web Major: frameworks front + back (Next.js + Django) | 2 | ✅ (once the site talks to Django) |
 | Web Minor: ORM (Django ORM) | 1 | ✅ |
 | Web Minor: SSR (Next.js Server Components) | 1 | ✅ |
-| Web Minor: custom design system (≥10 components, palette, typography, icons) | 1 | ✅ 13 `ui/` components + tokens + `navIcons` (needs a showcase page) |
+| Web Minor: custom design system (≥10 components, palette, typography, icons) | 1 | ✅ **Done (2026-11-23):** `/design-system` shows everything by Atomic Design level (foundations, atoms, molecules, organisms, templates & pages) with the real components (DOCS §17) |
 | User Mgmt Minor: OAuth 2.0 (42) | 1 | ⚠️ frontend done; 42 keys + `/auth/sync` missing |
 | Web Major: real-time WebSockets | 2 | ✅ **Done (2026-11-22):** Ahmed's `/ws/calendar/` + the student site's live pages (DOCS §15.1–15.2). Show it on the merged stack |
 | Web Minor: notification system (all create/update/delete) | 1 | ✅ **Done (2026-11-23):** Ahmed's stored notifications (PR #5, `event_title` in his final branch) + the live bell (DOCS §15.3). ⚠️ BE11: "new event" only reaches club members |

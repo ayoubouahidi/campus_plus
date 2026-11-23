@@ -18,7 +18,8 @@ export type AppRoute =
   | '/profile'
   | '/me'
   | '/privacy'
-  | '/terms';
+  | '/terms'
+  | '/design-system';
 
 // Icons are referenced by name so this contract stays plain data (no JSX, server-safe).
 // Each shell component resolves names through its own Record<NavIconName, Component>.
@@ -45,7 +46,7 @@ export type FooterLink =
   | { kind: 'external'; label: string; href: `https://${string}` };
 
 export interface FooterLinkGroup {
-  id: 'explore' | 'network'; // stable key for filtering (e.g. the drawer skips 'explore')
+  id: 'explore' | 'network' | 'project'; // stable key for filtering (e.g. the drawer skips 'explore')
   titleKey: NavLabelKey;
   links: readonly FooterLink[];
 }

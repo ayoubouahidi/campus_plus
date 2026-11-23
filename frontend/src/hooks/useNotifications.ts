@@ -6,12 +6,18 @@ import {
   loadNotificationsAction,
   markAllNotificationsReadAction,
   markNotificationReadAction,
+  type NotificationResult,
 } from '@/app/notifications/actions';
 import { useLiveMessages } from '@/components/providers/RealtimeProvider';
 import { useToast } from '@/components/ui/Toast';
 import { openLiveSocket, type RealtimeStatus } from '@/lib/liveSocket';
 import { NOTIFICATIONS_WS_PATH, mergeNotifications, parseNotificationMessage } from '@/lib/notifications';
 import type { AppNotification } from '@/types/notification';
+
+// A server action can throw instead of answering (network down, or a tab older than the server after a deploy:
+// "Server Action not found"). Treated like Django being unavailable, never as an unhandled rejection.
+const settle = <T,>(call: Promise<NotificationResult<T>>): Promise<NotificationResult<T>> =>
+  call.catch(() => ({ ok: false, error: 'unavailable' }) as const);
 
 interface Feed {
   items: AppNotification[];
@@ -40,7 +46,7 @@ export const useNotifications = (enabled: boolean) => {
 
   // State is set in the promise callback, never during the effect itself.
   const load = useCallback(() => {
-    void loadNotificationsAction().then((result) => {
+    void settle(loadNotificationsAction()).then((result) => {
       if (!result.ok) return; // keep what is shown; the next reconnect tries again
       setFeed((current) => ({
         items: mergeNotifications(result.value.items, current.items),
@@ -105,7 +111,7 @@ export const useNotifications = (enabled: boolean) => {
       if (!item || item.is_read) return;
       const ids = new Set([id]);
       setFeed((current) => ({ items: markItemsRead(current.items, ids), unread: Math.max(0, current.unread - 1) }));
-      void markNotificationReadAction(id).then((result) => {
+      void settle(markNotificationReadAction(id)).then((result) => {
         if (result.ok) return;
         setFeed((current) => ({
           items: current.items.map((candidate) => (candidate.id === id ? { ...candidate, is_read: false } : candidate)),
@@ -122,7 +128,7 @@ export const useNotifications = (enabled: boolean) => {
     if (before.unread === 0) return;
     const wereUnread = new Set(before.items.filter((item) => !item.is_read).map((item) => item.id));
     setFeed((current) => ({ items: markItemsRead(current.items), unread: 0 }));
-    void markAllNotificationsReadAction().then((result) => {
+    void settle(markAllNotificationsReadAction()).then((result) => {
       if (result.ok) return;
       setFeed((current) => ({
         items: current.items.map((item) => (wereUnread.has(item.id) ? { ...item, is_read: false } : item)),

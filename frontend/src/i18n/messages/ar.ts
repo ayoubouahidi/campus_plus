@@ -15,6 +15,8 @@ const ar = {
     login: 'تسجيل الدخول',
     explore: 'استكشف',
     network: 'الشبكة',
+    project: 'المشروع',
+    designSystem: 'نظام التصميم',
     privacy: 'سياسة الخصوصية',
     terms: 'شروط الاستخدام',
   },
@@ -370,6 +372,8 @@ const ar = {
     privacyDescription: 'ما يجمعه Campus Hub، ومن يمكنه رؤيته، وملفات تعريف الارتباط المستخدمة، وكيفية حذف بياناتك.',
     terms: 'شروط الاستخدام',
     termsDescription: 'قواعد استخدام Campus Hub: الحسابات، تسجيل الحضور، الأندية وما هو غير مسموح.',
+    designSystem: 'نظام التصميم',
+    designSystemDescription: 'مكوّنات Campus Hub حسب مستويات التصميم الذري: الألوان، الخطوط، الأيقونات وكل المكوّنات.',
   },
   Events: {
     count:

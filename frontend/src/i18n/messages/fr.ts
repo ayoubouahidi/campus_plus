@@ -14,6 +14,8 @@ const fr = {
     login: 'Se connecter',
     explore: 'Explorer',
     network: 'Réseau',
+    project: 'Projet',
+    designSystem: 'Design system',
     privacy: 'Politique de confidentialité',
     terms: 'Conditions d’utilisation',
   },
@@ -359,6 +361,8 @@ const fr = {
     privacyDescription: 'Ce que Campus Hub collecte, qui peut le voir, les cookies utilisés et comment faire supprimer vos données.',
     terms: 'Conditions d’utilisation',
     termsDescription: 'Les règles d’utilisation de Campus Hub : comptes, inscriptions, clubs et ce qui est interdit.',
+    designSystem: 'Design system',
+    designSystemDescription: 'Les briques de Campus Hub, par niveau d’Atomic Design : couleurs, typographie, icônes et tous les composants.',
   },
   Events: {
     count: '{count, plural, =0 {Aucun événement} one {# événement} other {# événements}}',

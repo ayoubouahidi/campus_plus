@@ -4810,3 +4810,107 @@ const { upcoming, past } = getMyEvents(await listEvents({ rsvped: true }, await 
 - Ahmed's backend was moved to `236494f`, with `DJANGO_PUBLIC_MEDIA_BASE_URL: https://localhost` added to `docker-compose.override.yml`, then rebuilt.
 - The new migrations (`core_data.0012`, `notifications.0002`) ran automatically on start.
 - The network was re-wired as in §15.3 (gotcha: a rebuild drops the `web` / `ahmed-web` names).
+
+## 17. Design-system page (2026-11-23)
+
+The "custom design system" module (1 pt) needs the system shown in one place: components, colour palette, typography and icons. Mouad's design system follows **Atomic Design** (Figma and code), so the page is ordered the same way.
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 17.1 | Showcase by atomic level, on `/test` | ✅ validated 2026-11-23 |
+| 17.2 | Its own route (`/design-system`), reachable in production, linked from the footer | ✅ done 2026-11-23 |
+
+### 17.1 The showcase (Step 17.1, 2026-11-23)
+
+**Files:**
+- New:
+  - `src/lib/designTokens.ts`: the tokens as data, plus the level names;
+  - `src/components/design-system/DesignSystemParts.tsx`: `DsSection`, `Specimen`, `SpecimenRow`, `LevelTag`;
+  - `src/components/design-system/InteractiveSpecimens.tsx`: the examples that need state;
+  - `src/components/design-system/DesignSystemShowcase.tsx`: the page body.
+- Test: `src/app/test/page.tsx`. The 16.1 comparison was removed.
+
+**Status:** ✅ Validated by Mouad (2026-11-23): "it is all good". Then moved to its own route (§17.2).
+
+**Business purpose.** It shows the team, Figma and the evaluators what the site is made of, using the real components. A new component or token has one obvious place to appear.
+
+**Core concepts & decisions.**
+- **Atomic Design order**, with a table of contents at the top that jumps to each level:
+
+| Level | What's on it |
+|---|---|
+| Foundations | Violet brand scale, slate neutrals, status colours, category colours, type scale and the 3 typefaces, radius, elevation, 18 icons |
+| Atoms | Button, Badge, FilterChip, Input, Select, Avatar / AvatarGroup, Logo / LogoMark, Skeleton |
+| Molecules | Card (compound), CardSkeleton, Tabs, Toast, Modal, EmptyState, ErrorState, LanguageSwitcher |
+| Organisms | EventCard, ClubCard, NotificationPopover, plus the live Navbar, search palette, phone navigation and Footer around the page |
+| Templates & pages | AppShell, LoginLayout, LegalPage; links to the real pages with what each one is built from |
+
+- **Real components only.** Every example imports the component the product uses, so the page can't drift from the site. Tokens are data (`designTokens.ts`) written as full class names, because Tailwind only generates classes it finds written out (no `bg-${color}-500`). Exhaustive `Record`s for status and category tones, so a new category without a colour is a compile error.
+- **Sample data, never Django.** The organisms get mock events, clubs and notifications. RSVP and "mark as read" change only the local copy (`InteractiveSpecimens.tsx`), so trying them changes nothing real. The event's schedule is formatted on the server, as on the feed (§5.2).
+- **Server first.** The page body is a Server Component; only the stateful examples (chips, tabs, toasts, dialog, EventCard, bell) are client components.
+- **Documentation text is English.** It's a developer reference, like Storybook. The components themselves follow the chosen language and direction, so switching to العربية shows the mirrored layout.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| A page in the app | Storybook | No second build or tooling; it runs in the same Docker container and shows the real providers (language, session, toasts). Cost: no isolated "controls" panel. |
+| Atomic Design levels | Alphabetical, or by folder | Matches Mouad's Figma; explains how pages are composed, which the module is about. |
+| Tokens listed in `designTokens.ts` | Read Tailwind's theme at runtime | Tailwind v4 has no runtime theme object; a short list also adds the role of each colour ("Primary hover"…). |
+| Real components with mock data | Screenshots | Always current; interactive (keyboard, focus, dark mode, RTL). |
+
+**Contract.**
+```ts
+// src/components/design-system/DesignSystemShowcase.tsx (Server Component)
+interface DesignSystemShowcaseProps { event: EventItem; schedule: EventSchedule; club: Club;
+  upcomingCount: number; notifications: AppNotification[] }
+// DesignSystemParts.tsx
+DsSection({ level: AtomicLevel, ...section props })  // id = level, for the table of contents
+Specimen({ title, path?, description?, children })
+SpecimenRow({ label, children })
+// src/lib/designTokens.ts
+type AtomicLevel = 'foundations' | 'atoms' | 'molecules' | 'organisms' | 'templates';
+ATOMIC_LEVELS, ATOMIC_ORDER, BRAND_SCALE, NEUTRAL_SCALE, STATUS_SWATCHES, CATEGORY_SWATCHES, TYPE_SCALE, RADII, SHADOWS
+```
+
+**Usage.**
+```tsx
+<Specimen title="Button" path="src/components/ui/Button.tsx" description="…">
+  <SpecimenRow label="Variants"><Button>Primary</Button><Button variant="secondary">Secondary</Button></SpecimenRow>
+</Specimen>
+```
+
+### 17.2 `/design-system` route (Step 17.2, 2026-11-23)
+
+**Files:**
+- New: `src/app/design-system/page.tsx`.
+- Changed:
+  - `src/lib/navigation.ts`: footer group `project`;
+  - `src/types/navigation.ts`: `'/design-system'` in `AppRoute`, `'project'` in `FooterLinkGroup.id`;
+  - `Nav.project`, `Nav.designSystem`, `Meta.designSystem`, `Meta.designSystemDescription` in the 3 message files.
+- `/test` reset.
+
+**Status:** ✅ Done.
+- `/design-system` returns 200, with the title "Design system | Campus Hub" ("نظام التصميم | Campus Hub" in Arabic).
+- The footer link is on every page.
+- `tsc` passes, and ESLint shows the same 6 old findings.
+
+**Business purpose.** Evaluators and the team open the design system on the real site, in production too. `/test` is a 404 there.
+
+**Decisions.**
+- **Public, linked from a new footer group "Project".** It isn't legal text (the Privacy/Terms row) or a student page (the navbar). The phone drawer shows the same group.
+- **Sample data in production too.** The page imports the mocks for its organisms on purpose. It never calls Django, so RSVP or "mark as read" there changes nothing.
+- **Metadata translated** (`Meta.designSystem…`). The page's documentation text stays English (§17.1).
+
+**Fix found while testing: server actions that throw.**
+- **Symptom:** after a frontend restart, an open tab still calls server actions by their old ids. The server answers "Server Action … not found" and the call throws. The same happens to open tabs after a production deploy.
+- **Before the fix:** `connectRealtime()` (socket credential) and the bell's actions had no `catch`, so the browser logged `unhandledRejection: UnrecognizedActionError`.
+- **Now:**
+  - `lib/liveSocket.ts`: a thrown credential call counts as `unavailable`, so the socket retries later.
+  - `useNotifications`: `settle()` turns a thrown action into `{ ok: false, error: 'unavailable' }`. A load keeps what is shown; a "mark as read" rolls back with the toast.
+  - RSVP and search already caught it.
+- Reloading the tab picks up the new action ids.
+
+**Fix after Mouad's check: the bell's panel ran off-screen.** The panel opens towards the start side of the bell (`sm:end-0`, built for the navbar, where the bell is at the end). In the showcase the bell came first in its row, so the 24rem panel left the screen. The bell now sits at the end of its row (`ms-auto`), as in the navbar, in both directions.
+
+**Contract.** Route `/design-system` (public). Footer: `{ id: 'project', titleKey: 'project', links: [{ kind: 'internal', labelKey: 'designSystem', href: '/design-system' }] }`.

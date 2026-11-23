@@ -19,10 +19,14 @@ export type RealtimeStatus = 'off' | 'connecting' | 'live' | 'reconnecting' | 'u
 // One credential request at a time for the tab: both sockets start together and expire together, and they share
 // one cookie, so the second caller reuses the first call's answer instead of asking Django twice.
 let pendingAccess: Promise<RealtimeAccess> | null = null;
+// A thrown call (network down, or a tab older than the server: "Server Action not found" after a deploy or a dev
+// restart) counts as 'unavailable': the socket retries later instead of an unhandled rejection.
 const getAccess = (): Promise<RealtimeAccess> => {
-  pendingAccess ??= connectRealtime().finally(() => {
-    pendingAccess = null;
-  });
+  pendingAccess ??= connectRealtime()
+    .catch((): RealtimeAccess => ({ ok: false, reason: 'unavailable' }))
+    .finally(() => {
+      pendingAccess = null;
+    });
   return pendingAccess;
 };
 

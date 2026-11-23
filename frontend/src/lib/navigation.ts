@@ -42,6 +42,12 @@ export const FOOTER_GROUPS: readonly FooterLinkGroup[] = [
       { kind: 'external', label: '42 Network', href: 'https://www.42network.org' },
     ],
   },
+  {
+    // How the site is built (Step 17.2, DOCS.md §17): the design-system page, for the team and evaluators.
+    id: 'project',
+    titleKey: 'project',
+    links: [{ kind: 'internal', labelKey: 'designSystem', href: '/design-system' }],
+  },
 ];
 
 // Strips a trailing slash so '/clubs/' and '/clubs' compare equal. Root stays '/'.
