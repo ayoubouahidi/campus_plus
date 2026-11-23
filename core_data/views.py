@@ -635,18 +635,21 @@ class ClubEventViewSet(viewsets.ModelViewSet):
         # [ahmed] Get the saved event's serialized data.
         event_data = public_event_broadcast_data(serializer.data)
 
-        # The explicit membership link is the recipient policy. No platform-wide fanout.
-        if isinstance(event, ClubEvent) and event.club_id:
-            member_user_ids = UserMember.objects.filter(
-                club_id=event.club_id,
-                user__isnull=False,
-                user__is_active=True,
-            ).values_list("user_id", flat=True)
+        # New public events are campus-wide student announcements. Roles are
+        # the available account-level audience boundary; club membership is
+        # intentionally irrelevant to this product decision.
+        if isinstance(event, ClubEvent):
+            student_user_ids = User.objects.filter(
+                is_active=True,
+                is_staff=False,
+                is_superuser=False,
+                role__in=(User.Role.STUDENT, User.Role.BOARD_MEMBER),
+            ).values_list("pk", flat=True)
             NotificationService.create_for_users(
-                recipients=member_user_ids,
+                recipients=student_user_ids,
                 notification_type=Notification.Type.NEW_EVENT,
-                title="New club event",
-                message=f'Your club published "{event.name}".',
+                title="New campus event",
+                message=f'A new campus event, "{event.name}", was published.',
                 event=event,
                 deduplication_key=f"new-event:{event.pk}",
             )

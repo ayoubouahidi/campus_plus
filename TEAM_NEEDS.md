@@ -104,6 +104,19 @@ Ahmed owns `realtime` (Channels, Daphne, Redis, WebSocket JWT, `POST /api/realti
 
 Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data": <event in the same shape as the API> }`. For `event_deleted`, `data` can be `{ "id": … }`. The frontend already uses these three names (`WebSocketEventType`).
 
+### 1b.3 Final personal notification audience decision
+
+Every new public event notifies the campus-wide eligible student audience:
+active, non-staff, non-superuser accounts with role `STUDENT` or
+`BOARD_MEMBER`. Organizing-Club membership is not required. Later event
+updates, cancellations, and deletions notify the affected active RSVP
+attendees; RSVP confirmation/cancellation remains private to the acting user.
+
+This audience relies on Ayoub's account classification. Before deployment,
+1337 eligibility must be enforced reliably for 42 sync and the compatibility
+email path; the current optional `ALLOWED_42_CAMPUSES` configuration is not
+enough to prove that every student-role account is eligible.
+
 ---
 
 ## 2. Ayoub (42 login + club dashboard, branch `Ayoub`)

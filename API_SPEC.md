@@ -435,7 +435,7 @@ newest count/state. A disconnected client loses live messages but not history.
 
 | Business action | Recipients | Duplicate rule |
 | --- | --- | --- |
-| New event with a Club | Active users linked through `UserMember.club_id` | Once per event/user |
+| New public event | Every active, non-staff, non-superuser account whose role is `STUDENT` or `BOARD_MEMBER`; Club membership is irrelevant | Once per event/user |
 | Meaningful registered-event change | Active RSVP users | Once per saved change/user |
 | Status transition to cancelled | Active RSVP users | Cancellation-specific alert |
 | First successful RSVP | Registering user | Once per RSVP row |
@@ -452,9 +452,19 @@ Historical rows may contain null. Mouad should localize from
 `notification_type` plus `event_title`, falling back to English `title` and
 `message` when structured information is unavailable.
 
-Fanout is synchronous and appropriate for the current Club membership scale.
-Large future audiences would require an approved background worker; this feature
-does not introduce Celery or another queue implicitly.
+New-event fanout is campus-wide, while later changes/cancellation/deletion are
+sent only to affected active RSVP attendees. The current account schema cannot
+independently prove 1337 eligibility: `ALLOWED_42_CAMPUSES` is optional during
+42 sync, and compatibility email registration has no campus enforcement. Ayoub
+must make the approved 1337 policy reliable before campus-wide notification
+deployment. Accounts classified with student/board roles are trusted by this
+query; unrelated staff, superusers, `SUPERADMIN` users, and inactive accounts
+are excluded.
+
+Fanout remains synchronous. This is acceptable for the current expected campus
+size, but delivery time grows with recipient count. A materially larger future
+audience would require an approved background worker; this implementation does
+not introduce Celery or another queue implicitly.
 
 ## Explicitly unavailable features
 

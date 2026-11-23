@@ -313,13 +313,49 @@ class NotificationTriggerTests(TestCase):
     def setUp(self):
         self.department = Department.objects.create(title="Computer Science")
         self.club = Club.objects.create(name="Robotics", department=self.department)
+        self.other_club = Club.objects.create(
+            name="Design",
+            department=self.department,
+        )
         self.board = User.objects.create_user(
             username="board", password="test-password", role=User.Role.BOARD_MEMBER
         )
         ClubBoardAssignment.objects.create(user=self.board, club=self.club)
         self.member = User.objects.create_user(username="member", password="test-password")
-        self.unrelated = User.objects.create_user(username="unrelated", password="test-password")
+        self.other_club_member = User.objects.create_user(
+            username="other-club-member",
+            password="test-password",
+        )
+        self.no_club_student = User.objects.create_user(
+            username="no-club-student",
+            password="test-password",
+        )
+        self.unrelated = self.no_club_student
+        self.inactive_student = User.objects.create_user(
+            username="inactive-student",
+            password="test-password",
+            is_active=False,
+        )
+        self.superadmin = User.objects.create_user(
+            username="notification-superadmin",
+            password="test-password",
+            role=User.Role.SUPERADMIN,
+        )
+        self.django_admin = User.objects.create_superuser(
+            username="notification-django-admin",
+            password="test-password",
+        )
+        self.service_account = User.objects.create_user(
+            username="service-account",
+            password="test-password",
+            is_staff=True,
+        )
         UserMember.objects.create(username="member-profile", user=self.member, club_id=self.club)
+        UserMember.objects.create(
+            username="other-club-profile",
+            user=self.other_club_member,
+            club_id=self.other_club,
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.board)
 
@@ -337,22 +373,57 @@ class NotificationTriggerTests(TestCase):
         return payload
 
     @patch("notifications.services.deliver_to_user")
-    def test_new_event_notifies_only_active_club_members(self, mocked_delivery):
+    def test_new_event_notifies_all_active_student_roles_once(self, mocked_delivery):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post("/api/club-events/", self.event_payload(), format="json")
         self.assertEqual(response.status_code, 201, response.data)
-        notification = Notification.objects.get(
-            recipient=self.member,
+        eligible_users = {
+            self.board,
+            self.member,
+            self.other_club_member,
+            self.no_club_student,
+        }
+        notifications = Notification.objects.filter(
             notification_type=Notification.Type.NEW_EVENT,
         )
-        self.assertEqual(notification.event_title, 'Robot Day')
         self.assertEqual(
-            mocked_delivery.call_args.args[1]['data']['event_title'],
-            'Robot Day',
+            set(notifications.values_list('recipient_id', flat=True)),
+            {user.pk for user in eligible_users},
         )
-        self.assertFalse(Notification.objects.filter(recipient=self.unrelated).exists())
+        self.assertEqual(notifications.count(), len(eligible_users))
+        self.assertTrue(all(
+            notification.event_title == 'Robot Day'
+            for notification in notifications
+        ))
+        self.assertTrue(all(
+            notification.title == 'New campus event'
+            and notification.message == (
+                'A new campus event, "Robot Day", was published.'
+            )
+            for notification in notifications
+        ))
+        delivered_user_ids = {
+            call.args[0] for call in mocked_delivery.call_args_list
+        }
+        self.assertEqual(
+            delivered_user_ids,
+            {user.pk for user in eligible_users},
+        )
+        for call in mocked_delivery.call_args_list:
+            delivered_user_id, payload = call.args
+            notification = notifications.get(pk=payload['data']['id'])
+            self.assertEqual(notification.recipient_id, delivered_user_id)
+            self.assertEqual(payload['data']['event_title'], 'Robot Day')
+        self.assertFalse(Notification.objects.filter(
+            recipient__in=(
+                self.inactive_student,
+                self.superadmin,
+                self.django_admin,
+                self.service_account,
+            ),
+        ).exists())
 
-    def test_new_event_skips_inactive_club_member(self):
+    def test_new_event_skips_inactive_student(self):
         self.member.is_active = False
         self.member.save(update_fields=['is_active'])
 
@@ -364,6 +435,59 @@ class NotificationTriggerTests(TestCase):
 
         self.assertEqual(response.status_code, 201, response.data)
         self.assertFalse(Notification.objects.filter(recipient=self.member).exists())
+
+    def test_new_event_deduplication_remains_per_event_and_recipient(self):
+        response = self.client.post(
+            '/api/club-events/',
+            self.event_payload(),
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        event = ClubEvent.objects.get(pk=response.data['id'])
+        eligible_ids = User.objects.filter(
+            is_active=True,
+            is_staff=False,
+            is_superuser=False,
+            role__in=(User.Role.STUDENT, User.Role.BOARD_MEMBER),
+        ).values_list('pk', flat=True)
+
+        NotificationService.create_for_users(
+            recipients=eligible_ids,
+            notification_type=Notification.Type.NEW_EVENT,
+            title='New campus event',
+            message=f'A new campus event, "{event.name}", was published.',
+            event=event,
+            deduplication_key=f'new-event:{event.pk}',
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(
+                notification_type=Notification.Type.NEW_EVENT,
+            ).count(),
+            4,
+        )
+
+    @patch('notifications.services.deliver_to_user')
+    @patch('core_data.views.broadcast_calendar_event')
+    def test_new_event_outer_rollback_persists_and_delivers_nothing(
+        self,
+        calendar_broadcast,
+        notification_delivery,
+    ):
+        with self.assertRaisesRegex(RuntimeError, 'force rollback'):
+            with transaction.atomic():
+                response = self.client.post(
+                    '/api/club-events/',
+                    self.event_payload(),
+                    format='json',
+                )
+                self.assertEqual(response.status_code, 201, response.data)
+                raise RuntimeError('force rollback')
+
+        self.assertFalse(ClubEvent.objects.filter(name='Robot Day').exists())
+        self.assertFalse(Notification.objects.exists())
+        notification_delivery.assert_not_called()
+        calendar_broadcast.assert_not_called()
 
     def test_event_update_and_cancellation_notify_registered_active_users(self):
         event = ClubEvent.objects.create(name="Robot Day", parent_id=self.department, club=self.club)

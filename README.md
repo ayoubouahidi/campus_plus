@@ -394,8 +394,10 @@ work: event/club/department APIs, search/filter/pagination, RSVP capacity and
 attendee privacy, Django Channels/ASGI calendar broadcasts, JWT WebSocket
 validation and expiry, private persistent notification history, isolated live
 delivery, media URL security, forward migrations, and backend integration and
-security tests. Event management uses `ClubBoardAssignment`; new-event alerts
-use the separate least-privilege membership link `UserMember.club_id`.
+security tests. Event management uses `ClubBoardAssignment`; new public-event
+alerts go to active non-administrator `STUDENT` and `BOARD_MEMBER` accounts,
+regardless of Club membership. Later event changes remain scoped to active RSVP
+attendees.
 
 The shared schema uses `accounts.User` as authentication identity,
 `core_data.ClubEvent` as the event model, `core_data.Rsvp` as the unique
