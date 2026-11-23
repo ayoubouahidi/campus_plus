@@ -1,4 +1,4 @@
-import { organizations, tenantStyles, type OrgStatus } from "@/lib/super-admin-data";
+import { organizations as mockOrganizations, tenantStyles, type OrgStatus } from "@/lib/super-admin-data";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -9,7 +9,25 @@ const statusVariants: Record<OrgStatus, "success" | "warning" | "danger"> = {
   Suspended: "danger",
 };
 
-export default function OrganizationsTable() {
+type Organization = {
+  id: number;
+  name: string;
+  department_name: string | null;
+  is_active: boolean;
+};
+
+export default function OrganizationsTable({ organizations }: { organizations?: Organization[] }) {
+  const rows =
+    organizations && organizations.length > 0
+      ? organizations.slice(0, 8).map((organization) => ({
+          name: organization.name,
+          tenant: (organization.department_name || "UM6P") as "1337" | "EMINES" | "UM6P",
+          admins: 0,
+          events: 0,
+          status: (organization.is_active ? "Active" : "Suspended") as OrgStatus,
+        }))
+      : mockOrganizations;
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
@@ -29,7 +47,7 @@ export default function OrganizationsTable() {
           </tr>
         </thead>
         <tbody>
-          {organizations.map((o) => (
+          {rows.map((o) => (
             <tr key={o.name} className="border-b border-slate-100 last:border-0">
               <td className="px-3 py-3.5 font-semibold text-slate-900">{o.name}</td>
               <td className="px-3 py-3.5">

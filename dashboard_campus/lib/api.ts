@@ -17,6 +17,7 @@ export async function backendFetch<T>(path: string, init: RequestInit = {}): Pro
   });
 
   if (res.status === 401) redirect("/login"); // token expired
+  if (res.status === 204) return undefined as T;
   if (!res.ok) throw new Error(`Backend error ${res.status} on ${path}`);
   return res.json() as Promise<T>;
 }

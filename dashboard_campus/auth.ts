@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import FortyTwoSchool from "next-auth/providers/42-school";
+import Credentials from "next-auth/providers/credentials";
 
 type FortyTwoProfile = {
   id: number;
@@ -11,7 +12,7 @@ type FortyTwoProfile = {
   campus?: { name: string }[];
 };
 
-type BackendUser = { id: string; role: string };
+type BackendUser = { id: string | number; role: string; login?: string };
 type BackendSyncResponse = { token: string; user: BackendUser };
 
 /** Ask the backend to create/update the user and give us its own token. */
@@ -50,12 +51,48 @@ async function syncWithBackend(p: FortyTwoProfile): Promise<BackendSyncResponse 
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [FortyTwoSchool],
+  providers: [
+    Credentials({
+      name: "Email and password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!process.env.BACKEND_URL) return null;
+
+        const res = await fetch(`${process.env.BACKEND_URL}/api/auth/login/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: credentials?.email,
+            password: credentials?.password,
+          }),
+          cache: "no-store",
+        });
+        if (!res.ok) return null;
+
+        const data = (await res.json()) as BackendSyncResponse;
+        return {
+          id: String(data.user.id),
+          backendToken: data.token,
+          role: data.user.role,
+          userId: String(data.user.id),
+          login: data.user.login ?? "",
+        } as never;
+      },
+    }),
+    FortyTwoSchool,
+  ],
   session: { strategy: "jwt" },
   pages: { signIn: "/login", error: "/login" },
   callbacks: {
     // Runs once, right after 42 approves the user
-    async signIn({ user, profile }) {
+    async signIn({ user, profile, account }) {
+      if (account?.provider === "credentials") {
+        return true;
+      }
+
       const p = profile as FortyTwoProfile | undefined;
       if (!p) return false;
 

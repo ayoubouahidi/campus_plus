@@ -1,15 +1,40 @@
 import Topbar from "@/components/admin/Topbar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { members } from "@/lib/mock-data";
+import { backendFetch } from "@/lib/api";
 
-export default function MembersPage() {
+export const instant = false;
+
+type Member = {
+  id: number;
+  name: string;
+  role: string;
+  joined_date: string;
+  status: "active" | "inactive";
+};
+
+export default async function MembersPage() {
+  let members: Member[] = [];
+  try {
+    members = await backendFetch<Member[]>("/api/board/members/");
+  } catch {
+    members = [];
+  }
+  const rows = members.map((member) => ({
+    name: member.name,
+    role: member.role,
+    joined: member.joined_date
+      ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(member.joined_date))
+      : "Unknown",
+    status: member.status === "active" ? "Active" : "Inactive",
+  }));
+
   return (
     <>
       <Topbar title="Members" subtitle="Members of Robotics & AI Research Club" />
 
       <main className="p-6">
-        {members.length > 0 ? (
+        {rows.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>Club members</CardTitle>
@@ -25,7 +50,7 @@ export default function MembersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((member) => (
+                  {rows.map((member) => (
                     <tr key={member.name} className="border-b border-slate-100 last:border-0">
                       <td className="flex items-center gap-3 px-3 py-3.5 font-semibold text-slate-900">
                         <Avatar name={member.name} size="sm" />

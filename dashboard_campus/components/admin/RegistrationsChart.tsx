@@ -1,7 +1,22 @@
-import { weeklyRegistrations } from "@/lib/mock-data";
+import { weeklyRegistrations as mockRegistrations } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
-export default function RegistrationsChart() {
+export default function RegistrationsChart({
+  registrations,
+}: {
+  registrations?: { date: string; registrations: number }[];
+}) {
+  const rows =
+    registrations && registrations.length > 0
+      ? registrations.map((item) => ({
+          day: new Intl.DateTimeFormat("en", { weekday: "short" }).format(
+            new Date(`${item.date}T12:00:00`)
+          ),
+          value: item.registrations,
+        }))
+      : mockRegistrations;
+  const max = Math.max(1, ...rows.map((row) => row.value));
+
   return (
     <Card>
       <CardHeader>
@@ -10,11 +25,11 @@ export default function RegistrationsChart() {
 
       <CardContent>
       <div className="mt-6 flex h-44 items-end justify-between gap-6 px-2">
-        {weeklyRegistrations.map((d) => (
+        {rows.map((d) => (
           <div key={d.day} className="flex h-full flex-1 flex-col items-center justify-end">
             <div
               className="w-full max-w-[32px] rounded-md bg-violet-600"
-              style={{ height: `${d.value}%` }}
+              style={{ height: `${Math.max(4, (d.value / max) * 100)}%` }}
             />
             <span className="mt-2 text-[11px] text-slate-500">{d.day}</span>
           </div>

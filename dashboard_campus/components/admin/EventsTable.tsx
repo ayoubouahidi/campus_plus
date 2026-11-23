@@ -1,4 +1,4 @@
-import { events, type EventStatus } from "@/lib/mock-data";
+import { events as mockEvents, type EventStatus } from "@/lib/mock-data";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -9,7 +9,31 @@ const statusVariants: Record<EventStatus, "success" | "warning" | "danger"> = {
   Cancelled: "danger",
 };
 
-export default function EventsTable() {
+type ClubEvent = {
+  id: number;
+  name: string;
+  starts_at: string | null;
+  status: string;
+};
+
+export default function EventsTable({ events }: { events?: ClubEvent[] }) {
+  const rows =
+    events && events.length > 0
+      ? events.slice(0, 5).map((event) => ({
+          name: event.name,
+          date: event.starts_at
+            ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.starts_at))
+            : "Date not set",
+          registered: "—",
+          status:
+            event.status === "cancelled"
+              ? ("Cancelled" as const)
+              : event.status === "ongoing" || event.status === "planned"
+                ? ("Confirmed" as const)
+                : ("Pending" as const),
+        }))
+      : mockEvents;
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
@@ -29,7 +53,7 @@ export default function EventsTable() {
           </tr>
         </thead>
         <tbody>
-          {events.map((e) => (
+          {rows.map((e) => (
             <tr key={e.name} className="border-b border-slate-100 last:border-0">
               <td className="px-3 py-3.5 font-semibold text-slate-900">{e.name}</td>
               <td className="px-3 py-3.5 text-slate-600">{e.date}</td>

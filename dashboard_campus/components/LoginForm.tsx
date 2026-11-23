@@ -22,17 +22,26 @@ export default function LoginForm() {
     const remember = data.get("remember") === "on";
 
     try {
-      void { email, password, remember };
-      setError("Use the 42 Intra button to sign in.");
+      const result = await signIn("credentials", {
+        email,
+        password,
+        callbackUrl: "/",
+        redirect: false,
+      });
+      if (result?.error) {
+        setError("Incorrect email or password. Try again.");
+      } else if (result?.url) {
+        window.location.assign(result.url);
+      }
     } catch {
-      setError("Incorrect email or password. Try again.");
+      setError("Unable to sign in. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
   function handle42Login() {
-    void signIn("42-school", { callbackUrl: "/admin" });
+    void signIn("42-school", { callbackUrl: "/" });
   }
 
   return (

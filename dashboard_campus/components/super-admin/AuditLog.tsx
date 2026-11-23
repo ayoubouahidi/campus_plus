@@ -1,9 +1,28 @@
-import { auditLog } from "@/lib/super-admin-data";
+import { auditLog as mockAuditLog } from "@/lib/super-admin-data";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
-export default function AuditLog() {
+export default function AuditLog({
+  auditRows,
+}: {
+  auditRows?: {
+    id: number;
+    actor_username: string | null;
+    action: string;
+    target: string;
+    created_at: string;
+  }[];
+}) {
+  const rows =
+    auditRows && auditRows.length > 0
+      ? auditRows.map((row) => ({
+          initials: (row.actor_username || "SYS").slice(0, 2).toUpperCase(),
+          title: row.action.replaceAll("_", " "),
+          detail: `${row.target}${row.created_at ? ` • ${new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.created_at))}` : ""}`,
+        }))
+      : mockAuditLog;
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
@@ -12,7 +31,7 @@ export default function AuditLog() {
       </CardHeader>
       <CardContent>
       <ul className="space-y-4">
-        {auditLog.map((a) => (
+        {rows.map((a) => (
           <li key={a.title} className="flex items-center gap-3">
             <Avatar name={a.initials} size="sm" />
             <div className="min-w-0">

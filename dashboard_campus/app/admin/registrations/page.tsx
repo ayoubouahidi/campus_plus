@@ -1,8 +1,37 @@
 import Topbar from "@/components/admin/Topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { eventRegistrations, weeklyRegistrations } from "@/lib/mock-data";
+import { backendFetch } from "@/lib/api";
 
-export default function RegistrationsPage() {
+export const instant = false;
+
+type WeeklyRegistration = { date: string; registrations: number };
+type ClubEvent = { id: number; name: string; capacity?: number | null };
+
+export default async function RegistrationsPage() {
+  let weeklyRegistrations: { day: string; value: number }[] = [];
+  let eventRegistrations: { event: string; registered: number; capacity: number }[] = [];
+  try {
+    const [weeklyResponse, eventsResponse] = await Promise.all([
+      backendFetch<WeeklyRegistration[]>("/api/board/registrations/weekly/"),
+      backendFetch<ClubEvent[] | { results: ClubEvent[] }>("/api/club-events/"),
+    ]);
+    weeklyRegistrations = weeklyResponse.map((item) => ({
+      day: new Intl.DateTimeFormat("en", { weekday: "short" }).format(
+        new Date(`${item.date}T12:00:00`)
+      ),
+      value: item.registrations,
+    }));
+    const events = "results" in eventsResponse ? eventsResponse.results : eventsResponse;
+    eventRegistrations = events.slice(0, 8).map((event) => ({
+      event: event.name,
+      registered: 0,
+      capacity: event.capacity ?? 0,
+    }));
+  } catch {
+    weeklyRegistrations = [];
+    eventRegistrations = [];
+  }
+
   return (
     <>
       <Topbar title="Registrations" subtitle="Event registrations for Robotics & AI Research Club" />
@@ -49,7 +78,11 @@ export default function RegistrationsPage() {
                       <div
                         className="h-2 rounded-full bg-violet-600"
                         style={{
-                          width: `${(registration.registered / registration.capacity) * 100}%`,
+                          width: `${
+                            registration.capacity > 0
+                              ? (registration.registered / registration.capacity) * 100
+                              : 0
+                          }%`,
                         }}
                       />
                     </div>
