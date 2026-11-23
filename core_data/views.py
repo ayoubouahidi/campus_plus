@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
+from django.utils.cache import patch_vary_headers
 
 # [ahmed] Broadcast calendar events through Redis.
 from realtime.broadcast import broadcast_calendar_event
@@ -160,6 +161,15 @@ EVENT_LIST_PARAMETERS = [
         description='`true` keeps events whose end time is in the future.',
     ),
     OpenApiParameter(
+        name='rsvped',
+        type=OpenApiTypes.BOOL,
+        location=OpenApiParameter.QUERY,
+        description=(
+            '`true` requires authentication and returns only events for which '
+            'the current user has an active RSVP. Includes past and upcoming events.'
+        ),
+    ),
+    OpenApiParameter(
         name='search',
         type=OpenApiTypes.STR,
         location=OpenApiParameter.QUERY,
@@ -276,6 +286,7 @@ class ClubEventFilterBackend(filters.BaseFilterBackend):
         from_value = self.get_single_value(request, 'from')
         to_value = self.get_single_value(request, 'to')
         upcoming = self.get_single_value(request, 'upcoming')
+        rsvped = self.get_single_value(request, 'rsvped')
 
         if request.query_params.getlist('ordering'):
             raise ValidationError({
@@ -331,6 +342,20 @@ class ClubEventFilterBackend(filters.BaseFilterBackend):
                 })
             if normalized == 'true':
                 queryset = queryset.filter(ends_at__gt=timezone.now())
+
+        if rsvped is not None:
+            normalized = rsvped.lower()
+            if normalized not in {'true', 'false'}:
+                raise ValidationError({
+                    'rsvped': 'Use true or false.',
+                })
+            if normalized == 'true':
+                if not request.user or not request.user.is_authenticated:
+                    # Permission selection normally rejects this earlier. Keep
+                    # the filter fail-closed when called directly as well.
+                    from rest_framework.exceptions import NotAuthenticated
+                    raise NotAuthenticated()
+                queryset = queryset.filter(rsvps__user=request.user)
 
         return queryset.order_by(
             F('starts_at').asc(nulls_last=True),
@@ -451,24 +476,34 @@ class ClubEventViewSet(viewsets.ModelViewSet):
             rsvps_count=Count('rsvps', distinct=True),
         )
         user = getattr(self.request, 'user', None)
+        is_rsvp_history = (
+            self.request.query_params.get('rsvped', '').lower() == 'true'
+        )
         if user and user.is_authenticated:
             queryset = queryset.annotate(
                 has_user_rsvpd=Exists(
                     Rsvp.objects.filter(event=OuterRef('pk'), user=user)
                 )
-            ).prefetch_related(
-                Prefetch(
-                    'rsvps',
-                    queryset=(
-                        Rsvp.objects.select_related('user')
-                        .order_by('-created_at')[:3]
-                    ),
-                    to_attr='attendees_preview_rsvps',
-                )
             )
+            if not is_rsvp_history:
+                queryset = queryset.prefetch_related(
+                    Prefetch(
+                        'rsvps',
+                        queryset=(
+                            Rsvp.objects.select_related('user')
+                            .order_by('-created_at')[:3]
+                        ),
+                        to_attr='attendees_preview_rsvps',
+                    )
+                )
         return queryset
 
     def get_permissions(self):
+        if (
+            self.action == 'list'
+            and self.request.query_params.get('rsvped', '').lower() == 'true'
+        ):
+            return [IsAuthenticated()]
         if self.action in ('rsvp', 'attendees'):
             return [IsAuthenticated()]
 
@@ -797,20 +832,28 @@ class UserMemberViewSet(viewsets.ModelViewSet):
     retrieve=extend_schema(
         summary='Retrieve a public club by slug',
         description=(
-            'Slug-based detail route. The response does not include private '
-            'president contact fields.'
+            'Slug-based detail route. President contact fields are omitted '
+            'anonymously and included only for an authenticated active user.'
         ),
         responses={200: ClubSerializer, 404: OpenApiResponse(description='Not found.')},
         auth=[],
     ),
 )
 class ClubViewSet(viewsets.ModelViewSet):
-    queryset = Club.objects.select_related('department', 'head')
+    queryset = Club.objects.select_related('department', 'head', 'head__user')
     serializer_class = ClubSerializer
     permission_classes = [AllowAny]
     lookup_field = 'slug'
     # [ahmed] Temporary fail-closed protection until shared roles are available.
     http_method_names = ['get', 'head', 'options']
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        # The same URL has an authenticated representation with private fields.
+        # Never allow a shared public cache to reuse it for another caller.
+        patch_vary_headers(response, ('Authorization',))
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
     def get_queryset(self):
         queryset = super().get_queryset()

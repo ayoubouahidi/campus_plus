@@ -376,8 +376,8 @@ class FrontendOpenApiCompatibilityTests(SimpleTestCase):
         )
         self.assertTrue(event['capacity']['nullable'])
         self.assertTrue(department['slug']['nullable'])
-        self.assertNotIn('president_email', club)
-        self.assertNotIn('president_phone', club)
+        self.assertEqual(club['president_email']['type'], 'string')
+        self.assertEqual(club['president_phone']['type'], 'string')
 
     def test_rsvp_and_integrated_auth_routes_are_present(self):
         paths = self.schema['paths']

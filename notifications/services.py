@@ -18,6 +18,7 @@ def notification_payload(notification):
             "notification_type": notification.notification_type,
             "title": notification.title,
             "message": notification.message,
+            "event_title": notification.event_title,
             "is_read": notification.is_read,
             "created_at": notification.created_at.isoformat().replace("+00:00", "Z"),
             "event_id": notification.event_id,
@@ -60,6 +61,7 @@ class NotificationService:
             "title": title,
             "message": message,
             "event": event,
+            "event_title": event.name if event is not None else None,
         }
         with transaction.atomic():
             if deduplication_key is None:

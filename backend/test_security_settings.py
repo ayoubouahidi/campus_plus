@@ -16,6 +16,7 @@ class ProductionSecuritySettingsTests(SimpleTestCase):
         'DJANGO_ALLOWED_HOSTS',
         'DJANGO_CSRF_TRUSTED_ORIGINS',
         'DJANGO_HTTPS_ENABLED',
+        'DJANGO_PUBLIC_MEDIA_BASE_URL',
         'DJANGO_HSTS_SECONDS',
         'DJANGO_HSTS_INCLUDE_SUBDOMAINS',
         'DJANGO_HSTS_PRELOAD',
@@ -40,6 +41,7 @@ print(json.dumps({
     'content_type_nosniff': settings.SECURE_CONTENT_TYPE_NOSNIFF,
     'referrer_policy': settings.SECURE_REFERRER_POLICY,
     'proxy_ssl_header': settings.SECURE_PROXY_SSL_HEADER,
+    'public_media_base_url': settings.PUBLIC_MEDIA_BASE_URL,
 }))
 """
 
@@ -63,6 +65,9 @@ print(json.dumps({
             'DJANGO_HSTS_PRELOAD': 'false',
             'REDIS_URL': 'redis://127.0.0.1:6379/15',
             'WS_AUTH_BACKEND': 'jwt',
+            'DJANGO_PUBLIC_MEDIA_BASE_URL': (
+                'https://app.campusplus.example'
+            ),
         })
         environment.update(overrides)
         return subprocess.run(
@@ -107,6 +112,10 @@ print(json.dumps({
         self.assertTrue(settings['session_cookie_secure'])
         self.assertTrue(settings['csrf_cookie_secure'])
         self.assertEqual(settings['hsts_seconds'], 31536000)
+        self.assertEqual(
+            settings['public_media_base_url'],
+            'https://app.campusplus.example',
+        )
         self.assertEqual(settings['x_frame_options'], 'DENY')
         self.assertTrue(settings['content_type_nosniff'])
         self.assertEqual(settings['referrer_policy'], 'same-origin')
@@ -166,6 +175,14 @@ print(json.dumps({
                 'DJANGO_CSRF_TRUSTED_ORIGINS',
             ),
             ({'DJANGO_HTTPS_ENABLED': 'sometimes'}, 'DJANGO_HTTPS_ENABLED'),
+            (
+                {'DJANGO_PUBLIC_MEDIA_BASE_URL': 'http://app.example'},
+                'DJANGO_PUBLIC_MEDIA_BASE_URL',
+            ),
+            (
+                {'DJANGO_PUBLIC_MEDIA_BASE_URL': 'https://app.example/media'},
+                'DJANGO_PUBLIC_MEDIA_BASE_URL',
+            ),
             ({'DJANGO_HSTS_SECONDS': '-1'}, 'DJANGO_HSTS_SECONDS'),
             (
                 {
@@ -223,6 +240,7 @@ print(json.dumps({
             'DJANGO_ALLOWED_HOSTS',
             'DJANGO_CSRF_TRUSTED_ORIGINS',
             'DJANGO_HTTPS_ENABLED',
+            'DJANGO_PUBLIC_MEDIA_BASE_URL',
             'DJANGO_HSTS_SECONDS',
             'DJANGO_HSTS_INCLUDE_SUBDOMAINS',
             'DJANGO_HSTS_PRELOAD',

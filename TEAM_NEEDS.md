@@ -1,5 +1,10 @@
 # What the frontend needs from the team
 
+> Final scope correction (2026-11-23): the product is 1337-only. Older EMINES,
+> FGSES, and UM6P examples were planning notes, not sample-data or eligibility
+> promises. Runtime eligibility still depends on Ayoub's configured and tested
+> `ALLOWED_42_CAMPUSES` authentication policy.
+
 > Written 2026-11-08 by the frontend (Mouad) after reading each teammate's branch. Every item says **who**, **what**, and **why the frontend needs it**. Tick items off here as they land. How the frontend works: [`ARCHITECTURE.md`](./ARCHITECTURE.md). Per-component detail: [`DOCS.md`](./DOCS.md).
 
 **The contract:** the frontend's data shapes are in `frontend/src/types/api.ts` (`EventItem`, `Club`, `User`, `ApiResponse<T>`). The backend can name things its own way; the frontend maps them in one place. But every *piece of information* below has to come from somewhere.
@@ -53,7 +58,7 @@ What exists today (on `Ahmed`): `/api/clubs/`, `/api/club-events/`, `/api/depart
 | `flyer_url` | `image_path` exists on the model but **isn't in the serializer** | Add it as an absolute URL (`''` or `null` when none) |
 | `category` | missing | Add `category` with choices `Tech, Media, Music, Sports, Business, EventsOrganization, Gaming` (filters, colours, calendar) |
 | `club_id`, `club_name` | `club` (id only) | Add `club_name` (and ideally `club_slug`) so the feed needn't fetch every club |
-| `department_name` + **campus** | missing on events | Add `department_name` and a `department_slug` (e.g. `1337`, `emines`). The campus filter currently guesses from names (DOCS §5.3). |
+| `department_name` + **campus** | missing on events | Add `department_name` and `department_slug` (`1337` for the agreed scope). |
 | `status` (`planned`/`ongoing`/`completed`/`cancelled`) | exists | Keep it. Frontend will show a "Cancelled" badge. |
 
 **Query parameters** (so the frontend doesn't download everything): `?from=&to=` (date range for the calendar month), `?upcoming=true`, `?club=<slug>`, `?department=<slug>`, `?category=`, `?search=` (title/description/club/location).
@@ -93,7 +98,7 @@ Ahmed owns `realtime` (Channels, Daphne, Redis, WebSocket JWT, `POST /api/realti
 | `token` | One token the frontend sends as `Authorization: Token …` for RSVP and private data. Plus the **WebSocket JWT** for the same user: Ahmed's socket code (JWT mode) reads it from a `ws_access` cookie, never from the URL. Someone must set that cookie (HttpOnly, Secure, SameSite) and refresh it (5-minute lifetime by default). |
 | Public reads | `GET` on events, clubs and departments must work **without** a token (`AllowAny` for safe methods); writes need auth |
 | `GET /api/me/` | The current user from the token |
-| Email/password | 42 is enough for students? `api/signup/` exists. **Decide** whether EMINES students (no 42 account) sign up with email. |
+| Email/password | Compatibility path only; it does not broaden the agreed 1337-only eligibility policy. |
 
 ### 1b.2 Real-time (WebSocket `/ws/calendar/`), Phase 6
 
@@ -134,7 +139,7 @@ Message: `{ "type": "event_created" | "event_updated" | "event_deleted", "data":
 | Question | Options | Frontend's suggestion |
 | --- | --- | --- |
 | Who can see who's going to an event? | Everyone / signed-in students / nobody but the count | Signed-in students |
-| EMINES students without a 42 account | Email sign-up / campus SSO / 42 only | Email sign-up via `api/signup/` |
+| Non-1337 users | Outside the agreed product scope | Do not provision sample users or claim eligibility |
 | Dashboard location | `/dashboard` on the same domain / `admin.` subdomain | Subdomain (no cookie clash, clean nginx) |
 | Event categories | The 7 above / editable list in the DB | Fixed list for now |
 | Languages | English + Arabic (RTL) / + French | English + Arabic, French later |

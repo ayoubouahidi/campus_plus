@@ -111,6 +111,7 @@ class PublicOpenApiSchemaTests(SimpleTestCase):
                 'status',
                 'to',
                 'upcoming',
+                'rsvped',
             },
         )
         self.assertNotIn('ordering', parameters)
@@ -136,8 +137,8 @@ class PublicOpenApiSchemaTests(SimpleTestCase):
         self.assertTrue(club['banner_url']['nullable'])
         self.assertEqual(club['logo_url']['type'], 'string')
         self.assertTrue(club['contact_email']['writeOnly'])
-        self.assertNotIn('president_email', club)
-        self.assertNotIn('president_phone', club)
+        self.assertEqual(club['president_email']['type'], 'string')
+        self.assertEqual(club['president_phone']['type'], 'string')
         self.assertTrue(department['slug']['nullable'])
 
         self.assertEqual(event['rsvps_count']['type'], 'integer')

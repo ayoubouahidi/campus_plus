@@ -5,6 +5,7 @@ import warnings
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.text import slugify
 from django.utils.deconstruct import deconstructible
 from PIL import Image, UnidentifiedImageError
 
@@ -99,8 +100,6 @@ class Club(models.Model):
     slug = models.SlugField(
         max_length=100,
         unique=True,
-        null=True,
-        blank=True,
     )
     description = models.TextField(blank=True)
     logo = models.ImageField(
@@ -145,6 +144,19 @@ class Club(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name)[:100] or 'club'
+            candidate = base_slug
+            suffix = 2
+            existing = type(self).objects.exclude(pk=self.pk)
+            while existing.filter(slug=candidate).exists():
+                suffix_text = f'-{suffix}'
+                candidate = f'{base_slug[:100 - len(suffix_text)]}{suffix_text}'
+                suffix += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
 
 
 class ClubEvent(models.Model):

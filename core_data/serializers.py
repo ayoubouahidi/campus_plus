@@ -1,5 +1,6 @@
 import secrets
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -18,6 +19,9 @@ def absolute_file_url(file_field, context, empty_value):
         return empty_value
 
     url = file_field.url
+    public_media_base_url = getattr(settings, 'PUBLIC_MEDIA_BASE_URL', '')
+    if public_media_base_url:
+        return f"{public_media_base_url}/{url.lstrip('/')}"
     request = context.get('request')
     if request is None:
         return url
@@ -54,6 +58,8 @@ class ClubSerializer(serializers.ModelSerializer):
     logo_url = serializers.SerializerMethodField()
     banner_url = serializers.SerializerMethodField()
     president_name = serializers.SerializerMethodField()
+    president_email = serializers.SerializerMethodField()
+    president_phone = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
     event_count = serializers.SerializerMethodField()
     upcoming_event_count = serializers.SerializerMethodField()
@@ -73,6 +79,31 @@ class ClubSerializer(serializers.ModelSerializer):
         if club.head is None:
             return ''
         return f'{club.head.first_name} {club.head.last_name}'.strip()
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_president_email(self, club):
+        if club.head is None or club.head.user is None:
+            return ''
+        return club.head.user.email
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_president_phone(self, club):
+        if club.head is None:
+            return ''
+        return club.head.phone
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not (
+            user
+            and user.is_authenticated
+            and user.is_active
+        ):
+            data.pop('president_email', None)
+            data.pop('president_phone', None)
+        return data
 
     @staticmethod
     @extend_schema_field(OpenApiTypes.INT)
@@ -110,6 +141,8 @@ class ClubSerializer(serializers.ModelSerializer):
             'banner_url',
             'president',
             'president_name',
+            'president_email',
+            'president_phone',
             'member_count',
             'event_count',
             'upcoming_event_count',
@@ -204,6 +237,9 @@ class ClubEventSerializer(serializers.ModelSerializer):
     def get_attendees_preview(self, event):
         request = self.context.get('request')
         user = getattr(request, 'user', None)
+        query_params = getattr(request, 'query_params', {})
+        if query_params.get('rsvped', '').lower() == 'true':
+            return []
         if not user or not user.is_authenticated or event.pk is None:
             return []
         rsvps = getattr(event, 'attendees_preview_rsvps', None)

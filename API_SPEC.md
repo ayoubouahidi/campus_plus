@@ -1,6 +1,6 @@
 # Campus Plus Public API Specification
 
-Status: implemented contract snapshot for branch `Ahmed` on 2026-11-20.
+Status: implemented contract snapshot for Ahmed's backend work on 2026-11-23.
 
 This file documents current runtime behavior. It deliberately distinguishes
 implemented public reads from planned authentication, RSVP, readiness, and
@@ -81,6 +81,7 @@ All supplied filters combine with AND.
 | `from` | ISO 8601 date/datetime lower overlap boundary; keeps events with `ends_at > from`. |
 | `to` | ISO 8601 date/datetime upper overlap boundary; keeps events with `starts_at < to`. |
 | `upcoming` | `true` keeps events whose `ends_at` is in the future; `false` adds no end-time filter. |
+| `rsvped` | `true` requires authentication and keeps only events for which the current user currently has an RSVP. |
 | `search` | Case-insensitive search across event name/title, description, Club name, and location; maximum 200 characters. |
 | `page` | Page number. |
 | `page_size` | Integer 1–200; default 20. |
@@ -90,6 +91,15 @@ with field-specific messages. A reversed/equal `from`/`to` interval returns 400.
 
 Ordering is fixed to `starts_at` ascending, nulls last, then primary key for
 stable pages. Client `ordering` is not supported; sending it returns 400.
+
+### Current user's RSVP history
+
+`GET /api/club-events/?rsvped=true` is the implemented profile-history
+contract. Authentication is required. Ownership is always derived from
+`request.user`; a submitted user ID is ignored. The normal bounded event
+pagination and chronological ordering include both past and upcoming current
+registrations. Cancelled registrations disappear. `attendees_preview` is `[]`
+on this focused response so unrelated attendee identities are not returned.
 
 ### Event detail
 
@@ -162,6 +172,8 @@ Current item fields:
   "banner_url": null,
   "president": 20,
   "president_name": "Yassine El Amrani",
+  "president_email": "president@example.test",
+  "president_phone": "+212600000000",
   "member_count": 86,
   "event_count": 24,
   "upcoming_event_count": 3,
@@ -174,15 +186,31 @@ Current item fields:
 }
 ```
 
-`logo_url` may be `""`. `banner_url` may be null. Slugs remain nullable in the
-serializer until the A0 migration/backfill is complete, although a null Club
-slug cannot be used for detail lookup.
+`logo_url` may be `""`. `banner_url` may be null. Migration
+`core_data.0012_backfill_club_slugs` fills missing Club slugs deterministically,
+rejects unsafe existing values, and makes the field non-null. New Clubs
+generate unique URL-safe slugs from their names.
 
-Anonymous responses do not include `contact_email`, `president_email`, or
-`president_phone`. The internal serializer still accepts `contact_email` as a
-write-only field, but Club writes are temporarily disabled.
+The two president contact fields are included only for authenticated active
+users. Anonymous callers cannot see them; invalid or inactive credentials are
+rejected. Missing values are empty strings for an authenticated caller.
+`contact_email` remains write-only. Responses use `Vary: Authorization` and
+`Cache-Control: private, no-store` to prevent shared-cache leakage.
 
 POST, PUT, PATCH, and DELETE are disabled for all Club callers and return 405.
+
+## Browser media URL contract
+
+`flyer_url`, `logo_url`, and `banner_url` use
+`DJANGO_PUBLIC_MEDIA_BASE_URL` when configured. It must be one explicit HTTP(S)
+origin without credentials, path, query, fragment, or wildcard; production
+HTTPS mode requires HTTPS. This avoids returning an internal host such as
+`web:8000` and does not trust forwarded host headers. Without the setting,
+request-derived absolute URLs remain the fallback.
+
+Hamza must set the externally reachable origin and route its `/media/` path to
+the shared media volume over HTTPS without exposing unrelated files. Backend
+tests validate URL construction, not a real Nginx/browser request.
 
 ## Public Department API
 
@@ -330,6 +358,7 @@ Each result has this shape:
   "notification_type": "event_updated",
   "title": "Event updated",
   "message": "An event you registered for changed.",
+  "event_title": "AI Hackathon",
   "is_read": false,
   "created_at": "2026-11-22T16:00:00Z",
   "read_at": null,
@@ -383,6 +412,7 @@ New records use:
     "notification_type": "event_updated",
     "title": "Event updated",
     "message": "An event you registered for changed.",
+    "event_title": "AI Hackathon",
     "is_read": false,
     "created_at": "2026-11-22T16:00:00Z",
     "event_id": 24
@@ -417,6 +447,10 @@ messages are scheduled with `transaction.on_commit()`. Failed transactions send
 nothing. Redis failures are logged without payload or recipient details and do
 not roll back persistent history. Event deletion sets `event_id` to null so the
 text history remains serializable without a dangling relationship.
+`event_title` snapshots the event name at creation and survives event deletion.
+Historical rows may contain null. Mouad should localize from
+`notification_type` plus `event_title`, falling back to English `title` and
+`message` when structured information is unavailable.
 
 Fanout is synchronous and appropriate for the current Club membership scale.
 Large future audiences would require an approved background worker; this feature
@@ -426,7 +460,7 @@ does not introduce Celery or another queue implicitly.
 
 The schema intentionally does not claim the following:
 
-- `/api/me/rsvps/`;
+- `/api/me/rsvps/` (use `GET /api/club-events/?rsvped=true`);
 - final product approval for attendee visibility and cancelled/completed RSVP
   policy;
 - protected database/Redis/Channels readiness;
@@ -443,7 +477,6 @@ The schema intentionally does not claim the following:
    liveness, while the newer team plan reserves it for protected readiness.
    Infrastructure should move probes to `/api/health/live` before repurposing
    the root health route.
-4. Department and Club slug nullability is temporary pending an approved A0
-   migration and backfill.
-5. Database-backed response and query behavior remains unverified until A0 is
-   resolved; OpenAPI/contract tests are database-free evidence only.
+4. Department slug nullability remains a legacy-data concern. Club slug
+   nullability is resolved by forward migration `core_data.0012`; Hamza must
+   rehearse it against a disposable copy of populated deployment data.

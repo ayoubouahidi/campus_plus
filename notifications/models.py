@@ -20,6 +20,7 @@ class Notification(models.Model):
     notification_type = models.CharField(max_length=32, choices=Type.choices)
     title = models.CharField(max_length=160)
     message = models.TextField(max_length=1000)
+    event_title = models.CharField(max_length=255, null=True, blank=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     read_at = models.DateTimeField(null=True, blank=True)
