@@ -68,6 +68,39 @@ const en = {
       rsvp_cancelled: { title: 'RSVP cancelled', body: 'You’re no longer going to “{event}”.' },
     },
   },
+  // Step 18.1: page links (ui/Pagination.tsx), for any paged list.
+  Pagination: {
+    label: 'Pages',
+    previous: 'Previous',
+    next: 'Next',
+    page: 'Page {page}',
+  },
+  // Step 18.1: the /search page (advanced search: filters, sorting, pagination).
+  SearchPage: {
+    title: 'Search events',
+    intro: 'Find any 1337 event: filter by category, date and club, then sort the results.',
+    filters: 'Search filters',
+    query: 'Search',
+    placeholder: 'Title, club, place, description…',
+    category: 'Category',
+    allCategories: 'All categories',
+    when: 'When',
+    whenOptions: { upcoming: 'Upcoming', past: 'Past', all: 'Any time' },
+    club: 'Club',
+    allClubs: 'All clubs',
+    sort: 'Sort by',
+    sortOptions: { relevance: 'Best match', soonest: 'Soonest first', latest: 'Latest first', popular: 'Most popular' },
+    sortByDate: 'No search words: sorted by date.',
+    submit: 'Search',
+    clearAll: 'Clear all',
+    updating: 'Updating results…',
+    events: 'Events',
+    clubs: 'Matching clubs',
+    summary: '{total, plural, =0 {No events found} one {1 event} other {Events {from}–{to} of #}}',
+    pageOf: 'Page {page} of {pageCount}',
+    emptyTitle: 'No events match your search',
+    emptyBody: 'Try other words, another category, or “Any time” to include past events.',
+  },
   Search: {
     loading: 'Loading events and clubs…',
     unavailable: 'Search isn’t available right now. Try again in a moment.',
@@ -80,6 +113,8 @@ const en = {
     noMatch: 'No events or clubs match “{query}”.',
     count: '{count, plural, =0 {No results} one {# result} other {# results}}',
     club: 'Club',
+    seeAll: 'See all results for “{query}”',
+    seeAllHint: 'Filters, sorting and every page of results',
   },
   // Event categories (EventCategory → label). Fixed list, so it is UI text, not club data.
   Categories: {
@@ -376,6 +411,8 @@ const en = {
     termsDescription: 'The rules for using Campus Hub: accounts, RSVPs, clubs and what is not allowed.',
     designSystem: 'Design system',
     designSystemDescription: 'The building blocks of Campus Hub, by Atomic Design level: colours, type, icons and every component.',
+    search: 'Search events',
+    searchDescription: 'Search every 1337 event by words, category, date and club, sorted the way you need.',
   },
   Events: {
     count: '{count, plural, =0 {No events} one {# event} other {# events}}',

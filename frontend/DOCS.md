@@ -4914,3 +4914,367 @@ ATOMIC_LEVELS, ATOMIC_ORDER, BRAND_SCALE, NEUTRAL_SCALE, STATUS_SWATCHES, CATEGO
 **Fix after Mouad's check: the bell's panel ran off-screen.** The panel opens towards the start side of the bell (`sm:end-0`, built for the navbar, where the bell is at the end). In the showcase the bell came first in its row, so the 24rem panel left the screen. The bell now sits at the end of its row (`ms-auto`), as in the navbar, in both directions.
 
 **Contract.** Route `/design-system` (public). Footer: `{ id: 'project', titleKey: 'project', links: [{ kind: 'internal', labelKey: 'designSystem', href: '/design-system' }] }`.
+
+## 18. Advanced search: filters, sorting, pagination (2026-11-23)
+
+The "advanced search" module (Web minor, 1 pt) asks for **search with filters, sorting and pagination**. Before this step the site had:
+- the ⌘K palette: words only, 5 results per group, no order to choose, no pages;
+- the feed's category chips: one filter, no words.
+
+Step 18 adds a full results page, **`/search`**. This section is written to be studied: it explains every rule, with examples, not only what the code does.
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 18.1 | `/search` page: URL-driven filters, 4 sorts, pagination, `Pagination` molecule, shared matching rules | ✅ validated 2026-11-23 |
+| 18.2 | One search box: "See all results" in the navbar search opens `/search`; live refresh on `/search`; no other entry | ✅ validated 2026-11-23 |
+
+### 18.1 The `/search` page (Step 18.1, 2026-11-23)
+
+**Files:**
+
+| File | Kind | Role |
+|---|---|---|
+| `src/lib/advancedSearch.ts` | Pure logic (new) | URL ⇄ state, filtering, the 4 sort orders, paging, page numbers |
+| `src/lib/search.ts` | Pure logic (refactored) | Matching rules shared with the ⌘K palette: `toTerms`, `rankName`, `eventMatches`, `clubMatches`, `searchClubs` |
+| `src/lib/data.ts` | Data (changed) | `EventQuery.category`, passed to Django as `?category=` |
+| `src/app/search/page.tsx` | Server Component (new) | Reads the URL, fetches, runs the search, renders |
+| `src/components/search/SearchView.tsx` | Client Component (new) | The filter form, the results grid with RSVP, the pending state |
+| `src/components/ui/Pagination.tsx` | Molecule (new) | Page links, reusable for any paged list |
+| `src/types/navigation.ts` | Types | `'/search'` and `` `/search?${string}` `` in `AppRoute` |
+| `src/i18n/messages/{en,fr,ar}.ts` | Words | `SearchPage`, `Pagination`, `Meta.search…` |
+| `src/app/test/page.tsx` | Test | The step's checklist |
+
+**Status:** ✅ Validated by Mouad (2026-11-23), together with 18.2: "all good". Checks done are under "Verified" below.
+
+#### 1. Business purpose
+
+A student who wants "every music event last month" or "the most popular events from LEET Dev" can't get it from the feed (upcoming events, one category chip) or the palette (5 quick results). `/search` answers any of these:
+
+| Question | URL |
+|---|---|
+| Find words anywhere | `/search?q=hackathon` |
+| Narrow by category, date and club | `/search?category=Music&when=past&club=leet-music` |
+| Choose the order | `&sort=soonest` / `latest` / `popular` / `relevance` |
+| Browse long lists | `&page=2`, 12 events per page |
+
+Every result list has its own URL: it can be shared, bookmarked, reopened, and the back button works.
+
+#### 2. How it works: the data flow
+
+```
+ Browser                                   Next.js server (page.tsx)                         Django
+ ───────                                   ─────────────────────────                         ──────
+ /search?q=jam&when=all&sort=popular  ──►  parseSearchParams(URL)  → SearchState
+                                           listClubs()  ───────────────────────────────────► GET /api/clubs/
+                                           club slug valid? else "all clubs"
+                                           listEvents({category, club, upcoming}, token) ──► GET /api/club-events/?category=…&club=…&upcoming=true
+                                           eventsForVisitor()   (signed out: no names)
+                                           runEventSearch(events, state, now)
+                                             ├ filter: category, club, when, words
+                                             ├ sort:   COMPARATORS[effectiveSort(state)]
+                                             └ slice:  page → 12 events + totals
+                                           getEventSchedules(page events)  (dates in campus time)
+                                           searchClubs(q)   (page 1 only)
+                 HTML (server-rendered) ◄──  <SearchView …>  +  <Pagination …>
+
+ User changes a filter ──► SearchView: buildSearchHref(withFilter(state, change))
+                            router.push(href) inside startTransition  ──► the server renders the new URL (same path as above)
+```
+
+The server decides **everything** from the URL. The client component never filters or sorts; it only turns a choice into a new URL. So there's one implementation of the rules, and the result for a URL is the same for everyone (apart from the signed-in RSVP state).
+
+#### 3. The URL contract (`parseSearchParams`, `buildSearchHref`)
+
+| Param | Values | Default | Invalid or missing → |
+|---|---|---|---|
+| `q` | Any text, trimmed, max 200 characters (Django's limit) | `''` | `''`; longer text is cut |
+| `category` | `all`, `Tech`, `Media`, `Music`, `Sports`, `Business`, `Gaming`, `EventsOrganization` | `all` | `all` |
+| `when` | `upcoming`, `past`, `all` | `upcoming` | `upcoming` |
+| `club` | A club slug (`[a-z0-9_-]`, max 100) | `''` (all clubs) | `''`; a well-formed slug of no existing club also becomes `''` (checked in `page.tsx`) |
+| `sort` | `relevance`, `soonest`, `latest`, `popular` | `relevance` | `relevance` |
+| `page` | Integer ≥ 1 | `1` | `1`; a page past the end shows the last page |
+
+Rules worth remembering:
+- **Never an error for a bad URL.** Old links, typos and hand-edited URLs fall back to defaults. Example: `/search?sort=bogus&when=nope&page=-3&category=Foo` shows the plain upcoming list.
+- **Repeated params:** `?q=a&q=b` arrives as `['a','b']` (Next.js); the first value wins.
+- **Short, stable URLs.** `buildSearchHref` leaves out default values and always writes the keys in the same order (`q, category, when, club, sort, page`). The plain page is `/search`; page 1 never writes `page=1`. Same state → same URL, which matters for back/forward and for comparing URLs.
+- **A new filter resets the page** (`withFilter`): page 3 of the old results means nothing for the new ones.
+- **`isDefaultSearch`** = "the URL would be `/search`" → hides "Clear all".
+
+#### 4. Matching words (`lib/search.ts`, shared with the ⌘K palette)
+
+1. **`toTerms`** splits the query into terms after `normalizeText`:
+   - lower case;
+   - accents removed (`Cinématic` → `cinematic`);
+   - Arabic vowel marks removed;
+   - example: `"  Leet  JAM "` → `['leet', 'jam']`.
+2. **`eventMatches`**: **every** term must appear somewhere in the event's text. More words narrow the results, they never widen them (AND, not OR). The text searched is:
+   - title, club name, location and description;
+   - the category's English name and its name in the visitor's language. So "musique" (French) or "رياضة" (Arabic) find Music or Sports events.
+3. **`clubMatches`**: the same rule on a club's name, department and description.
+4. **`rankName`** scores how well a *name* matches the whole query, used by "Best match":
+
+   | Rank | Meaning | Query "leet jam" vs title |
+   |---|---|---|
+   | 0 | Title starts with the query | "Leet Jam Session" |
+   | 1 | Title contains the query | "Friday Leet Jam" |
+   | 2 | Matched only elsewhere (club, place, description, category) | "Afro House Night" by LEET Music |
+
+**One rule set, two places.** The palette (browser, `searchCampus`) and `/search` (server, `runEventSearch`) import the same functions. A query can't match in one and not the other.
+
+**Change for the palette:** the description is now part of the searched text in the palette too (it wasn't before). Django's own `search` also covers it, so this lines up with the backend.
+
+#### 5. Filters (`runEventSearch`)
+
+| Filter | Rule | Where it's applied |
+|---|---|---|
+| Category | `event.category === state.category` | Django (`?category=`) and again on our side |
+| Club | `event.club_slug === slug`, or `event.club_id === clubId` (mock events have no slug) | Django (`?club=`) and again on our side |
+| When | Upcoming: `end_time > now` (an **ongoing** event counts as upcoming, you can still go). Past: `end_time ≤ now`. All: everything | Django for "upcoming" (`?upcoming=true`); past and all filtered by us |
+| Words | `eventMatches` (above) | Us only |
+
+**Why filter twice?** Django's filter reduces what travels over the network. Our filter keeps the rules identical with the mocks (dev without Django) and protects against a parameter Django ignored. It costs a few microseconds.
+
+**`now`** is the request time (`getRequestTime`), the same instant for the whole page, so the time filter and the "upcoming before ended" rank can't disagree within one render.
+
+#### 6. Sorting (`COMPARATORS`, `effectiveSort`)
+
+| Sort | Order | Ties broken by |
+|---|---|---|
+| `relevance` (Best match) | `rankName` 0 → 1 → 2, then upcoming before ended | start time, then id |
+| `soonest` | Start time, earliest first | id |
+| `latest` | Start time, latest first | id (reversed) |
+| `popular` | `rsvps_count`, most first (Django's public count) | start time, then id |
+
+- **`effectiveSort`: "Best match" without words means "by date".** With nothing to match, every event would rank 2 and the order would be arbitrary. So `relevance` with an empty query becomes `soonest`, or `latest` when "Past" is chosen (the most recent past event is the most useful). The form says so under the select: "No search words: sorted by date." The URL keeps `relevance`, so typing a word later uses it.
+- **Stable order (tie-breakers down to the id).** Pagination slices the sorted list. If two events compared equal, their order could change between two requests, and an event could show on page 1 and page 2, or on neither. Ending every comparison with start time and then the id (compared as numbers, so `9 < 10`) makes the order total.
+- **The comparators table is a `Record<SearchSort, …>`:** adding a sort without its comparator is a compile error (CLAUDE.md rule 4).
+- **Why we sort, not Django:** Django's event list has a fixed order (start date). Any other client order returns **400** (API_SPEC "ordering is not supported"). Sorting by popularity or relevance therefore happens here, on the full list of matches.
+
+#### 7. Pagination: the math (`runEventSearch`, `getPageItems`)
+
+With `total` matches and `SEARCH_PAGE_SIZE = 12` (4 rows of 3 cards on desktop, 6 rows of 2 on tablet):
+
+```
+pageCount = max(1, ceil(total / 12))        29 events → 3 pages ; 0 events → 1 page ("page 1 of 1")
+page      = min(requested, pageCount)        ?page=99 with 3 pages → page 3
+offset    = (page − 1) × 12                  page 2 → offset 12
+events    = sorted.slice(offset, offset + 12)
+from      = total ? offset + 1 : 0           page 2 → 13
+to        = offset + events.length           page 2 → 24 ; page 3 of 29 → 29
+```
+
+The summary reads "Events 13–24 of 29 · Page 2 of 3". It's an ICU plural:
+- 0 → "No events found";
+- 1 → "1 event";
+- otherwise the range.
+
+Arabic has its own forms (one, two, few, many, other).
+
+**Which page numbers to show (`getPageItems`).** The rule:
+1. Always show the first page, the last page, the current page and one neighbour on each side.
+2. Between two kept numbers, if exactly one page is skipped, show that number. A "…" would take the same room and hide information.
+3. If two or more pages are skipped, show "…".
+
+Checked output (run with Node on the real function):
+
+| Page of | Shows |
+|---|---|
+| 1 of 1 | Pagination hidden (nothing to choose) |
+| 1 of 3 | **1** 2 3 |
+| 1 of 10 | **1** 2 … 10 |
+| 3 of 7 | 1 2 **3** 4 … 7 |
+| 4 of 7 | 1 2 3 **4** 5 6 7 |
+| 5 of 10 | 1 … 4 **5** 6 … 10 |
+| 10 of 10 | 1 … 9 **10** |
+
+**Why page numbers and not "Load more" or infinite scroll:**
+- the subject says pagination;
+- each page has a URL (shareable, back button);
+- the footer stays reachable;
+- keyboard and screen-reader users know where they are ("Page 2, current page").
+
+#### 8. The `Pagination` molecule (`components/ui/Pagination.tsx`)
+
+- **Real links** (`<a href>` via `next/link`), not buttons: works before JavaScript, opens in a new tab, `rel="prev"` / `rel="next"`.
+- **ARIA:**
+  - `<nav aria-label="Pages">` (a landmark);
+  - each number has `aria-label="Page 2"`;
+  - the current one has `aria-current="page"`, so screen readers say "current page";
+  - the "…" is `aria-hidden` (the numbers around it carry the meaning).
+- **Previous/Next at the ends** stay in place as `aria-disabled` spans, so the layout doesn't jump. Their arrows flip in Arabic (`rtl:-scale-x-100`). Below `sm` only the arrow shows, the label stays in `aria-label`.
+- **Contract:** `{ page, pageCount, hrefFor: (page) => string }`. `hrefFor` is a function, so `Pagination` is rendered by the **server** page and passed into the client `SearchView` as a ready-made element (a `pagination` slot). A function can't be sent from a Server Component to a Client Component.
+- `pageCount ≤ 1` → renders nothing.
+
+#### 9. The form (`SearchView.tsx`): progressive enhancement and the pending state
+
+- **A real GET form** (`<form action="/search" method="get">`), and every control has a `name` (`q`, `category`, `when`, `club`, `sort`). Before JavaScript loads (or without it), the Search button submits `/search?q=…&category=…` and the server answers. With JavaScript, `onSubmit` prevents the full reload and navigates to the same URL.
+- **When changes apply:**
+
+| Control | Applies | History |
+|---|---|---|
+| Select (category, when, club, sort) | At once | `router.push`: one Back step per choice |
+| Typing | 400 ms after the last key (debounce) | `router.replace`: typing "hackathon" is one entry, not nine |
+| Enter / Search button | At once | `push` |
+
+  `scroll: false` keeps the page where it is while filtering.
+- **Pending state** (`useTransition`). While the server prepares the new results, the old ones stay visible, dimmed (`opacity-60`) and `aria-busy`, and "Updating results…" is announced. No blank flash, no spinner replacing the content.
+- **The text field and the URL.** The field is edited locally and re-synced from the URL only when the URL's words really differ (Back/Forward, "Clear all"). Re-syncing on every URL change would eat the trailing space being typed: "leet " → debounce → URL `q=leet` → the field would snap back to "leet". It uses React's "adjust state when a prop changes" pattern, not an effect.
+- **RSVP on the results** works as on the feed (`useRsvp` + `useSyncedState`, §14.3, §15.2). Signed-out visitors get counts only (`eventsForVisitor`).
+- **Landmarks:**
+  - `<search aria-label="Search filters">` (the HTML search landmark);
+  - the results `<section>` has the heading "Events" (`h2`), with the cards as `h3`;
+  - the "Matching clubs" strip is a separate `h2` section, page 1 only, when there are words.
+
+#### 10. Edge cases
+
+| Case | Behaviour |
+|---|---|
+| No events at all | "No events found" + empty state; "Clear all" only if a filter is set |
+| Unknown club slug in the URL | Treated as "all clubs" (never sent to Django) |
+| Page past the end (events deleted since the link was shared) | Last page shown, highlighted correctly |
+| Very long query | Cut to 200 characters (Django's limit, `maxLength` on the field too) |
+| Words + "Best match" + "Past" | Rank first, then (all past) by date |
+| No words + "Best match" | Date order; the hint explains it |
+| Cancelled events | Included (their card shows the Cancelled badge, §14.3); "Most popular" may list them, with their badge |
+| Signed out | Counts only, no attendee names, no "Going" |
+| Arabic | Layout mirrors, arrows flip, plural forms; numbers stay Western digits (ar-MA, §12.6) |
+
+#### 11. Tradeoffs ("Why this instead of alternatives?")
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| **URL as the single source of truth**, server-rendered results | Client state (`useState`) filtering an array in the browser | Shareable and bookmarkable results, Back/Forward for free, works without JavaScript, one implementation of the rules. Cost: one server round trip per change (hidden by the transition). |
+| **Sort and page on the Next.js server** | Ask Django (`?ordering=`, `?page=`) | Django refuses other orders (400) and its text search knows neither our accent rules nor translated category names. Campus scale (hundreds of events, capped at 2,000 by `apiFetchAll`) makes this cheap. If events grow to tens of thousands, the fix is a Django ordering + search endpoint, and this page would pass `page` through instead. |
+| **Django filters category, club and upcoming first** | Fetch every event every time | Less data over the network; our second filter keeps the rules identical anyway. |
+| **Page numbers (12 per page)** | "Load more" / infinite scroll | Subject wording; a URL per page; footer reachable; clearer for screen readers. |
+| **New `/search` page** | Add sorting and pages to the feed (`/`) | The feed stays a simple "what's next" page; `/search` covers past events and every filter without crowding it. |
+| **Native `<select>`** (our `Select` atom) | Custom dropdowns | Accessible everywhere, uses the phone's own picker, no focus-management code. |
+| **Debounced `replace` for typing** | Navigate on every key | One request and one history entry per pause instead of per letter. |
+| **`Pagination` with links** | Buttons calling a handler | Works without JavaScript and in new tabs. |
+
+#### 12. Contract
+
+```ts
+// src/lib/advancedSearch.ts
+type SearchWhen = 'upcoming' | 'past' | 'all';
+type SearchSort = 'relevance' | 'soonest' | 'latest' | 'popular';
+interface SearchState { q: string; category: CategoryFilter; when: SearchWhen; club: string; sort: SearchSort; page: number }
+interface SearchPage { events: EventItem[]; total: number; page: number; pageCount: number; from: number; to: number; sort: SearchSort }
+SEARCH_PAGE_SIZE = 12; SEARCH_QUERY_MAX = 200; DEFAULT_SEARCH; SEARCH_WHENS; SEARCH_SORTS
+parseSearchParams(raw: Record<string, string | string[] | undefined>): SearchState
+buildSearchHref(state: SearchState): `/search${string}`
+withFilter(state, change): SearchState            // page back to 1
+isDefaultSearch(state): boolean
+effectiveSort(state): SearchSort                   // relevance without words → soonest / latest
+runEventSearch(events, state, now, { categoryLabel?, clubId?, pageSize? }): SearchPage
+getPageItems(page, pageCount): (number | 'gap')[]
+
+// src/lib/search.ts (shared with the palette)
+toTerms(query): string[]; rankName(name, query): 0 | 1 | 2
+eventMatches(event, terms, categoryLabel?): boolean; clubMatches(club, terms): boolean
+searchClubs(query, clubs, limit): Club[]
+
+// src/components/ui/Pagination.tsx
+<Pagination page pageCount hrefFor={(page) => string} />      // render from a Server Component
+
+// src/components/search/SearchView.tsx ('use client')
+<SearchView state result schedules clubs matchingClubs? pagination? />
+
+// src/lib/data.ts
+listEvents({ upcoming?, club?, rsvped?, category? }, token)
+```
+
+#### 13. Usage
+
+```tsx
+// Any server page with a paged list:
+<Pagination page={result.page} pageCount={result.pageCount} hrefFor={(page) => buildSearchHref({ ...state, page })} />
+
+// Linking to a ready-made search (e.g. from a club page or the palette in Step 18.2):
+<Link href={buildSearchHref({ ...DEFAULT_SEARCH, q: 'hackathon', when: 'all' })}>See all results</Link>
+```
+
+#### 14. Verified (2026-11-23, against Ahmed's Django with 29 upcoming + 1 past event)
+
+- **Local test data.** 24 events "Search Demo 01–24" were created through the API as the board member (script `search_seed.js`, outside the repo, copied to `/tmp` in the frontend container). They span 7 categories, 6 places and 26-hour steps.
+- **Default and paging:**
+  - `/search` gives "Events 1–12 of 29 · Page 1 of 3" and pages `[1] 2 3`;
+  - page 2 shows 13–24 and page 3 shows 25–29;
+  - `?page=99` shows page 3.
+- **Sorts:** `sort=popular` puts Edge AI Hackathon (4 RSVPs) first; `sort=latest` gives the reverse date order. With `q=demo&sort=latest&page=2`, the page links keep `q` and `sort` and leave out `page=1`.
+- **Filters:**
+
+| URL | Result |
+|---|---|
+| `q=hack` | 1 event |
+| `category=Media&when=past` | 1 event (Lighting Masterclass) |
+| `club=leet-music&when=all` | 1 event |
+| `club=nope` | All clubs |
+| `q=zzzz` | "No events found" |
+| `q=leet` | "Matching clubs" strip with LEET Dev and the other clubs |
+
+- **Bad URL:** `sort=bogus&when=nope&page=-3&category=Foo` gives the defaults.
+- **Languages:**
+  - French: "Événements 13 à 24 sur 25 · Page 2 sur 3", `<nav aria-label="Pages">`, title "Rechercher des événements | Campus Hub";
+  - Arabic: "الفعاليات 13–24 من 25 · الصفحة 2 من 3", "الصفحات".
+- **`getPageItems`:** 11 cases, the table in part 7, run with Node on the file's own code.
+- **Checks:** `tsc` passes; ESLint shows the same 6 old findings; no server errors.
+
+#### 15. Study questions (for the evaluation)
+
+1. Why does `/search` keep its state in the URL instead of `useState`? Name three things that come for free.
+2. Django already has `?page=`; why do we paginate on the Next.js server instead?
+3. Why must the sort end with the event id? What goes wrong in pagination without it?
+4. What does "Best match" do when there are no words, and why?
+5. Why is typing applied with `router.replace` and a 400 ms pause, but a select with `router.push` at once?
+6. How does the page still work before JavaScript has loaded?
+7. Why is `Pagination` rendered by the server page and passed into `SearchView` as an element?
+8. Where are the matching rules defined, and why do the palette and `/search` share them?
+9. `?page=99` with 3 pages: what happens, and why is that better than an empty page or an error?
+10. Why do we filter by category and club twice (Django and us)?
+
+### 18.2 One search box: the navbar search opens `/search` (Step 18.2, 2026-11-23)
+
+**Files:**
+- `src/components/search/SearchPalette.tsx`: the "See all results" option;
+- `src/hooks/useLiveRefresh.ts`: `/search` added to `LIVE_ROUTES`;
+- `Search.seeAll` / `Search.seeAllHint` in the 3 message files;
+- `/test` checklist.
+
+**Status:** ✅ Validated by Mouad (2026-11-23). `tsc` passes, ESLint shows the same 6 old findings, `/search?q=jam&when=all` renders.
+
+**Decision (Mouad, 2026-11-23): one search box.** Mouad asked why the site would need two searches. It doesn't: the navbar search (⌘K) stays the **only place to type a search**, and `/search` is its **full results page**. This is the usual pattern on large sites: a few suggestions while you type, then "See all results". No search link was added to the navbar, the footer or the phone tab bar.
+
+| | Navbar search (⌘K) | `/search` |
+|---|---|---|
+| Job | Jump to one event or club | Explore a list: filter, sort, page through |
+| Shows | 5 events + 5 clubs | Every match, 12 per page |
+| Lives | A dialog over any page | Its own page, its own URL |
+
+**How it works.**
+- **The option.** With words typed, the palette's listbox gets one more option, always last, after a divider: "See all results for “jam”" with the hint "Filters, sorting and every page of results". It's a real `role="option"` in the same combobox:
+  - the arrow keys reach it, and hovering or clicking it works;
+  - its id is the last `aria-activedescendant` target;
+  - it shows the ↵ hint when active.
+- **Its link:** `buildSearchHref({ ...DEFAULT_SEARCH, q, when: 'all' })`, for example `/search?q=jam&when=all`.
+  - `when: 'all'` because the palette lists past events too (upcoming first). With the page's default (upcoming), a past event seen in the palette would vanish from "all results".
+  - The words are trimmed and cut to 200 characters, the same rule as the page.
+- **Enter with no match.** When nothing matches, "See all" is the only option, so it is active and Enter opens `/search`. There the student can relax the filters (another category, "Any time"). With matches, Enter still opens the highlighted result, as before.
+- **The screen-reader count** ("2 results") counts events and clubs only, not the "See all" option.
+- **Typing types:** the result groups hold `ResultOption` (events and clubs). The "See all" kind exists only in the flat option list, so a group can never hold it (TypeScript checks this).
+- **Live results.** `/search` joined `LIVE_ROUTES`. A live event message re-renders it from the server, like the feed (§15.2). Filters and page stay, because they are in the URL.
+
+**Tradeoffs.**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| "See all" as a listbox option | A plain link under the list | One keyboard model: arrows reach everything, Enter opens the active one; screen readers hear it as part of the results. |
+| No other entry to `/search` | A navbar / footer link | Two search entry points would confuse ("which one do I use?"); the palette is already on every page with ⌘K. |
+| Open with "Any time" | The page's default "Upcoming" | The full results must include what the palette showed. |
+| Keep `/search` | Sorting and pages on the feed instead | The feed stays "what's next"; past events and all filters don't crowd it (Mouad chose this, 2026-11-23). |
+
+**Study questions.**
+1. Why is "See all results" an option of the combobox and not a separate link?
+2. Why does it open `/search` with `when=all`?
+3. What does Enter do when nothing matches, and why is that useful?

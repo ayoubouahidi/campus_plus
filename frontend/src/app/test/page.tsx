@@ -45,7 +45,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: ready for the next step (the design system is live on /design-system)</p>
+        <p className="font-semibold">Test page: Steps 18.1–18.2, advanced search (/search, opened from the navbar search)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -130,6 +130,26 @@ export default async function TestPage() {
               <>Mocks (no <code>BACKEND_URL</code>): {liveEvents.length} events and {liveClubs.length} clubs from lib/mockData.ts, the dev fallback.</>
             )}
           </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold">What to check (Steps 18.1–18.2): the navbar search and <Link href="/search" className="underline underline-offset-2">/search</Link></h3>
+          <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
+            <li>Step 18.2, one search box: open the navbar search (⌘K / Ctrl K), type &quot;jam&quot;. Under the results: &quot;See all results for “jam”&quot;. Arrow down to it (or click) → /search?q=jam&amp;when=all, the words already in the field.</li>
+            <li>Type &quot;zzzz&quot; (no match) and press Enter: it opens /search directly (the only option). With no words, the option isn&apos;t there.</li>
+            <li>The screen reader count (&quot;2 results&quot;) doesn&apos;t count &quot;See all&quot;. In French / Arabic the option is translated.</li>
+            <li>Live: with /search open, run <code>! docker compose exec -T frontend node /tmp/live_demo.js 5</code>: &quot;Live Demo Night&quot; appears in the results and disappears at the end, without reloading.</li>
+            <li>Local data: 24 extra &quot;Search Demo&quot; events were added to Django (LEET Dev), so there are 3 pages of upcoming events.</li>
+            <li>Filters: type &quot;demo&quot; (results update after a short pause, the URL changes, page goes back to 1); pick a category, &quot;Past&quot; / &quot;Any time&quot;, a club. Each choice applies at once.</li>
+            <li>Sorting: Best match (needs words; without words the hint says &quot;sorted by date&quot;), Soonest first, Latest first, Most popular (most RSVPs first).</li>
+            <li>Pagination: 12 per page, Previous / numbers / Next, the current page highlighted; the filters stay in every page link. Try <Link href="/search?q=demo&amp;sort=latest&amp;page=2" className="underline underline-offset-2">/search?q=demo&amp;sort=latest&amp;page=2</Link>.</li>
+            <li>Links and history: copy a results URL into a new tab (same results); Back / Forward walk through your choices; <Link href="/search?page=99&amp;sort=bogus&amp;category=Foo" className="underline underline-offset-2">a broken URL</Link> falls back to sensible defaults.</li>
+            <li>&quot;Clear all&quot; appears once something is chosen and returns to plain /search. No results: the empty message with &quot;Clear all&quot;.</li>
+            <li>Words: &quot;leet&quot; also shows &quot;Matching clubs&quot; above the events (page 1 only); &quot;musique&quot; in French or &quot;رياضة&quot; in Arabic matches the category; accents don&apos;t matter.</li>
+            <li>RSVP on a result card works as on the feed. Signed out: counts only, no names.</li>
+            <li>Keyboard and screen reader: Tab through the form and pages; the result count is announced after each change; the current page is announced as current. Arabic: arrows of Previous / Next point the right way.</li>
+            <li>Without JavaScript (optional): the Search button still submits the form and the server answers.</li>
+          </ul>
         </div>
 
         <div>

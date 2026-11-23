@@ -346,7 +346,7 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | User Mgmt Minor: OAuth 2.0 (42) | 1 | ⚠️ frontend done; 42 keys + `/auth/sync` missing |
 | Web Major: real-time WebSockets | 2 | ✅ **Done (2026-11-22):** Ahmed's `/ws/calendar/` + the student site's live pages (DOCS §15.1–15.2). Show it on the merged stack |
 | Web Minor: notification system (all create/update/delete) | 1 | ✅ **Done (2026-11-23):** Ahmed's stored notifications (PR #5, `event_title` in his final branch) + the live bell (DOCS §15.3). ⚠️ BE11: "new event" only reaches club members |
-| Web Minor: advanced search (filters, sorting, **pagination**) | 1 | ⚠️ filters + ⌘K on mocks; sorting/pagination missing |
+| Web Minor: advanced search (filters, sorting, **pagination**) | 1 | ✅ **Done (2026-11-23):** `/search`, opened from the navbar search: words, category, date, club; 4 sorts; 12 per page with page links; every result list has its own URL (DOCS §18) |
 | User Mgmt Major: advanced permissions (user CRUD, roles, views per role) | 2 | ⚠️ Ayoub: roles defined, superadmin user CRUD needed |
 | User Mgmt Major: organization system (clubs: create/edit/delete, add/remove members) | 2 | ⚠️ Ayoub dashboard (mock data) + Ahmed |
 | Web Minor: file upload & management (types, validation, preview, progress, delete) | 1 | ⚠️ flyers/logos/avatars, nothing built |

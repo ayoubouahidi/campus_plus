@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal, ModalTitle } from '@/components/ui/Modal';
 import { NAV_ICONS, SearchIcon } from '@/components/ui/layout/navIcons';
 import { useCampusSearch } from '@/hooks/useCampusSearch';
+import { DEFAULT_SEARCH, buildSearchHref } from '@/lib/advancedSearch';
 
 /* --------------------------------- Types ---------------------------------- */
 
@@ -19,24 +20,29 @@ export interface SearchPaletteProps {
 // One flat list of everything the arrow keys can reach, in display order.
 type PaletteOption =
   | { kind: 'event'; key: string; href: string; event: EventItem }
-  | { kind: 'club'; key: string; href: string; club: Club };
+  | { kind: 'club'; key: string; href: string; club: Club }
+  // "See all results" → the /search page (Step 18.2, DOCS.md §18.2), always last.
+  | { kind: 'all'; key: string; href: string };
+
+// What the result groups hold: events and clubs, never "See all".
+type ResultOption = Exclude<PaletteOption, { kind: 'all' }>;
 
 interface PaletteGroup {
   id: string;
   label: string;
-  options: PaletteOption[];
+  options: ResultOption[];
 }
 
 const CalendarIcon = NAV_ICONS.calendar;
 
-const toEventOption = (event: EventItem): PaletteOption => ({
+const toEventOption = (event: EventItem): ResultOption => ({
   kind: 'event',
   key: `event-${event.id}`,
   href: `/events/${event.id}`,
   event,
 });
 
-const toClubOption = (club: Club): PaletteOption => ({ kind: 'club', key: `club-${club.id}`, href: `/clubs/${club.slug}`, club });
+const toClubOption = (club: Club): ResultOption => ({ kind: 'club', key: `club-${club.id}`, href: `/clubs/${club.slug}`, club });
 
 /* ------------------------------ SearchPalette ----------------------------- */
 
@@ -59,7 +65,14 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
         { id: `${baseId}-clubs`, label: t('clubs'), options: results.clubs.map(toClubOption) },
       ].filter((group) => group.options.length > 0)
     : [{ id: `${baseId}-upcoming`, label: t('comingUp'), options: suggestions.map(toEventOption) }];
-  const options = groups.flatMap((group) => group.options);
+  // The palette is the site's one search box; /search is its full results page (filters, sorting, pages). With
+  // words typed, the last option opens it with those words and "Any time", since the palette lists past events
+  // too. Enter reaches it directly when nothing matched (it is then the only option).
+  const seeAll: PaletteOption | null = hasQuery
+    ? { kind: 'all', key: 'all', href: buildSearchHref({ ...DEFAULT_SEARCH, q: query.trim().slice(0, 200), when: 'all' }) }
+    : null;
+  const resultCount = groups.reduce((sum, group) => sum + group.options.length, 0);
+  const options = [...groups.flatMap((group) => group.options), ...(seeAll ? [seeAll] : [])];
   const optionId = (index: number) => `${baseId}-option-${index}`;
   const active = Math.min(activeIndex, Math.max(options.length - 1, 0));
 
@@ -131,7 +144,7 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
 
       {/* Announces the result count while typing (the listbox itself isn't a live region). */}
       <p aria-live="polite" className="sr-only">
-        {hasQuery ? t('count', { count: options.length }) : ''}
+        {hasQuery ? t('count', { count: resultCount }) : ''}
       </p>
 
       <div id={listboxId} role="listbox" aria-label={t('results')} className="max-h-[60vh] overflow-y-auto p-2">
@@ -141,7 +154,7 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
             {t(status === 'loading' ? 'loading' : 'unavailable')}
           </p>
         )}
-        {status === 'ready' && hasQuery && options.length === 0 && (
+        {status === 'ready' && hasQuery && resultCount === 0 && (
           <p className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
             {t('noMatch', { query: query.trim() })}
           </p>
@@ -214,6 +227,40 @@ export const SearchPalette = ({ isOpen, onClose }: SearchPaletteProps) => {
             })}
           </div>
         ))}
+
+        {seeAll && (
+          <div className="mt-1 border-t border-slate-200/80 pt-1 dark:border-slate-800">
+            <div
+              id={optionId(options.length - 1)}
+              role="option"
+              aria-selected={active === options.length - 1}
+              onMouseMove={() => setActiveIndex(options.length - 1)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => open(seeAll)}
+              className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 ${
+                active === options.length - 1 ? 'bg-violet-50 dark:bg-violet-500/10' : ''
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+              >
+                <SearchIcon className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-violet-700 dark:text-violet-400">
+                  {t('seeAll', { query: query.trim() })}
+                </span>
+                <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{t('seeAllHint')}</span>
+              </span>
+              {active === options.length - 1 && (
+                <kbd aria-hidden="true" className="hidden text-xs text-slate-400 sm:inline">
+                  ↵
+                </kbd>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

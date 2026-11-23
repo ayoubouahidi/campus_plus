@@ -3,7 +3,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useLiveMessages } from '@/components/providers/RealtimeProvider';
 
 // Pages that show events: a live change re-renders them from the server (Step 15.2, DOCS.md §15.2).
-const LIVE_ROUTES = ['/', '/calendar', '/clubs', '/events', '/profile'];
+const LIVE_ROUTES = ['/', '/calendar', '/clubs', '/events', '/profile', '/search'];
 const isLiveRoute = (pathname: string) =>
   LIVE_ROUTES.some((route) => (route === '/' ? pathname === '/' : pathname === route || pathname.startsWith(`${route}/`)));
 

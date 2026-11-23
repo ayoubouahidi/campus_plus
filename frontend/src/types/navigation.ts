@@ -19,7 +19,9 @@ export type AppRoute =
   | '/me'
   | '/privacy'
   | '/terms'
-  | '/design-system';
+  | '/design-system'
+  | '/search'
+  | `/search?${string}`;
 
 // Icons are referenced by name so this contract stays plain data (no JSX, server-safe).
 // Each shell component resolves names through its own Record<NavIconName, Component>.

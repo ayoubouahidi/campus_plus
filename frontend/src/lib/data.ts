@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import type { AttendeePreview, Club, Department, EventItem } from '@/types/api';
+import type { AttendeePreview, Club, Department, EventCategory, EventItem } from '@/types/api';
 import { ApiError, apiFetch, apiFetchAll, hasBackend, ApiUnavailable } from '@/lib/api/client';
 import { toAttendee, toClub, toClubs, toDepartment, toEventItem, toNotification } from '@/lib/api/mappers';
 import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawNotification, RawPage, RawRsvpState } from '@/lib/api/raw';
@@ -28,6 +28,7 @@ export interface EventQuery {
   upcoming?: boolean; // only events that haven't ended (Django: ?upcoming=true)
   club?: string; // a club's slug
   rsvped?: boolean; // only the signed-in student's RSVPs, past and upcoming (Django: ?rsvped=true, TEAM_NEEDS BE2)
+  category?: EventCategory; // one category (Django: ?category=Music; the /search page, Step 18.1)
 }
 
 // Mocks: every event; pages already filter by time (getUpcomingEvents, splitEventsByTime), so the result is the
@@ -36,13 +37,15 @@ export const listEvents = cache(async (query: EventQuery = {}, token: string | n
   if (mocksOnly()) {
     const club = query.club ? mockClubs.find((item) => item.slug === query.club) : undefined;
     const events = query.club ? mockEvents.filter((event) => event.club_id === club?.id) : mockEvents;
-    return query.rsvped ? events.filter((event) => event.has_user_rsvpd) : events;
+    const inCategory = query.category ? events.filter((event) => event.category === query.category) : events;
+    return query.rsvped ? inCategory.filter((event) => event.has_user_rsvpd) : inCategory;
   }
   if (query.rsvped && !token) return []; // Django answers 401: no token, no RSVPs (e.g. a dev login)
   const params = new URLSearchParams(PAGE);
   if (query.upcoming) params.set('upcoming', 'true');
   if (query.club) params.set('club', query.club);
   if (query.rsvped) params.set('rsvped', 'true');
+  if (query.category) params.set('category', query.category);
   const raws = await apiFetchAll<RawEvent>(`/api/club-events/?${params}`, { token });
   return raws.map(toEventItem);
 });
