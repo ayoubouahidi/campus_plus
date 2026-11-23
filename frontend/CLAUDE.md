@@ -43,7 +43,7 @@ Added later: `Logo.tsx` (`Logo` + `LogoMark`, the real brand as inline SVG for l
 2. **Ref Forwarding**: All native interactive wrappers and structural elements must use `React.forwardRef<TElement, TProps>()`.
 3. **Compound Architecture**: Prefer composable subcomponents over monolithic prop configurations.
 4. **Exhaustive Dictionaries**: Use TypeScript lookup tables (`Record<Variant, string>`) rather than messy string interpolations or nested ternary operators.
-5. **SSR Hydration Safety**: Any component touching `document`, `window`, or browser portals must use client mounting guards (`useState(false)` + `useEffect`) and explicitly declare `'use client'` at line 1.
+5. **SSR Hydration Safety**: Any component touching `document`, `window`, or browser portals must use the client guard `useIsClient()` (`src/hooks/useIsClient.ts`, `useSyncExternalStore`; it replaced the old `useState(false)` + `useEffect` guard in Step 20.1, `DOCS.md` §20) and explicitly declare `'use client'` at line 1. Never read `Date.now()` or `Math.random()` during render: take the time in an event handler, a timer or a data callback.
 6. **Accessibility (WAI-ARIA)**:
    - Form inputs must automatically bind `htmlFor` and `id` using `useId()`.
    - Modals and popovers must trap focus and manage `aria-expanded`, `aria-haspopup`, and `role`.

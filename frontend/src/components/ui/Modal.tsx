@@ -1,9 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { FOCUSABLE_SELECTOR, trapTabKey } from '@/lib/focus';
+import { useIsClient } from '@/hooks/useIsClient';
 
 // Lets <ModalTitle> name the dialog (aria-labelledby) without the caller wiring ids.
 const ModalContext = createContext<{ titleId: string } | null>(null);
@@ -45,14 +46,9 @@ export const Modal = ({
   children,
   className = '',
 }: ModalProps) => {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient(); // portals need document.body: browser only
   const titleId = useId();
   const surfaceRef = useRef<HTMLDivElement>(null);
-
-  // Run on mount (browser only)
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Lock body scroll and listen for Escape key when modal is open
   useEffect(() => {

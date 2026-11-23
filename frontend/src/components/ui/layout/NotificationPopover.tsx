@@ -18,11 +18,13 @@ import { useMergedRef } from '@/lib/refs';
 import { formatAbsoluteTime, formatRelativeTime } from '@/lib/time';
 import { useNotificationText } from '@/hooks/useNotificationText';
 import { AppNotification, NotificationKind } from '@/types/notification';
+import { useIsClient } from '@/hooks/useIsClient';
 
 /* -------------------------------- Context --------------------------------- */
 
 interface NotificationPopoverContextValue {
   isOpen: boolean;
+  openedAt: number; // Date.now() of the click that last opened the panel (for relative times)
   toggle: () => void;
   close: () => void;
   panelId: string;
@@ -80,7 +82,12 @@ export const NotificationPopover = React.forwardRef<HTMLDivElement, Notification
     const triggerRef = useRef<HTMLButtonElement>(null);
     const setRootRef = useMergedRef(ref, rootRef);
 
-    const toggle = useCallback(() => setIsOpen((open) => !open), []);
+    const [openedAt, setOpenedAt] = useState(0);
+    // The time is read in the click handler, never during render. (Also updated on close: harmless.)
+    const toggle = useCallback(() => {
+      setOpenedAt(Date.now());
+      setIsOpen((open) => !open);
+    }, []);
     const close = useCallback(() => setIsOpen(false), []);
 
     const countedUnread = useMemo(
@@ -106,6 +113,7 @@ export const NotificationPopover = React.forwardRef<HTMLDivElement, Notification
     const value = useMemo(
       () => ({
         isOpen,
+        openedAt,
         toggle,
         close,
         panelId,
@@ -117,7 +125,7 @@ export const NotificationPopover = React.forwardRef<HTMLDivElement, Notification
         onMarkRead,
         onMarkAllRead,
       }),
-      [isOpen, toggle, close, panelId, titleId, notifications, unreadCount, onMarkRead, onMarkAllRead]
+      [isOpen, openedAt, toggle, close, panelId, titleId, notifications, unreadCount, onMarkRead, onMarkAllRead]
     );
 
     return (
@@ -287,6 +295,7 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
   ({ className = '', onKeyDown, ...props }, ref) => {
     const {
       isOpen,
+      openedAt,
       close,
       panelId,
       titleId,
@@ -300,14 +309,13 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
     const t = useTranslations('Notifications');
     const textOf = useNotificationText();
     const locale = useLocale();
-    const [mounted, setMounted] = useState(false);
-    const [now, setNow] = useState(() => Date.now());
+    const mounted = useIsClient();
+    // Relative times ("5 min ago"). `openedAt` is taken by the click that opens the panel (an event handler);
+    // `tick` by the timer below. Never Date.now() during render: the render would not be pure.
+    const [tick, setTick] = useState(0);
+    const now = Math.max(openedAt, tick);
     const panelRef = useRef<HTMLDivElement>(null);
     const setPanelRef = useMergedRef(ref, panelRef);
-
-    useEffect(() => {
-      setMounted(true);
-    }, []);
 
     const closeAndRestoreFocus = useCallback(() => {
       close();
@@ -321,12 +329,10 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
       (firstItem ?? panelRef.current).focus();
     }, [mounted, isOpen]);
 
-    // Relative times are computed client-side only (the panel never renders on the server),
-    // refreshed on open and every minute while open.
+    // Refreshed every minute while open (state set in the timer's callback, not during the effect itself).
     useEffect(() => {
       if (!isOpen) return;
-      setNow(Date.now());
-      const interval = window.setInterval(() => setNow(Date.now()), 60_000);
+      const interval = window.setInterval(() => setTick(Date.now()), 60_000);
       return () => window.clearInterval(interval);
     }, [isOpen]);
 

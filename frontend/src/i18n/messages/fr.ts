@@ -57,7 +57,7 @@ const fr = {
       description: 'Vos notifications n’ont pas changé. Réessayez dans un instant.',
     },
     kinds: {
-      new_event: { title: 'Nouvel événement de votre club', body: 'Votre club a publié « {event} ».' },
+      new_event: { title: 'Nouvel événement sur le campus', body: 'Un nouvel événement a été publié : « {event} ».' },
       event_updated: { title: 'Événement modifié', body: '« {event} », un événement auquel vous participez, a changé.' },
       event_cancelled: { title: 'Événement annulé', body: '« {event} » a été annulé.' },
       event_removed: { title: 'Événement supprimé', body: '« {event} » a été supprimé et n’est plus disponible.' },

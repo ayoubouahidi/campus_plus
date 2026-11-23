@@ -61,7 +61,7 @@ const ar = {
       description: 'لم تتغيّر إشعاراتك. حاول مرة أخرى بعد قليل.',
     },
     kinds: {
-      new_event: { title: 'فعالية جديدة من ناديك', body: 'نشر ناديك «{event}».' },
+      new_event: { title: 'فعالية جديدة في الحرم الجامعي', body: 'نُشرت فعالية جديدة: «{event}».' },
       event_updated: { title: 'تم تعديل فعالية', body: 'تغيّرت «{event}»، وهي فعالية سجّلت لحضورها.' },
       event_cancelled: { title: 'أُلغيت فعالية', body: 'أُلغيت «{event}».' },
       event_removed: { title: 'حُذفت فعالية', body: 'حُذفت «{event}» ولم تعد متاحة.' },

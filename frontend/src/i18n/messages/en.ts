@@ -60,7 +60,7 @@ const en = {
       description: 'Your notifications didn’t change. Try again in a moment.',
     },
     kinds: {
-      new_event: { title: 'New club event', body: 'Your club published “{event}”.' },
+      new_event: { title: 'New campus event', body: 'A new event was published: “{event}”.' },
       event_updated: { title: 'Event updated', body: '“{event}”, an event you’re going to, changed.' },
       event_cancelled: { title: 'Event cancelled', body: '“{event}” was cancelled.' },
       event_removed: { title: 'Event removed', body: '“{event}” was removed and is no longer available.' },

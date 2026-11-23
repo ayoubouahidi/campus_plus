@@ -216,8 +216,8 @@ export const mockNotifications: AppNotification[] = [
   {
     id: 'ntf_04',
     kind: 'new_event',
-    title: 'New club event',
-    body: 'Your club published "42 Campus Hackathon: Edge AI & Systems".',
+    title: 'New campus event',
+    body: 'A new campus event, "42 Campus Hackathon: Edge AI & Systems", was published.',
     event_title: '42 Campus Hackathon: Edge AI & Systems',
     href: '/events/evt_hackathon_ai',
     created_at: '2026-09-24T16:45:00Z',

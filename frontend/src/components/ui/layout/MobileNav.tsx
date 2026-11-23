@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SessionState, SessionStatus } from '@/types/session';
 import { NavItem } from '@/types/navigation';
+import { useIsClient } from '@/hooks/useIsClient';
 
 /* ------------------------------ MobileTabBar ------------------------------ */
 
@@ -234,14 +235,10 @@ export const MobileNavDrawer = React.forwardRef<HTMLDivElement, MobileNavDrawerP
     const tNav = useTranslations('Nav');
     const tNavbar = useTranslations('Navbar');
     const titleId = useId();
-    const [mounted, setMounted] = useState(false);
+    const mounted = useIsClient(); // the drawer is portalled to document.body: browser only
     const drawerRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const setDrawerRef = useMergedRef(ref, drawerRef);
-
-    useEffect(() => {
-      setMounted(true);
-    }, []);
 
     const closeAndRestoreFocus = useCallback(() => {
       close();

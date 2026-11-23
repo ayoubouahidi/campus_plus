@@ -3,6 +3,9 @@ import Image from 'next/image';
 
 /* ---------------------------------- Card ---------------------------------- */
 
+// An absolute URL (another host) rather than a file of our own public/ folder.
+const isRemoteImage = (src: string): boolean => /^(https?:)?\/\//.test(src);
+
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'muted' | 'outline';
   isHoverable?: boolean;
@@ -93,6 +96,12 @@ export const CardBanner = React.forwardRef<HTMLDivElement, CardBannerProps>(
             fill
             sizes={sizes}
             loading={loading}
+            // Uploads (flyers, banners) come from Django's media URL, e.g. https://localhost/media/… (TEAM_NEEDS
+            // BE4). Next's optimizer would need that host in next.config.ts and would fetch it from inside the
+            // container, where "localhost" is not nginx: the page crashed ("hostname is not configured").
+            // Remote images are shown as they are, loaded by the browser through nginx; our own /public images
+            // keep Next's resizing (DOCS.md §20).
+            unoptimized={isRemoteImage(src)}
             className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
           />
         ) : fallback ? (

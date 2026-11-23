@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Logo, LogoMark } from '@/components/ui/Logo';
@@ -10,6 +10,7 @@ import { NAV_ICONS, SearchIcon } from '@/components/ui/layout/navIcons';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SessionState } from '@/types/session';
+import { useIsClient } from '@/hooks/useIsClient';
 
 type LinkState = 'active' | 'idle';
 
@@ -148,17 +149,20 @@ export interface NavbarSearchProps
 }
 
 // Icon-only below sm. Between md and lg the desktop links need the room, so the label collapses again.
+// The platform never changes while the page is open: read once, then cached (getSnapshot must return the same
+// value every time it is called).
+let cachedPlatform: Platform | null = null;
+const getPlatform = (): Platform => (cachedPlatform ??= detectPlatform());
+const getServerPlatform = (): Platform => 'other';
+const noSubscription = () => () => {};
+
 export const NavbarSearch = React.forwardRef<HTMLButtonElement, NavbarSearchProps>(
   ({ onOpen, disabled, className = '', ...props }, ref) => {
     const t = useTranslations('Navbar');
-    const [mounted, setMounted] = useState(false);
-    const [platform, setPlatform] = useState<Platform>('other');
-
-    // navigator only exists in the browser: server HTML and the first client render both use 'other'
-    useEffect(() => {
-      setPlatform(detectPlatform());
-      setMounted(true);
-    }, []);
+    // navigator only exists in the browser: the server HTML and the hydration render both use 'other', then React
+    // reads the real platform (useSyncExternalStore, Step 20.1: no state set inside an effect).
+    const mounted = useIsClient();
+    const platform = useSyncExternalStore(noSubscription, getPlatform, getServerPlatform);
 
     useEffect(() => {
       if (disabled) return;

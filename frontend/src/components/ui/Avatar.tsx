@@ -83,7 +83,12 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
           }`}
         >
           {showImage ? (
+            // A plain <img> on purpose (DOCS.md §20): avatars are tiny (16–96 px) and come from other hosts (42's
+            // CDN, Django's /media/) that Next's optimizer can't fetch from inside the container; onError swaps
+            // in the initials. next/image would add a server round trip for no visible gain.
+            // eslint-disable-next-line @next/next/no-img-element
             <img
+              decoding="async"
               src={src!}
               alt={accessibleAlt}
               onError={() => setHasError(true)}

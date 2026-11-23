@@ -4675,7 +4675,7 @@ Notifications are stored, so they are still there on the next visit, read state 
 
 | Django type | Sent to | Our kind | Link |
 |---|---|---|---|
-| `new_event` | Members of the club (`UserMember.club_id`, TEAM_NEEDS BE11) | `new_event` | `/events/{id}` |
+| `new_event` | **Every active student and board member** (since Ahmed's `792ac56`, 2026-11-23, answer to BE11; before: club members only) | `new_event`, shown as "New campus event" | `/events/{id}` |
 | `event_updated` | Students who RSVP'd | `event_updated` | `/events/{id}` |
 | `event_cancelled` (status → cancelled) | Students who RSVP'd | `event_cancelled` | `/events/{id}` (shows the Cancelled badge) |
 | `event_cancelled` with `event_id: null` (deleted while planned or ongoing) | Students who RSVP'd | **`event_removed`** | `/calendar` |
@@ -5439,3 +5439,94 @@ Lesson: measure before adding a tool. The obvious explanation (process 1) was wr
 7. Stopping took 10 s. What was the first guess, why was it wrong, and what was the real cause?
 8. Why does `/` answer 200 when Django is down, while `/search` answers 500?
 9. Why do `make lint` and `make typecheck` now start a separate container?
+
+## 20. Quality pass: lint clean, render purity, remote images, console (2026-11-23)
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 20.1 | ESLint from 6 problems to 0 (`useIsClient`, time read outside render, Avatar `<img>` justified); remote image crash in `CardBanner` fixed; server-side page crawl; Chrome console checked | ✅ console clean 2026-11-23 |
+
+### 20.1 Lint, purity and the remote-image crash (Step 20.1, 2026-11-23)
+
+**Files:**
+- New: `src/hooks/useIsClient.ts`.
+- Changed:
+  - `src/components/ui/{Modal,Card,Avatar}.tsx`;
+  - `src/components/ui/layout/{MobileNav,NotificationPopover,Navbar}.tsx`;
+  - `src/hooks/useCampusSearch.ts`;
+  - `CLAUDE.md` (rule 5);
+  - `/test`.
+
+**Status:** 🧪 `make lint` **0 problems** (was 6). `tsc` passes. Every page was loaded signed out and signed in with no server error or warning. Waiting for the Chrome console check (`/test` checklist), which needs a real browser.
+
+#### 1. The 6 lint problems and what each one meant
+
+| Where | Rule | What was wrong | Fix |
+|---|---|---|---|
+| Modal, MobileNav, NotificationPopover (4 errors) | `react-hooks/set-state-in-effect` | The "mounted" guard: `useState(false)` + `useEffect(() => setMounted(true), [])`. Setting state inside an effect forces a second render of every one of these components | `useIsClient()` (below) |
+| NotificationPopover (part of the above) | same | `setNow(Date.now())` synchronously when the panel opened | The time is taken by the **click** that opens it (`openedAt`, in the popover's context); the 1-minute timer sets `tick` in its callback; `now = max(openedAt, tick)` |
+| `useCampusSearch` (1 error) | `react-hooks/purity` | `Date.now()` inside `useMemo`, i.e. during render | The time is stored when the data arrives (`setData({ ...loaded, at: Date.now() })`, in the promise callback) |
+| Avatar (1 warning) | `@next/next/no-img-element` | Plain `<img>` instead of `next/image` | **Kept on purpose**, with a written reason on the lint exception (part 3) |
+
+Also converted, though lint didn't report it: the navbar search set the platform (⌘K vs Ctrl K) and the mounted flag inside an effect. It now reads them with `useSyncExternalStore` (server: `'other'`; browser: the detected platform, read once and cached).
+
+**Why "pure render" matters.** React may render a component several times, or render it and throw the result away (concurrent rendering, Strict Mode). If a render reads the clock or a random number, two renders of the same props can disagree. The server and browser HTML then differ (a hydration error), or the screen flickers. The rule: read the time in an **event handler**, a **timer callback** or a **data callback**, and keep it in state.
+
+#### 2. `useIsClient()`: why `useSyncExternalStore`
+
+```ts
+const subscribe = () => () => {};
+export const useIsClient = () => useSyncExternalStore(subscribe, () => true, () => false);
+```
+
+- **On the server** React calls the third function (`getServerSnapshot`) → `false`. The HTML has no portal and no browser-only content.
+- **During hydration** React also uses the server value, so the first browser render matches the HTML exactly (no hydration error).
+- **Right after hydration** React reads the client value (`true`) and re-renders once. A component mounted later, after a client navigation, gets `true` immediately, with no extra pass. The old guard paid that extra pass every time.
+- This is React's documented replacement for "mounted" flags. `CLAUDE.md` rule 5 now prescribes it instead of the old `useState` + `useEffect` guard.
+
+#### 3. Images: the crash, and why Avatar keeps `<img>`
+
+**The crash (found while doing this step).**
+- **When it happens:** the first event with a flyer. Django sends `flyer_url: "https://localhost/media/…"` (BE4).
+- **Why:** `CardBanner` passed it to `next/image`, which only accepts remote hosts listed in `next.config.ts` (`images.remotePatterns`). The server threw `Invalid src prop … hostname "localhost" is not configured`, and the feed showed the error page.
+- **How it was found:** reproduced by giving "Search Demo 01" a flyer in the local Django (`image_path = campus-test.webp`).
+
+Adding `remotePatterns` wouldn't be enough, for two reasons:
+- Next's optimizer **fetches the image itself, from inside the frontend container**. There, `https://localhost` is the container, not nginx, and the certificate is self-signed.
+- The public host would be baked in at build time, so the image would no longer run on any machine (§19).
+
+**Fix.** `CardBanner` passes `unoptimized` for absolute URLs (`isRemoteImage`: `http://`, `https://` or `//`). The browser loads them as they are, through nginx. Our own `public/` images keep Next's resizing. After the fix the feed renders with `src="https://localhost/media/campus-test.webp"`. The image itself is a 404 **locally** only, because our local nginx isn't wired to Ahmed's media volume. Hamza's `Developer` compose shares the volume; to test after the merge.
+
+**Avatar keeps a plain `<img>`**, with the reason written next to the lint exception:
+- avatars are 16–96 px;
+- they come from other hosts (42's image server, Django's `/media/`), with the same optimizer problem;
+- `onError` swaps in the initials when an image fails.
+
+`decoding="async"` was added so a slow image never blocks rendering.
+
+**Local wiring for media (test stack only).** Our local nginx serves `/media/` from **our** volume (`transcendence_media_data`), not Ahmed's (`campusbe_media_data`). The test flyer was copied into ours: `docker run --rm -v transcendence_media_data:/m -v "$PWD/frontend/public":/src:ro alpine cp /src/campus.webp /m/campus-test.webp`. After that, `https://localhost/media/campus-test.webp` returned 200 (`image/webp`). After the merge one shared volume makes this step unnecessary (Hamza's compose).
+
+**Chrome console, Mouad's check (2026-11-23).**
+- The only lines were "Download the React DevTools" and "[HMR] connected". Both come from the dev server and don't exist in the production build.
+- The rest was the test flyer's 404, the local wiring above, fixed afterwards.
+- No error or warning from our code.
+
+**Tradeoff.** Uploaded flyers are sent at their original size, not resized. Fine at campus scale; if that becomes a problem, the fix belongs at upload time (Django makes thumbnails) or with a custom image loader that points at a resizing service.
+
+#### 4. Console and server checks
+
+- **Server, automated** (`crawl.js`, outside the repo): 15 pages signed out, then the same 15 signed in. All statuses as expected:
+  - signed out: `/profile` → 307;
+  - signed in: the login and register pages → 307;
+  - `/nope` → 404.
+
+  No error or warning in the frontend log during the crawl.
+- **Browser, manual:** browser tools weren't available in this session. The `/test` checklist lists the pages to reload in Chrome DevTools, signed out and signed in, and what counts as "ours". A clean console is a mandatory item of the subject.
+
+#### 5. Study questions
+
+1. Why is setting state inside an effect discouraged, and what did the old "mounted" guard cost?
+2. How does `useSyncExternalStore` avoid a hydration mismatch when the server and the browser give different answers?
+3. Why must a render never call `Date.now()`? Where does the bell take its time now?
+4. Why did the first event with a flyer crash the feed, and why wasn't `remotePatterns` the right fix?
+5. When is a plain `<img>` the better choice than `next/image`?

@@ -27,19 +27,21 @@ const EMPTY: SearchData = { events: [], clubs: [] };
 
 // The palette's data source (Step 14.4): events and clubs from Django (or the mocks in dev) through the
 // loadSearchData server action, ranked here with lib/search.ts. Runs in the browser only (the palette mounts
-// after it opens), so Date.now() here never meets hydration.
+// after it opens). "Now" for the ranking is when the data arrived (Step 20.1), not read during render.
 // Categories also match in the active language (Step 12.3): "musique" finds Music events in French.
 export const useCampusSearch = (
   query: string
 ): { results: SearchResults; suggestions: EventItem[]; status: 'loading' | 'ready' | 'error' } => {
   const tCategory = useTranslations('Categories');
-  const [data, setData] = useState<SearchData | null>(null);
+  // `at`: when the data arrived. The ranking needs "now" (upcoming before past); it is read in the load callback,
+  // never during render (a render must be pure: same input, same output).
+  const [data, setData] = useState<(SearchData & { at: number }) | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     getSearchData().then(
-      (loaded) => active && setData(loaded),
+      (loaded) => active && setData({ ...loaded, at: Date.now() }),
       () => active && setFailed(true)
     );
     return () => {
@@ -48,7 +50,7 @@ export const useCampusSearch = (
   }, []);
 
   return useMemo(() => {
-    const now = Date.now();
+    const now = data?.at ?? 0;
     const source = data ?? EMPTY;
     return {
       results: searchCampus(query, source, now, (category) => tCategory(category)),
