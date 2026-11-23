@@ -52,6 +52,19 @@ const en = {
     unreadPrefix: 'Unread: ',
     arrivedOne: 'New notification: {title}',
     arrivedMany: '{count, plural, other {# new notifications}}',
+    // Step 15.3: Django writes notifications in English; the bell writes them in the visitor's language.
+    saveFailed: {
+      title: 'Couldn’t update your notifications',
+      description: 'Your notifications didn’t change. Try again in a moment.',
+    },
+    kinds: {
+      new_event: { title: 'New club event', body: 'Your club published “{event}”.' },
+      event_updated: { title: 'Event updated', body: '“{event}”, an event you’re going to, changed.' },
+      event_cancelled: { title: 'Event cancelled', body: '“{event}” was cancelled.' },
+      event_removed: { title: 'Event removed', body: '“{event}” was removed and is no longer available.' },
+      rsvp_confirmed: { title: 'You’re going', body: 'You’re registered for “{event}”.' },
+      rsvp_cancelled: { title: 'RSVP cancelled', body: 'You’re no longer going to “{event}”.' },
+    },
   },
   Search: {
     loading: 'Loading events and clubs…',

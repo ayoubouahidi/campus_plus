@@ -1,6 +1,7 @@
 import type { AttendeePreview, Club, Department, EventCategory, EventItem, User } from '@/types/api';
+import type { AppNotification, NotificationKind } from '@/types/notification';
 import { EVENT_CATEGORIES } from '@/lib/events';
-import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawUser } from './raw';
+import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawNotification, RawUser } from './raw';
 
 // Django's JSON → the student site's types (Step 14.1, DOCS.md §14). Pure functions: no fetch, no Next.js, so
 // they run anywhere and can be checked with the examples from API_SPEC.md. The rest of the app only ever sees
@@ -80,3 +81,32 @@ export const toUser = (raw: RawUser): User => ({
   role: raw.role,
   club_id: raw.club_id === null ? null : String(raw.club_id),
 });
+
+// Django types the bell knows. An unknown one (a new Django choice) is shown as an announcement: Django's own
+// title and message, no translation, so nothing is lost (logged once per notification).
+const DJANGO_KINDS: readonly string[] = [
+  'new_event',
+  'event_updated',
+  'event_cancelled',
+  'rsvp_confirmed',
+  'rsvp_cancelled',
+  'club_announcement',
+] satisfies Exclude<NotificationKind, 'event_removed'>[];
+
+export const toNotification = (raw: RawNotification): AppNotification => {
+  let kind: NotificationKind = 'club_announcement';
+  if (DJANGO_KINDS.includes(raw.notification_type)) kind = raw.notification_type as NotificationKind;
+  else console.warn(`[api] notification ${raw.id}: unknown type "${raw.notification_type}"`);
+  // A deleted event: Django sends event_cancelled without an event (it no longer exists).
+  if (kind === 'event_cancelled' && raw.event_id === null) kind = 'event_removed';
+  return {
+    id: String(raw.id),
+    kind,
+    title: raw.title,
+    body: raw.message,
+    ...(raw.event_title ? { event_title: raw.event_title } : {}),
+    href: raw.event_id === null ? '/calendar' : `/events/${raw.event_id}`,
+    created_at: raw.created_at,
+    is_read: raw.is_read,
+  };
+};

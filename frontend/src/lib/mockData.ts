@@ -211,13 +211,14 @@ export const mockEvents: EventItem[] = [
   },
 ];
 
-// Newest first, as the API will return them. Three unread.
+// Newest first, as GET /api/notifications/ returns them (Step 15.3: Django's types and English text). Three unread.
 export const mockNotifications: AppNotification[] = [
   {
     id: 'ntf_04',
-    kind: 'event_created',
-    title: 'New event from 1337 Coding School',
-    body: '42 Campus Hackathon: Edge AI & Systems opens RSVPs.',
+    kind: 'new_event',
+    title: 'New club event',
+    body: 'Your club published "42 Campus Hackathon: Edge AI & Systems".',
+    event_title: '42 Campus Hackathon: Edge AI & Systems',
     href: '/events/evt_hackathon_ai',
     created_at: '2026-09-24T16:45:00Z',
     is_read: false,
@@ -225,26 +226,29 @@ export const mockNotifications: AppNotification[] = [
   {
     id: 'ntf_03',
     kind: 'event_updated',
-    title: 'Venue changed',
-    body: 'LEET Jam Session moved to the Auditorium Courtyard.',
+    title: 'Event updated',
+    body: 'An event you registered for, "LEET Jam Session", changed.',
+    event_title: 'LEET Jam Session',
     href: '/events/evt_jam_session',
     created_at: '2026-09-24T11:20:00Z',
     is_read: false,
   },
   {
     id: 'ntf_02',
-    kind: 'event_deleted',
-    title: 'Event cancelled',
-    body: 'Leet Frame cancelled "Night Photography Walk".',
+    kind: 'event_removed',
+    title: 'Event removed',
+    body: '"Night Photography Walk" was removed and is no longer available.',
+    event_title: 'Night Photography Walk',
     href: '/calendar',
     created_at: '2026-09-23T19:05:00Z',
     is_read: false,
   },
   {
     id: 'ntf_01',
-    kind: 'event_updated',
-    title: 'Starts tomorrow',
-    body: 'Cinematic Storytelling & Lighting Masterclass, 18:00 in Cluster 2.',
+    kind: 'rsvp_confirmed',
+    title: 'RSVP confirmed',
+    body: 'You are registered for "Cinematic Storytelling & Lighting Masterclass".',
+    event_title: 'Cinematic Storytelling & Lighting Masterclass',
     href: '/events/evt_workshop_cine',
     created_at: '2026-09-22T09:00:00Z',
     is_read: true,

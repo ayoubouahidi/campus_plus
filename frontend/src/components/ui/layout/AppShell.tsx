@@ -25,11 +25,11 @@ import {
 } from '@/components/ui/layout/MobileNav';
 import { FooterLegal, FooterNav } from '@/components/ui/layout/Footer';
 import { useLiveRefresh } from '@/hooks/useLiveRefresh';
+import { useNotifications } from '@/hooks/useNotifications';
 import { useSession } from '@/components/providers/SessionProvider';
 import { SearchPalette } from '@/components/search/SearchPalette';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { FOOTER_GROUPS, isFullScreenRoute } from '@/lib/navigation';
-import { AppNotification } from '@/types/notification';
 
 // The drawer already lists the Explore pages at the top, so it only repeats the external links.
 const DRAWER_FOOTER_GROUPS = FOOTER_GROUPS.filter((group) => group.id !== 'explore');
@@ -38,30 +38,17 @@ export interface AppShellProps {
   children: React.ReactNode;
   // Rendered by the (server) root layout and passed in, so the page footer stays a Server Component.
   footer: React.ReactNode;
-  // Starting feed, decided on the server (Step 14.4): the mocks in dev without Django, [] with Django (no
-  // notifications API: Phase 6 fills the feed from the realtime WebSocket).
-  initialNotifications: AppNotification[];
 }
 
 // The one client component that wires the shell together: it owns the state the parts share
 // (search palette, notification feed) and reads the session. Pages render inside <main>.
-export const AppShell = ({ children, footer, initialNotifications }: AppShellProps) => {
+export const AppShell = ({ children, footer }: AppShellProps) => {
   const { session } = useSession();
   useLiveRefresh(); // live event changes re-render the current page from the server (Step 15.2)
   const t = useTranslations('MobileNav');
 
-  // Phase 6: the WebSocket layer adds to this feed.
-  const [notifications, setNotifications] = useState<AppNotification[]>(initialNotifications);
-
-  const markRead = useCallback((id: string) => {
-    setNotifications((current) =>
-      current.map((notification) => (notification.id === id ? { ...notification, is_read: true } : notification))
-    );
-  }, []);
-
-  const markAllRead = useCallback(() => {
-    setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true })));
-  }, []);
+  // The bell (Step 15.3): Django's stored notifications, live over /ws/notifications/ (DOCS.md §15.3).
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications(session.status === 'signed-in');
 
   // ⌘K palette (Step 4.17). Stable callbacks: NavbarSearch re-binds its window ⌘K listener when onOpen changes.
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -91,7 +78,12 @@ export const AppShell = ({ children, footer, initialNotifications }: AppShellPro
           <LanguageSwitcher className="hidden sm:block" />
           {/* Notifications are per user, and the phone navbar has no room for bell + "Log in" */}
           {session.status === 'signed-in' && (
-            <NotificationPopover notifications={notifications} onMarkRead={markRead} onMarkAllRead={markAllRead}>
+            <NotificationPopover
+              notifications={notifications}
+              unreadCount={unreadCount}
+              onMarkRead={markRead}
+              onMarkAllRead={markAllRead}
+            >
               <NotificationTrigger />
               <NotificationPanel />
             </NotificationPopover>

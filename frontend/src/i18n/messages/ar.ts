@@ -54,6 +54,18 @@ const ar = {
     arrivedOne: 'إشعار جديد: {title}',
     arrivedMany:
       '{count, plural, one {إشعار جديد واحد} two {إشعاران جديدان} few {# إشعارات جديدة} many {# إشعارًا جديدًا} other {# إشعار جديد}}',
+    saveFailed: {
+      title: 'تعذّر تحديث إشعاراتك',
+      description: 'لم تتغيّر إشعاراتك. حاول مرة أخرى بعد قليل.',
+    },
+    kinds: {
+      new_event: { title: 'فعالية جديدة من ناديك', body: 'نشر ناديك «{event}».' },
+      event_updated: { title: 'تم تعديل فعالية', body: 'تغيّرت «{event}»، وهي فعالية سجّلت لحضورها.' },
+      event_cancelled: { title: 'أُلغيت فعالية', body: 'أُلغيت «{event}».' },
+      event_removed: { title: 'حُذفت فعالية', body: 'حُذفت «{event}» ولم تعد متاحة.' },
+      rsvp_confirmed: { title: 'تم تسجيل حضورك', body: 'أنت مسجَّل لحضور «{event}».' },
+      rsvp_cancelled: { title: 'تم إلغاء حضورك', body: 'لم تعد مسجَّلًا لحضور «{event}».' },
+    },
   },
   Search: {
     loading: 'جارٍ تحميل الفعاليات والأندية…',

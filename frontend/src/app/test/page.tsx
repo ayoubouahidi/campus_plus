@@ -45,7 +45,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 15.2, pages update live</p>
+        <p className="font-semibold">Test page: ready for the next step (15.3 notifications are live in the navbar bell)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -130,22 +130,6 @@ export default async function TestPage() {
               <>Mocks (no <code>BACKEND_URL</code>): {liveEvents.length} events and {liveClubs.length} clubs from lib/mockData.ts, the dev fallback.</>
             )}
           </p>
-        </div>
-
-        <div>
-          <h3 className="font-semibold">What to check (Step 15.2), signed in as student@1337.ma</h3>
-          <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Open the feed (/) in one tab and /calendar (week of the day after tomorrow) in another. In the Claude Code prompt run <code>! docker compose exec -T frontend node /tmp/live_demo.js</code> (8 s between steps; add a number for another pause, e.g. <code>… live_demo.js 15</code>).</li>
-            <li>Step 1 (created): &quot;Live Demo Night&quot; appears in the feed and the calendar within a second or two, without reloading; the feed&apos;s count goes up by one.</li>
-            <li>Step 2 (moved to Agora Hall): the card shows the new place. Open the event page the script names (/events/&lt;id&gt;) for the next steps.</li>
-            <li>Step 3 (cancelled): red &quot;Cancelled&quot; badge on the card, the event page and the calendar agenda; the RSVP button disappears.</li>
-            <li>Step 4 (deleted): gone from the feed and calendar; the event page turns into &quot;Event not found&quot;.</li>
-            <li>The filters you chose on the feed (category) and the calendar&apos;s day/view stay as they were after each update.</li>
-            <li>RSVP to an event, then run the demo: your &quot;Going&quot; stays (live messages never reset RSVP state).</li>
-            <li>Offline catch-up: stop Django (<code>! docker stop campusbe-web-1</code>), start it again (<code>! docker start campusbe-web-1</code>): when the status is back to live, the page reloads its data once.</li>
-            <li>Pages without events (/privacy, /terms, /auth/…) never refresh.</li>
-            <li>Live monitor below: still shows each message.</li>
-          </ul>
         </div>
 
         <div>

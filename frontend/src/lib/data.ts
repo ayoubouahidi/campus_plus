@@ -1,10 +1,10 @@
 import { cache } from 'react';
 import type { AttendeePreview, Club, Department, EventItem } from '@/types/api';
 import { ApiError, apiFetch, apiFetchAll, hasBackend, ApiUnavailable } from '@/lib/api/client';
-import { toAttendee, toClub, toClubs, toDepartment, toEventItem } from '@/lib/api/mappers';
-import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawPage, RawRsvpState } from '@/lib/api/raw';
+import { toAttendee, toClub, toClubs, toDepartment, toEventItem, toNotification } from '@/lib/api/mappers';
+import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawNotification, RawPage, RawRsvpState } from '@/lib/api/raw';
 import { getMockAttendees, mockClubs, mockDepartments, mockEvents, mockNotifications } from '@/lib/mockData';
-import type { AppNotification } from '@/types/notification';
+import type { NotificationFeed } from '@/types/notification';
 
 // Where server pages get their data (Step 14.1, DOCS.md §14). One function per need; each one:
 //  - with BACKEND_URL: calls Django (lib/api/client.ts) and maps the answer (lib/api/mappers.ts);
@@ -100,11 +100,30 @@ export const getClub = cache(async (slug: string, token: string | null = null): 
 
 /* ------------------------------ Notifications ----------------------------- */
 
-// The bell's starting feed (Step 14.4). Django has no notifications endpoint: the feed is built from realtime
-// events in Phase 6. Until then: the mocks in dev without Django (to keep the popover testable), otherwise
-// empty, never fake notifications in front of real students. Never throws (read by the root layout).
-export const getInitialNotifications = (): AppNotification[] =>
-  !hasBackend() && process.env.NODE_ENV !== 'production' ? mockNotifications : [];
+const NOTIFICATIONS_PAGE = 30; // what the panel shows; older ones stay in Django (no "load more" yet)
+
+// The signed-in student's newest notifications and unread count (Step 15.3, GET /api/notifications/ and
+// /unread-count/). Django only ever returns the token owner's records. Mocks: the four sample ones.
+export const listNotifications = async (token: string): Promise<NotificationFeed> => {
+  if (mocksOnly()) return { items: mockNotifications, unreadCount: mockNotifications.filter((item) => !item.is_read).length };
+  const [page, count] = await Promise.all([
+    apiFetch<RawPage<RawNotification>>(`/api/notifications/?page_size=${NOTIFICATIONS_PAGE}`, { token }),
+    apiFetch<{ unread_count: number }>('/api/notifications/unread-count/', { token }),
+  ]);
+  return { items: page.results.map(toNotification), unreadCount: count.unread_count };
+};
+
+// Idempotent on Django's side; a non-numeric id (a mock one) can't exist there: 404, like Django.
+export const markNotificationRead = async (id: string, token: string): Promise<void> => {
+  if (mocksOnly()) return;
+  if (!/^\d+$/.test(id)) throw new ApiError(404, null, `/api/notifications/${id}/read/`);
+  await apiFetch(`/api/notifications/${id}/read/`, { method: 'POST', token });
+};
+
+export const markAllNotificationsRead = async (token: string): Promise<void> => {
+  if (mocksOnly()) return;
+  await apiFetch('/api/notifications/read-all/', { method: 'POST', token });
+};
 
 /* ------------------------------- Departments ------------------------------ */
 

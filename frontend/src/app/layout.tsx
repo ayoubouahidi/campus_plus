@@ -10,7 +10,6 @@ import { AppShell } from "@/components/ui/layout/AppShell";
 import { CampusBackground } from "@/components/ui/layout/CampusBackground";
 import { Footer, FooterBrand, FooterLegal, FooterNav } from "@/components/ui/layout/Footer";
 import { getSessionState } from "@/auth";
-import { getInitialNotifications } from "@/lib/data";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -91,7 +90,6 @@ export default async function RootLayout({
               {/* One WebSocket per signed-in tab, shared by every page (Step 15.1). */}
               <RealtimeProvider>
                 <AppShell
-                  initialNotifications={getInitialNotifications()}
                   footer={
                     <Footer>
                       <FooterBrand />

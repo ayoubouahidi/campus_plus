@@ -83,3 +83,17 @@ export interface RawRsvpState {
   rsvps_count: number;
   has_user_rsvpd: boolean;
 }
+
+// GET /api/notifications/ results and the `data` of a `notification.created` socket message (Step 15.3).
+// `read_at` is absent from the socket message; `event_title` is asked for in TEAM_NEEDS BE10.
+export interface RawNotification {
+  id: number;
+  notification_type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+  event_id: number | null;
+  event_title?: string | null;
+}

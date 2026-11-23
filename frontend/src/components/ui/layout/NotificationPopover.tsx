@@ -16,6 +16,7 @@ import { BellIcon, IconBase, NavIconProps } from '@/components/ui/layout/navIcon
 import { trapTabKey } from '@/lib/focus';
 import { useMergedRef } from '@/lib/refs';
 import { formatAbsoluteTime, formatRelativeTime } from '@/lib/time';
+import { useNotificationText } from '@/hooks/useNotificationText';
 import { AppNotification, NotificationKind } from '@/types/notification';
 
 /* -------------------------------- Context --------------------------------- */
@@ -49,8 +50,10 @@ const useNotificationPopover = () => {
 /* -------------------------- NotificationPopover --------------------------- */
 
 export interface NotificationPopoverProps extends React.HTMLAttributes<HTMLDivElement> {
-  // Owned by the caller (the WebSocket layer in Phase 6); the popover only owns open/closed.
+  // Owned by the caller (useNotifications, Step 15.3); the popover only owns open/closed.
   notifications: readonly AppNotification[];
+  // Django's unread count, which can exceed the unread items loaded. Default: counted from `notifications`.
+  unreadCount?: number;
   // Called when an unread notification is clicked. Omit to leave read state untouched.
   onMarkRead?: (id: string) => void;
   // Shows the "Mark all as read" button when provided and something is unread.
@@ -65,8 +68,9 @@ interface Announcement {
 
 // `relative` wrapper: the panel is positioned against it from sm up.
 export const NotificationPopover = React.forwardRef<HTMLDivElement, NotificationPopoverProps>(
-  ({ notifications, onMarkRead, onMarkAllRead, children, className = '', ...props }, ref) => {
+  ({ notifications, unreadCount: unreadCountProp, onMarkRead, onMarkAllRead, children, className = '', ...props }, ref) => {
     const t = useTranslations('Notifications');
+    const textOf = useNotificationText();
     const [isOpen, setIsOpen] = useState(false);
     const [announcement, setAnnouncement] = useState<Announcement | null>(null);
     const seenIdsRef = useRef<Set<string> | null>(null);
@@ -79,10 +83,11 @@ export const NotificationPopover = React.forwardRef<HTMLDivElement, Notification
     const toggle = useCallback(() => setIsOpen((open) => !open), []);
     const close = useCallback(() => setIsOpen(false), []);
 
-    const unreadCount = useMemo(
+    const countedUnread = useMemo(
       () => notifications.filter((notification) => !notification.is_read).length,
       [notifications]
     );
+    const unreadCount = unreadCountProp ?? countedUnread;
 
     // Announce unread notifications that weren't in the previous list. The first list is not "new".
     useEffect(() => {
@@ -94,9 +99,9 @@ export const NotificationPopover = React.forwardRef<HTMLDivElement, Notification
       if (arrived.length === 0) return;
       // The title is the notification's own text (data); only the frame around it is translated.
       const text =
-        arrived.length === 1 ? t('arrivedOne', { title: arrived[0].title }) : t('arrivedMany', { count: arrived.length });
+        arrived.length === 1 ? t('arrivedOne', { title: textOf(arrived[0]).title }) : t('arrivedMany', { count: arrived.length });
       setAnnouncement((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
-    }, [notifications, t]);
+    }, [notifications, t, textOf]);
 
     const value = useMemo(
       () => ({
@@ -189,12 +194,12 @@ NotificationTrigger.displayName = 'NotificationTrigger';
 
 /* --------------------------- NotificationPanel ---------------------------- */
 
-// Exhaustive: a new WebSocketEventType without an entry here is a compile error.
+// Exhaustive: a new NotificationKind without an entry here is a compile error.
 const KIND_STYLES: Record<
   NotificationKind,
   { icon: (props: NavIconProps) => React.JSX.Element; tone: string }
 > = {
-  event_created: {
+  new_event: {
     icon: (props) => (
       <IconBase {...props}>
         <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
@@ -212,7 +217,7 @@ const KIND_STYLES: Record<
     ),
     tone: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
   },
-  event_deleted: {
+  event_cancelled: {
     icon: (props) => (
       <IconBase {...props}>
         <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
@@ -220,6 +225,41 @@ const KIND_STYLES: Record<
       </IconBase>
     ),
     tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+  },
+  event_removed: {
+    icon: (props) => (
+      <IconBase {...props}>
+        <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />
+      </IconBase>
+    ),
+    tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+  },
+  rsvp_confirmed: {
+    icon: (props) => (
+      <IconBase {...props}>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+      </IconBase>
+    ),
+    tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  },
+  rsvp_cancelled: {
+    icon: (props) => (
+      <IconBase {...props}>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M8.5 12h7" />
+      </IconBase>
+    ),
+    tone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  },
+  club_announcement: {
+    icon: (props) => (
+      <IconBase {...props}>
+        <path d="M4 10v4h3l6 4V6L7 10H4z" />
+        <path d="M16.5 9a4 4 0 0 1 0 6" />
+      </IconBase>
+    ),
+    tone: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
   },
 };
 
@@ -258,6 +298,7 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
       onMarkAllRead,
     } = useNotificationPopover();
     const t = useTranslations('Notifications');
+    const textOf = useNotificationText();
     const locale = useLocale();
     const [mounted, setMounted] = useState(false);
     const [now, setNow] = useState(() => Date.now());
@@ -368,6 +409,7 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
             {notifications.map((notification) => {
               const readState: ReadState = notification.is_read ? 'read' : 'unread';
               const { icon: KindIcon, tone } = KIND_STYLES[notification.kind];
+              const text = textOf(notification);
 
               return (
                 <li key={notification.id}>
@@ -388,9 +430,9 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
                     <span className="min-w-0 flex-1 space-y-0.5">
                       <span className={`block text-sm ${itemTitleStyles[readState]}`}>
                         {!notification.is_read && <span className="sr-only">{t('unreadPrefix')}</span>}
-                        {notification.title}
+                        {text.title}
                       </span>
-                      <span className="block text-sm text-slate-500 dark:text-slate-400">{notification.body}</span>
+                      <span className="block text-sm text-slate-500 dark:text-slate-400">{text.body}</span>
                       <time
                         dateTime={notification.created_at}
                         title={formatAbsoluteTime(notification.created_at, locale)}

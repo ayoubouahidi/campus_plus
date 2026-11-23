@@ -4496,13 +4496,13 @@ getInitialNotifications(): AppNotification[]; // mocks in dev without Django, ot
 
 ## 15. Real-time (Phase 6, 2026-11-22)
 
-Backend side: Ahmed's WebSocket on branch `Ahmed` (`/ws/calendar/`, `POST /api/realtime/token/`), described in his `docs/ahmed/REALTIME_FRONTEND_HANDOFF.md`. Notifications wait for Ahmed's design choice (TEAM_NEEDS BE8).
+Backend side: Ahmed's WebSocket on branch `Ahmed` (`/ws/calendar/`, `POST /api/realtime/token/`), described in his `docs/ahmed/REALTIME_FRONTEND_HANDOFF.md`. Notifications: Ahmed's stored notifications (`notifications` app, PR #5, `67e9a08`; API_SPEC.md "Personal notification API" and "…WebSocket").
 
 | Step | Scope | Status |
 | --- | --- | --- |
 | 15.1 | Credential cookie (`ws_access`), one WebSocket per signed-in tab, acknowledgment, 4401 refresh, backoff, message parsing | ✅ validated 2026-11-22 |
 | 15.2 | Pages apply live messages (feed, calendar, event page, club page), keeping RSVP state; reload on `resync` | ✅ validated 2026-11-22 |
-| 15.3 | Notifications from Ahmed's chosen design (BE8) | ⏳ waiting for Ahmed |
+| 15.3 | The bell shows Django's stored notifications: load, live socket `/ws/notifications/`, mark read, translated text | ✅ validated 2026-11-23 |
 
 ### 15.1 The realtime connection (Step 15.1, 2026-11-22)
 
@@ -4625,3 +4625,132 @@ const [events, setEvents] = useSyncedState(initialEvents); // instead of useStat
 **Local demo** (outside the repo, copied into the frontend container): `docker compose exec -T frontend node /tmp/live_demo.js [seconds]`: the seeded board member creates "Live Demo Night" (capacity 40) for the day after tomorrow, moves it to Agora Hall, cancels it, then deletes it, with a pause between steps (8 s by default). Dry run with 1 s pauses: all four requests accepted (created #10).
 
 **Verified.** `tsc` passes; ESLint: the same 6 old findings (four "missing dependency `setEvents`" warnings fixed by listing the setter). The server side of a refresh is the page render verified in §14.2–14.4. The browser side (message → refresh → new card, badge, "Event not found") is the checklist on `/test`.
+
+### 15.3 Notifications from Django (Step 15.3, 2026-11-23)
+
+**Files:**
+- New:
+  - `src/types/notification.ts` (rewritten: Django's kinds);
+  - `src/lib/api/{raw,mappers}.ts` (`RawNotification`, `toNotification`);
+  - `src/lib/data.ts` (`listNotifications`, `markNotificationRead`, `markAllNotificationsRead`);
+  - `src/app/notifications/actions.ts` (server actions);
+  - `src/lib/liveSocket.ts` (the connection, shared with 15.1);
+  - `src/lib/notifications.ts` (socket messages, merge);
+  - `src/hooks/useNotifications.ts`;
+  - `src/hooks/useNotificationText.ts`;
+  - `Notifications.saveFailed` / `Notifications.kinds` in the 3 message files.
+- Changed:
+  - `RealtimeProvider.tsx`: now uses `openLiveSocket`;
+  - `NotificationPopover.tsx`: 7 kinds, translated text, `unreadCount` prop;
+  - `mockData.ts`: Django-shaped mocks.
+- Integrated: `src/components/ui/layout/AppShell.tsx` (the navbar bell), `src/app/layout.tsx` (no more `initialNotifications`). Demo script outside the repo (below).
+
+**Status:** ✅ Validated (2026-11-23) on `/test`, then integrated into the navbar bell:
+- `AppShell` calls `useNotifications`;
+- the root layout's `getInitialNotifications` and the `initialNotifications` prop are gone;
+- `/test` is reset (`NotificationsMonitor` removed).
+
+Checked against Ahmed's Django:
+- the demo produced the 9 expected notifications, `unread_count` 9;
+- read state is kept in Django (`read_at` set);
+- Mouad's run showed one fix (deleted event, below);
+- `tsc` passes, ESLint shows the same 6 old findings.
+
+**Business purpose.** A student learns what happened to the events they care about without watching the pages:
+- a new event from their club;
+- a change to, cancellation or removal of an event they're going to;
+- a confirmation of their own RSVP or cancellation.
+
+Notifications are stored, so they are still there on the next visit, read state included, on every device.
+
+**Backend contract** (Ahmed, `Ahmed` at `67e9a08`; this answers TEAM_NEEDS BE8 with design (b)):
+- REST:
+  - `GET /api/notifications/?page_size=30`: the student's own notifications, newest first;
+  - `GET /api/notifications/unread-count/`;
+  - `POST /api/notifications/{id}/read/`;
+  - `POST /api/notifications/read-all/`.
+- Socket `/ws/notifications/`: same `ws_access` cookie (path `/ws/` already covers it), same 4401 expiry. It sends `connection_established`, then `notification.unread_count`, then `notification.created` for each new notification.
+- Fields: `id, notification_type, title, message, is_read, created_at, read_at, event_id`.
+- Who gets one:
+
+| Django type | Sent to | Our kind | Link |
+|---|---|---|---|
+| `new_event` | Members of the club (`UserMember.club_id`, TEAM_NEEDS BE11) | `new_event` | `/events/{id}` |
+| `event_updated` | Students who RSVP'd | `event_updated` | `/events/{id}` |
+| `event_cancelled` (status → cancelled) | Students who RSVP'd | `event_cancelled` | `/events/{id}` (shows the Cancelled badge) |
+| `event_cancelled` with `event_id: null` (deleted while planned or ongoing) | Students who RSVP'd | **`event_removed`** | `/calendar` |
+| `rsvp_confirmed` / `rsvp_cancelled` | The student who clicked | same | `/events/{id}` |
+| `club_announcement` (not sent yet: dashboard) | — | same; also the fallback for an unknown type | `/events/{id}` or `/calendar` |
+
+After an event is deleted, Django sets `event_id` to null on all its notifications, so older ones (for example "You're going") then link to `/calendar`.
+
+**Core concepts & decisions.**
+- **One connection module for both sockets** (`openLiveSocket`). The 15.1 logic (cookie, wait for `connection_established`, 4401 → new cookie, backoff with jitter, `stop()`) moved out of `RealtimeProvider` unchanged.
+  - The calendar socket and the notification socket call the same function.
+  - The two sockets start and expire together, and they share one cookie. So one credential request is shared: the second caller reuses the pending `connectRealtime()` call, and Django gets one token request every 5 minutes, not two.
+- **Load, then live, merged by id.**
+  - On mount and after every (re)connect, `useNotifications` reloads the newest 30 and Django's unread count (server action).
+  - The socket adds new notifications on top.
+  - `mergeNotifications` keeps each id once, newest first, at most 50. This covers what API_SPEC.md warns about: a notification created while the list loads is neither lost nor shown twice.
+  - "Read" wins in a merge: Django never makes a read notification unread again, so a reload that started before a click can't undo the click on screen.
+- **The badge is Django's count.** `unread_count` can be more than the unread items among the 30 loaded, so `NotificationPopover` takes an optional `unreadCount` prop (default: counted from the list, as before).
+  - A `notification.unread_count` message corrects the count, for example after reading in another tab.
+  - When the count is 0, every loaded item turns read.
+- **Mark as read is optimistic, with rollback.** The click shows the change at once, then the server action saves it in Django.
+  - If Django refuses or is down, the item turns unread again and a red toast says so.
+  - "Mark all" restores exactly the items that were unread.
+  - The token stays on the server, as for RSVP (§14.3).
+- **Translated in the browser, from the kind.** Django writes English (`"Event updated"`, `An event you registered for, "…", changed.`). `useNotificationText` writes the text in the visitor's language:
+  - the title always comes from `Notifications.kinds.{kind}.title`;
+  - the sentence is translated when the event's name is known (`event_title`, asked from Ahmed in TEAM_NEEDS BE10), otherwise Django's English sentence is shown;
+  - club announcements keep Django's text (the club's own words).
+  - Translating at render time (not when mapping) means switching language re-translates the bell without reloading.
+- **Deleted event, live.** When the calendar socket says an event was deleted, notifications linking to it switch to `/calendar` at once, as Django's next reload would (`event_id` becomes null). Otherwise a click leads to "Event not found". Found on `/test`: `live_demo.js` (15.2) created and deleted "Live Demo Night", and its "New club event" notification still linked to `/events/19`.
+- **Signed out: nothing stays.** The effect's cleanup closes the socket and empties the list, so the next student on a shared computer never sees the previous one's notifications.
+- **Dev without Django:** the server action returns the four mock notifications (now in Django's shape). The socket stays `off`, as in §15.1.
+
+**Tradeoffs ("Why this instead of alternatives?").**
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Second WebSocket `/ws/notifications/` | Notifications on the calendar socket | Django keeps them separate (public calendar group vs private per-student group); one function opens both, so the cost is one more connection per tab. |
+| Shared `openLiveSocket` function | A second copy of the 15.1 code | One place for renewal and backoff rules; the credential request is shared. |
+| Client state + server actions | Load in the root layout (server) | The root layout renders on every navigation; the bell would re-fetch on each page. The hook loads once per tab and stays live. |
+| Translate from `notification_type` | Show Django's English text | The site is fully translated (§12). The kind is a fixed list, so its title is UI text; only the event's name is data. |
+| Django's unread count | Count the loaded items | Correct even with more than 30 unread. |
+| Rollback + toast | Wait for Django before showing "read" | Instant feedback; failures are rare and visible. |
+
+**Contract.**
+```ts
+// src/types/notification.ts
+type NotificationKind = 'new_event' | 'event_updated' | 'event_cancelled' | 'event_removed'
+  | 'rsvp_confirmed' | 'rsvp_cancelled' | 'club_announcement';
+interface AppNotification { id: string; kind: NotificationKind; title: string; body: string; // Django's English text
+  event_title?: string; href: AppRoute; created_at: string; is_read: boolean }
+// src/hooks/useNotifications.ts
+useNotifications(enabled: boolean): { notifications: AppNotification[]; unreadCount: number;
+  status: RealtimeStatus; markRead(id: string): void; markAllRead(): void };
+// src/hooks/useNotificationText.ts
+useNotificationText(): (n: AppNotification) => { title: string; body: string };
+// src/lib/liveSocket.ts
+openLiveSocket({ path, onStatus, onEstablished, onMessage }): () => void; // returns stop()
+// src/app/notifications/actions.ts ('use server'): { ok: true; value } | { ok: false; error: 'signed-out' | 'unavailable' }
+loadNotificationsAction(); markNotificationReadAction(id); markAllNotificationsReadAction();
+// NotificationPopover: new optional prop unreadCount?: number
+```
+
+**Usage** (in `AppShell`):
+```tsx
+const { notifications, unreadCount, markRead, markAllRead } = useNotifications(session.status === 'signed-in');
+<NotificationPopover notifications={notifications} unreadCount={unreadCount} onMarkRead={markRead} onMarkAllRead={markAllRead}>
+  <NotificationTrigger />
+  <NotificationPanel />
+</NotificationPopover>
+```
+
+**Local test wiring.**
+- Ahmed's backend was moved to `67e9a08` (the `notifications` app; migration `notifications.0001` applied) and rebuilt with `docker compose -p campusbe up -d --build web`.
+- **Gotcha:** rebuilding recreates the container, which drops its names on our network. Re-run the §15.1 wiring (`docker network disconnect …`, `connect --alias ahmed-web --alias web …`, restart nginx and frontend). Otherwise nginx fails with `host not found in upstream "web:8000"`.
+- The seeded student is now a LEET Dev member (`UserMember.club_id`), so "new event" notifications reach them (seed script updated).
+- `live_demo.js` (15.2) now also gives the student one "New club event" notification, because the student is a LEET Dev member. It stays unread until it is read. The other steps notify nobody, because the student didn't RSVP.
+- Demo: `docker compose exec -T frontend node /tmp/notify_demo.js [seconds]`. It runs 7 steps that produce 9 notifications: new event, going, updated, cancelled, then a second event (new + going), RSVP cancelled + going again, removed.

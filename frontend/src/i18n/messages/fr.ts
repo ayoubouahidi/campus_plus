@@ -50,6 +50,18 @@ const fr = {
     unreadPrefix: 'Non lue : ',
     arrivedOne: 'Nouvelle notification : {title}',
     arrivedMany: '{count, plural, one {# nouvelle notification} other {# nouvelles notifications}}',
+    saveFailed: {
+      title: 'Impossible de mettre à jour vos notifications',
+      description: 'Vos notifications n’ont pas changé. Réessayez dans un instant.',
+    },
+    kinds: {
+      new_event: { title: 'Nouvel événement de votre club', body: 'Votre club a publié « {event} ».' },
+      event_updated: { title: 'Événement modifié', body: '« {event} », un événement auquel vous participez, a changé.' },
+      event_cancelled: { title: 'Événement annulé', body: '« {event} » a été annulé.' },
+      event_removed: { title: 'Événement supprimé', body: '« {event} » a été supprimé et n’est plus disponible.' },
+      rsvp_confirmed: { title: 'Participation confirmée', body: 'Vous êtes inscrit·e à « {event} ».' },
+      rsvp_cancelled: { title: 'Participation annulée', body: 'Vous ne participez plus à « {event} ».' },
+    },
   },
   Search: {
     loading: 'Chargement des événements et des clubs…',
