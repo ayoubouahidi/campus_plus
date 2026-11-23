@@ -5701,3 +5701,47 @@ Collecting a new piece of personal data must be in the policy (§9):
 - The "name and email come from 42" line was removed: the dialog only edits the number.
 - Messages: `Profile.editNumber`, `addNumber`, `editTitle` replaced `editProfile`, `edit`, `editTitle`, `editDescription` (3 languages).
 - Status: ✅ validated by Mouad (2026-11-23).
+
+## 22. Multi-user test (mandatory item, 2026-11-23)
+
+The subject requires the site to work for **many users at the same time, without conflicts, with real-time updates across users**. This step proves it against Ahmed's Django (`feat/ahmed-final-requirements` at `792ac56`) and our Next.js, with a script that acts as 20 students at once.
+
+**Status:** ✅ 13/13 checks, **4 runs in a row (52/52)**, no error or exception in Django's log during the runs. To repeat on the merged stack before the evaluation (TEAM_NEEDS §5.1).
+
+### 22.1 Setup
+
+- **20 test students** `mu01…mu20@1337.ma` (password `campus-test-2026`) were created in the local Django (users + `UserMember`, 1337 department). Local test data only.
+- **The script** `multiuser.js` (outside the repo, copied to `/tmp` in the frontend container) talks to Django on its internal address and to our Next.js on `localhost:3000`. It logs everyone in, runs the scenarios in parallel (`Promise.all`: the requests really leave at the same moment), then deletes its test events.
+- **Command:** `docker compose exec -T frontend node /tmp/multiuser.js`.
+
+### 22.2 Scenarios and results
+
+| # | Scenario | What could go wrong | Result (every run) |
+|---|---|---|---|
+| A | 20 students RSVP **at the same instant** to an event with **5 places** | Two requests both see "4 taken" and both get in → 6 or more in a 5-place event ("overbooking", a race condition) | `201 × 5`, `409 × 15`; `rsvps_count` = 5; exactly 5 students see "going" |
+| B | One student sends **10 identical RSVPs** at once (double click, retries) | Duplicate RSVP rows, count 10, or a server error on the unique constraint | `201 × 1`, `200 × 9` (already going); count 1; no 5xx |
+| C | One student sends 10 mixed RSVP / cancel requests at once | Count and "going" disagree (e.g. "going" with count 0) | Final state varies (the last request wins, as expected); count **always** matches; no 5xx |
+| D | **10 students with live sockets** (`/ws/calendar/` + `/ws/notifications/`, 20 connections); a board member creates an event | A socket misses the message; a notification sent to the wrong student | 10/10 calendar sockets got `event_created`; 10/10 students got their own "New campus event", 10 different notification ids |
+| E | Privacy of notifications | A student's list contains another student's notification | 0 leaks for all 10 students (each list holds only the id its own socket received) |
+| F | **10 sessions through our Next.js**, `/profile` loaded at the same time | Our server mixes up sessions, e.g. a shared cache or global variable gives student A's token to student B's page | 10/10 pages show only their own student's email, and no other test student's |
+
+### 22.3 Why it works (what to explain at the evaluation)
+
+- **A, no overbooking:** Django checks the capacity and creates the RSVP inside one database transaction with a row lock on the event. A request that arrives while another holds the lock waits, then sees the updated count and answers 409 "Event capacity has been reached". The student site shows "Event full" and rolls back its optimistic count (§14.3).
+- **B, idempotent RSVP:** one RSVP per (event, student) is enforced by the database (unique constraint). A repeated "going" answers 200 with the current state instead of creating a second row. The site also ignores repeated clicks while a request is pending (`useRsvp`, §14.3).
+- **D, real-time across users:** Django sends each change to Redis; every connected socket in the calendar group receives it (Django Channels). Notifications use one private group per student, chosen from the authenticated user, never from the request (§15.3).
+- **F, no session mix-up in Next.js:** each request reads its own encrypted Auth.js cookie. `getBackendToken` uses React's `cache()`, which is **per request**, not global. Data calls never use Next's shared cache (`cache: 'no-store'`, §14.1).
+
+### 22.4 What this doesn't cover
+
+- **Browsers.** The script makes the same HTTP and WebSocket calls as the site; seeing the live update in two real browser windows remains a manual demo (two students in two browsers, one RSVPs, the other's count changes).
+- **The merged stack** (Hamza's nginx, rate limits, production Django settings): to repeat after the merge. The nginx limit of 10 requests per second per IP (H9) may answer 429 if all students come from one machine.
+- **Load at scale.** 20 users prove correctness, not capacity for thousands.
+
+### 22.5 Study questions
+
+1. What is a race condition, and how could two students both take the last place?
+2. How does Django prevent overbooking (transaction + lock), and what does the student see?
+3. Why must "RSVP" be idempotent, and what makes it so (database + frontend)?
+4. How does a notification reach only its own student?
+5. How do we know Next.js never shows one student's data to another under load?
