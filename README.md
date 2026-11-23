@@ -56,26 +56,26 @@ Images must be a real JPEG, PNG, or WEBP file and must be smaller than 2 MB.
 
 ## Filtering and search
 
-Club events can be filtered by department:
+Club events can be filtered by department slug:
 
 ```text
-GET /api/club-events/?department=1
+GET /api/club-events/?department=1337
 ```
 
-They can also be filtered by a word in the event name or description:
+They can also be filtered by the fixed event category:
 
 ```text
-GET /api/club-events/?category=football
+GET /api/club-events/?category=Tech
 ```
 
 Both filters can be used at the same time:
 
 ```text
-GET /api/club-events/?department=1&category=football
+GET /api/club-events/?department=1337&category=Tech
 ```
 
-The event endpoint also supports search. Search checks the event name,
-description, and department title:
+The event endpoint also supports search across event name, description, club
+name, and location:
 
 ```text
 GET /api/club-events/?search=technology
@@ -311,17 +311,18 @@ different Django processes deliver messages to connected clients.
   this mode. There is no fallback to development tokens.
 - An unsupported value prevents application startup.
 
-The API still uses DRF tokens. Signup at `/api/signup/` returns a DRF token;
-it does **not** issue JWTs. The frontend session remains a mock. No JWT login,
-cookie issuance, refresh, logout, or 42 OAuth integration exists in this
-checkout. A NextAuth session token is not an established backend credential.
+The REST API uses DRF tokens. Email signup/login, `/api/me/`, logout and the
+internal 42 profile-sync contract are implemented. `POST /api/realtime/token/`
+exchanges an authenticated REST request for a short-lived socket JWT; Django
+does not set the browser cookie. An Auth.js session token is not automatically
+a backend SimpleJWT credential.
 
 For local JWT mode, start the existing Daphne application with
 `WS_AUTH_BACKEND=jwt .venv/bin/daphne backend.asgi:application` after configuring
 the environment, database, and Redis. This does not create a login endpoint.
 The authentication teammate must agree on issuance and set the `ws_access`
 cookie with `HttpOnly`, `Secure`, an appropriate `SameSite` policy, and a path
-covering `/ws/calendar/`. Middleware cannot infer these attributes from an
+covering `/ws/`. Middleware cannot infer these attributes from an
 incoming Cookie header. Keep access and refresh credentials out of URLs.
 
 No `SIMPLE_JWT` overrides are currently declared. Installed defaults use
@@ -332,9 +333,10 @@ an experimental verification contract, pending agreement with the login owner.
 
 Origins are checked using `AllowedHostsOriginValidator` and `ALLOWED_HOSTS`.
 This is a host-based policy, not an explicit HTTPS-origin allowlist. All
-authenticated users currently share the calendar group; private notifications
-are not implemented. Authentication runs at connection time: expiry, account
-disablement, logout, and revocation do not yet close an existing socket.
+authenticated users share the public calendar group; private notifications use
+a separate per-user group at `/ws/notifications/`. JWT expiry closes both
+consumers with code 4401. Logout/revocation does not close a socket before that
+JWT deadline.
 
 ### Environment and Docker
 
@@ -344,6 +346,10 @@ local default. Setting `POSTGRES_HOST` selects PostgreSQL and requires
 `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`; `POSTGRES_PORT` defaults
 to 5432. `DEBUG`, `DJANGO_ALLOWED_HOSTS`, and `WS_AUTH_BACKEND` control the
 development and authentication settings.
+`DJANGO_PUBLIC_MEDIA_BASE_URL` supplies a validated browser-visible origin for
+flyers, logos, and banners when Django receives an internal Docker hostname.
+Production HTTPS mode requires an HTTPS value. Nginx must serve `/media/` from
+the shared media volume at this public origin.
 
 Compose defines `web`, `frontend`, `nginx`, `redis`, and `db`. Inside its network,
 the database is `db:5432` and Redis is `redis:6379`; these names are not local
@@ -380,6 +386,31 @@ channels-redis 4.3.0, DRF 3.18.3, SimpleJWT 5.5.1, PyJWT 2.15.1. SimpleJWT's
 installed metadata lists Django through 5.2 and Python through 3.13; support
 for this newer runtime needs separate compatibility review. Docker installs
 `requirements.txt`, which already declares SimpleJWT.
+
+## Ahmed's backend contribution
+
+Ahmed owns the shared `core_data`, `realtime`, and personal `notifications`
+work: event/club/department APIs, search/filter/pagination, RSVP capacity and
+attendee privacy, Django Channels/ASGI calendar broadcasts, JWT WebSocket
+validation and expiry, private persistent notification history, isolated live
+delivery, media URL security, forward migrations, and backend integration and
+security tests. Event management uses `ClubBoardAssignment`; new public-event
+alerts go to active non-administrator `STUDENT` and `BOARD_MEMBER` accounts,
+regardless of Club membership. Later event changes remain scoped to active RSVP
+attendees.
+
+The shared schema uses `accounts.User` as authentication identity,
+`core_data.ClubEvent` as the event model, `core_data.Rsvp` as the unique
+user/event registration, and `notifications.Notification` as durable personal
+history. Redis transports transient WebSocket messages; the database stores
+authoritative records. The public calendar projection excludes attendee
+identities and private contact data.
+
+Project-manager work includes maintaining backend/frontend contracts,
+documenting ownership and handoffs, reconciling shared model boundaries, and
+recording test evidence and external blockers. The team must still provide any
+mandatory Product Owner and Tech Lead identities; this README does not invent
+them.
 
 See [architecture](docs/ahmed/ARCHITECTURE.md),
 [learning journal](docs/ahmed/LEARNING_JOURNAL.md), and

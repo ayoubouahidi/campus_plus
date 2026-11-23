@@ -1,12 +1,12 @@
 # Campus Plus realtime calendar handoff
 
-Status: implemented backend contract on branch `Ahmed`, reviewed 2026-11-21.
+Status: implemented backend contract, reviewed 2026-11-23.
 Owner of this document: Ahmed (backend realtime).
 Frontend implementation owner: Mouad.
 
 This document describes behavior that exists now. Proposed frontend behavior is
-explicitly labelled. It does not claim that Ayoub's final login/custom-user
-integration, browser cookie handoff, RSVP, or production deployment is complete.
+explicitly labelled. It does not claim browser cookie handoff, the real Mouad
+frontend, Nginx, or production deployment is complete.
 
 ## Endpoints
 
@@ -161,6 +161,9 @@ transaction commits.
     "category": "Tech",
     "status": "planned",
     "capacity": 150,
+    "rsvps_count": 0,
+    "has_user_rsvpd": false,
+    "attendees_preview": [],
     "created_at": "2026-11-21T10:00:00Z",
     "updated_at": "2026-11-21T10:00:00Z"
   }
@@ -201,6 +204,9 @@ contains the complete current event serializer shape, not only changed fields.
     "category": "Tech",
     "status": "planned",
     "capacity": null,
+    "rsvps_count": 87,
+    "has_user_rsvpd": false,
+    "attendees_preview": [],
     "created_at": "2026-11-21T10:00:00Z",
     "updated_at": "2026-11-21T11:00:00Z"
   }
@@ -248,7 +254,7 @@ event item.
 | `department_slug` | Department route/filter key | May be null until A0 backfill |
 | `club` | Club numeric ID | Writable relationship; may be null |
 | `club_id` | Club numeric ID alias | Read-only; may be null |
-| `club_name`, `club_slug` | Club display/routing | Null for department-only events; slug may also be null pending A0 |
+| `club_name`, `club_slug` | Club display/routing | Null only for department-only events; persisted Clubs have a non-null slug after `core_data.0012` |
 | `description`, `location` | Display text | May be empty string |
 | `flyer_url` | Image URL | Empty string when no flyer |
 | `category` | Seven-value category | Historical rows may be null; new events require it |
@@ -262,8 +268,24 @@ For event writes, use the documented writable backend fields (`name`,
 `starts_at`, `ends_at`, `parent_id`, and optionally `club`); `title`,
 `start_time`, and `end_time` are read-only response aliases.
 
-No RSVP counts, attendee previews, user-specific RSVP state, delivery IDs or
-server sequence numbers are present. Do not add fake defaults for them.
+`rsvps_count` is a public aggregate and is present. `has_user_rsvpd` is always
+sanitized to `false`, and `attendees_preview` is always sanitized to `[]`,
+because a shared calendar message cannot carry caller-specific state or
+attendee identities. President contacts, credentials, recipient IDs, delivery
+IDs, and server sequence numbers are never present.
+
+## Personal notification messages
+
+Personal messages use a separate per-user group at `/ws/notifications/`.
+`notification.created` contains `id`, `notification_type`, English fallback
+`title` and `message`, nullable `event_title`, read state, creation time, and
+nullable `event_id`. It never contains another recipient's identity or club
+president contacts.
+
+For English, French and Arabic UI text, render from `notification_type` and
+`event_title`. Fall back to `title` and `message` when the snapshot is null.
+Fetch `/api/notifications/` after reload/reconnect: PostgreSQL is durable
+history while Redis only delivers live messages.
 
 ## Reconnection and snapshot reconciliation
 
@@ -316,8 +338,6 @@ delivery while disconnected.
 
 ### Ayoub
 
-- Final custom-user and HTTP authentication integration.
-- DRF token acquisition/rotation and logout behavior.
 - Server-side `ws_access` cookie handoff contract with Mouad.
 - Whether logout needs active socket revocation before JWT expiry.
 
@@ -337,9 +357,9 @@ delivery while disconnected.
 
 ### Ahmed
 
-- Broadcast failure currently propagates after the database commit. Delivery is
-  not transactional with the database and there is no retry/outbox.
-- Pending core-data migrations prevent full database-backed integration claims.
+- Redis delivery failure is logged and does not erase committed notification
+  history; there is no retry/outbox.
+- Production rollout requires forward migrations and a populated-data rehearsal.
 - The shared calendar group is appropriate only for public calendar data; do
   not place private per-user data in this payload.
 

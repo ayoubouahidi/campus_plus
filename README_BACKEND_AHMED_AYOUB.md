@@ -1,5 +1,10 @@
 # Campus Hub backend: the split between Ahmed and Ayoub
 
+> Final scope correction (2026-11-23): Campus Plus is 1337-only. EMINES,
+> FGSES, and UM6P references in this historical plan are obsolete and must not
+> become seed data or eligibility evidence. Runtime enforcement depends on
+> Ayoub configuring and verifying `ALLOWED_42_CAMPUSES`.
+
 > Written 2026-11-18 by Mouad (frontend), after reading the code on the `Ahmed`, `Ayoub` and `Mouad` branches.
 > The new backend teammate is not joining. DASH's role (**Backend API & data**) is split between **Ahmed** and **Ayoub**, so we can reach production as fast as possible.
 > This file replaces `README_BACKEND_TEAMMATE.md` (same Desktop), which is now obsolete.
@@ -87,7 +92,7 @@ Sit together for one hour, agree on this list, then **Ahmed writes it as one mig
 
 | Field | Type | Why |
 | --- | --- | --- |
-| `slug` | `SlugField(unique=True)` | `1337`, `emines`, `um6p`. The website's campus filter and the super-admin "tenant" column use it. Today the frontend guesses the campus from names. |
+| `slug` | `SlugField(unique=True)` | `1337` for the agreed product scope. |
 
 ### 4.2 `Club`
 
@@ -181,7 +186,8 @@ Plus a one-line helper both of you can call: `dashboard.audit.log(actor, action,
 
 ### 4.8 Seed data
 
-One `python manage.py seed` command (Ahmed) that creates the departments (`1337`, `emines`, `um6p`), a few clubs with slugs, and events in the next 30 days, so all three frontends show something right after `make up`.
+If sample data is approved later, it must create only the `1337` department,
+clubs with slugs, and disposable events. No seed command is currently needed.
 
 ---
 
@@ -369,9 +375,10 @@ Every role change and suspension writes an `AuditLog` entry.
 | Next.js 16.4.2 here, 16.3.5 on the student site. | Mouad upgrades the student site to 16.4.2 during login integration. |
 | 42 app | Register redirect URIs for **both** apps: `https://<host>/api/auth/callback/42-school` (student site) and the dashboard's. Share the client id with Mouad. |
 
-### B8. Email sign-in for EMINES students (only if decided, §14)
+### B8. Compatibility email sign-in (does not broaden campus scope)
 
-If EMINES students (no 42 account) must log in: Ahmed's `POST /api/signup/` already exists; add `POST /api/auth/login/` (email + password → `{token, user}`) and add a Credentials provider in Auth.js. Otherwise skip for the first release.
+The existing email path is a compatibility mechanism. Product eligibility is
+still 1337-only and must be enforced by the approved authentication policy.
 
 ### B9. Tests and Swagger for B1–B5.
 
@@ -568,7 +575,7 @@ Merge order into `master`: backend (Ahmed + Ayoub) + infrastructure (Hamza) → 
 | --- | --- | --- |
 | Dashboard location | subdomain `admin.<host>` / `/dashboard` on the same domain | **Subdomain**: no cookie clash, no conflict with Django's `/admin` |
 | Who can see who's going to an event | everyone / signed-in students / count only | **Signed-in students** |
-| EMINES students without a 42 account | email sign-in (B8) / 42 only for now | **42 only for the first release**, email right after |
+| Non-1337 users | outside scope | Do not provision or seed them |
 | Event approval by super admin before publishing | yes / no | **No for the first release** (club boards publish directly; super admin can delete). Faster to ship. |
 | One club per student, or many | single `club_id` / `Membership` table | **Single for now** |
 | Allowed 42 campuses | any / allow-list | Allow-list (`ALLOWED_42_CAMPUSES`) |

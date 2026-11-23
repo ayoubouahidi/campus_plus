@@ -15,7 +15,7 @@ from core_data.models import Club, ClubEvent, Department, Rsvp, UserMember
 from realtime.consumers import NotificationConsumer
 
 from .models import Notification
-from .services import NotificationService
+from .services import NotificationService, notification_payload
 
 
 User = get_user_model()
@@ -113,16 +113,28 @@ class NotificationModelAndServiceTests(TestCase):
     def test_deleted_event_keeps_serializable_history(self):
         department = Department.objects.create(title="Engineering")
         event = ClubEvent.objects.create(name="Demo", parent_id=department)
-        notification = Notification.objects.create(
+        notification, _ = NotificationService.create(
             recipient=self.user,
             notification_type=Notification.Type.EVENT_UPDATED,
-            title="Update",
-            message="Update",
+            title='Update',
+            message='Update',
             event=event,
         )
         event.delete()
         notification.refresh_from_db()
         self.assertIsNone(notification.event_id)
+        self.assertEqual(notification.event_title, 'Demo')
+        self.assertEqual(notification_payload(notification)['data']['event_title'], 'Demo')
+
+    def test_historical_notification_without_event_title_remains_valid(self):
+        notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type=Notification.Type.CLUB_ANNOUNCEMENT,
+            title='Historical',
+            message='Fallback text',
+        )
+        self.assertIsNone(notification.event_title)
+        self.assertIsNone(notification_payload(notification)['data']['event_title'])
 
 
 class NotificationAPITests(TestCase):
@@ -155,6 +167,8 @@ class NotificationAPITests(TestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], self.mine.pk)
         self.assertNotIn("recipient", response.data["results"][0])
+        self.assertIn('event_title', response.data['results'][0])
+        self.assertIsNone(response.data['results'][0]['event_title'])
 
     def test_unread_filter_and_count(self):
         read = Notification.objects.create(
@@ -299,13 +313,49 @@ class NotificationTriggerTests(TestCase):
     def setUp(self):
         self.department = Department.objects.create(title="Computer Science")
         self.club = Club.objects.create(name="Robotics", department=self.department)
+        self.other_club = Club.objects.create(
+            name="Design",
+            department=self.department,
+        )
         self.board = User.objects.create_user(
             username="board", password="test-password", role=User.Role.BOARD_MEMBER
         )
         ClubBoardAssignment.objects.create(user=self.board, club=self.club)
         self.member = User.objects.create_user(username="member", password="test-password")
-        self.unrelated = User.objects.create_user(username="unrelated", password="test-password")
+        self.other_club_member = User.objects.create_user(
+            username="other-club-member",
+            password="test-password",
+        )
+        self.no_club_student = User.objects.create_user(
+            username="no-club-student",
+            password="test-password",
+        )
+        self.unrelated = self.no_club_student
+        self.inactive_student = User.objects.create_user(
+            username="inactive-student",
+            password="test-password",
+            is_active=False,
+        )
+        self.superadmin = User.objects.create_user(
+            username="notification-superadmin",
+            password="test-password",
+            role=User.Role.SUPERADMIN,
+        )
+        self.django_admin = User.objects.create_superuser(
+            username="notification-django-admin",
+            password="test-password",
+        )
+        self.service_account = User.objects.create_user(
+            username="service-account",
+            password="test-password",
+            is_staff=True,
+        )
         UserMember.objects.create(username="member-profile", user=self.member, club_id=self.club)
+        UserMember.objects.create(
+            username="other-club-profile",
+            user=self.other_club_member,
+            club_id=self.other_club,
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.board)
 
@@ -323,12 +373,121 @@ class NotificationTriggerTests(TestCase):
         return payload
 
     @patch("notifications.services.deliver_to_user")
-    def test_new_event_notifies_only_active_club_members(self, mocked_delivery):
+    def test_new_event_notifies_all_active_student_roles_once(self, mocked_delivery):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post("/api/club-events/", self.event_payload(), format="json")
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertTrue(Notification.objects.filter(recipient=self.member, notification_type=Notification.Type.NEW_EVENT).exists())
-        self.assertFalse(Notification.objects.filter(recipient=self.unrelated).exists())
+        eligible_users = {
+            self.board,
+            self.member,
+            self.other_club_member,
+            self.no_club_student,
+        }
+        notifications = Notification.objects.filter(
+            notification_type=Notification.Type.NEW_EVENT,
+        )
+        self.assertEqual(
+            set(notifications.values_list('recipient_id', flat=True)),
+            {user.pk for user in eligible_users},
+        )
+        self.assertEqual(notifications.count(), len(eligible_users))
+        self.assertTrue(all(
+            notification.event_title == 'Robot Day'
+            for notification in notifications
+        ))
+        self.assertTrue(all(
+            notification.title == 'New campus event'
+            and notification.message == (
+                'A new campus event, "Robot Day", was published.'
+            )
+            for notification in notifications
+        ))
+        delivered_user_ids = {
+            call.args[0] for call in mocked_delivery.call_args_list
+        }
+        self.assertEqual(
+            delivered_user_ids,
+            {user.pk for user in eligible_users},
+        )
+        for call in mocked_delivery.call_args_list:
+            delivered_user_id, payload = call.args
+            notification = notifications.get(pk=payload['data']['id'])
+            self.assertEqual(notification.recipient_id, delivered_user_id)
+            self.assertEqual(payload['data']['event_title'], 'Robot Day')
+        self.assertFalse(Notification.objects.filter(
+            recipient__in=(
+                self.inactive_student,
+                self.superadmin,
+                self.django_admin,
+                self.service_account,
+            ),
+        ).exists())
+
+    def test_new_event_skips_inactive_student(self):
+        self.member.is_active = False
+        self.member.save(update_fields=['is_active'])
+
+        response = self.client.post(
+            '/api/club-events/',
+            self.event_payload(),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertFalse(Notification.objects.filter(recipient=self.member).exists())
+
+    def test_new_event_deduplication_remains_per_event_and_recipient(self):
+        response = self.client.post(
+            '/api/club-events/',
+            self.event_payload(),
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        event = ClubEvent.objects.get(pk=response.data['id'])
+        eligible_ids = User.objects.filter(
+            is_active=True,
+            is_staff=False,
+            is_superuser=False,
+            role__in=(User.Role.STUDENT, User.Role.BOARD_MEMBER),
+        ).values_list('pk', flat=True)
+
+        NotificationService.create_for_users(
+            recipients=eligible_ids,
+            notification_type=Notification.Type.NEW_EVENT,
+            title='New campus event',
+            message=f'A new campus event, "{event.name}", was published.',
+            event=event,
+            deduplication_key=f'new-event:{event.pk}',
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(
+                notification_type=Notification.Type.NEW_EVENT,
+            ).count(),
+            4,
+        )
+
+    @patch('notifications.services.deliver_to_user')
+    @patch('core_data.views.broadcast_calendar_event')
+    def test_new_event_outer_rollback_persists_and_delivers_nothing(
+        self,
+        calendar_broadcast,
+        notification_delivery,
+    ):
+        with self.assertRaisesRegex(RuntimeError, 'force rollback'):
+            with transaction.atomic():
+                response = self.client.post(
+                    '/api/club-events/',
+                    self.event_payload(),
+                    format='json',
+                )
+                self.assertEqual(response.status_code, 201, response.data)
+                raise RuntimeError('force rollback')
+
+        self.assertFalse(ClubEvent.objects.filter(name='Robot Day').exists())
+        self.assertFalse(Notification.objects.exists())
+        notification_delivery.assert_not_called()
+        calendar_broadcast.assert_not_called()
 
     def test_event_update_and_cancellation_notify_registered_active_users(self):
         event = ClubEvent.objects.create(name="Robot Day", parent_id=self.department, club=self.club)
@@ -337,6 +496,12 @@ class NotificationTriggerTests(TestCase):
         self.client.patch(f"/api/club-events/{event.pk}/", {"status": "cancelled"}, format="json")
         types = list(Notification.objects.filter(recipient=self.member).values_list("notification_type", flat=True))
         self.assertCountEqual(types, [Notification.Type.EVENT_UPDATED, Notification.Type.EVENT_CANCELLED])
+        self.assertEqual(
+            set(Notification.objects.filter(recipient=self.member).values_list(
+                'event_title', flat=True
+            )),
+            {'Robot Day'},
+        )
         self.assertFalse(Notification.objects.filter(recipient=self.unrelated).exists())
 
     def test_irrelevant_or_rejected_update_creates_nothing(self):
@@ -357,6 +522,12 @@ class NotificationTriggerTests(TestCase):
         self.assertEqual((first.status_code, second.status_code, cancel.status_code, repeated_cancel.status_code), (201, 200, 200, 200))
         self.assertEqual(Notification.objects.filter(recipient=self.member, notification_type=Notification.Type.RSVP_CONFIRMED).count(), 1)
         self.assertEqual(Notification.objects.filter(recipient=self.member, notification_type=Notification.Type.RSVP_CANCELLED).count(), 1)
+        self.assertEqual(
+            set(Notification.objects.filter(recipient=self.member).values_list(
+                'event_title', flat=True
+            )),
+            {'Robot Day'},
+        )
 
 
 class EventDeletionNotificationTests(TestCase):
@@ -410,9 +581,14 @@ class EventDeletionNotificationTests(TestCase):
         )
         self.assertIn(event_name, notification.message)
         self.assertIsNone(notification.event_id)
+        self.assertEqual(notification.event_title, event_name)
         self.assertFalse(Notification.objects.filter(recipient=self.unrelated).exists())
         delivery.assert_called_once()
         self.assertIsNone(delivery.call_args.args[1]["data"]["event_id"])
+        self.assertEqual(
+            delivery.call_args.args[1]['data']['event_title'],
+            event_name,
+        )
         calendar_broadcast.assert_called_once_with(
             "event_deleted",
             {"id": event_id},

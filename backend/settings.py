@@ -153,6 +153,55 @@ def validate_csrf_origin(origin, *, require_https):
         )
 
 
+def validate_public_media_base_url(origin, *, require_https):
+    """Return a safe public origin used only to construct browser media URLs."""
+    try:
+        parsed = urlsplit(origin)
+        parsed_port = parsed.port
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL contains a malformed origin.'
+        ) from error
+
+    if (
+        parsed.scheme not in {'http', 'https'}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {'', '/'}
+        or parsed.query
+        or parsed.fragment
+        or '*' in origin
+    ):
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL must be one explicit HTTP(S) origin '
+            'without a path, credentials, query, fragment, or wildcard.'
+        )
+    if parsed_port is not None and not 1 <= parsed_port <= 65535:
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL contains an invalid port.'
+        )
+    try:
+        ip_address(parsed.hostname)
+    except ValueError:
+        hostname_label = re.compile(
+            r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+        )
+        if len(parsed.hostname) > 253 or not all(
+            hostname_label.fullmatch(label)
+            for label in parsed.hostname.split('.')
+        ):
+            raise ImproperlyConfigured(
+                'DJANGO_PUBLIC_MEDIA_BASE_URL contains a malformed hostname.'
+            )
+    if require_https and parsed.scheme != 'https':
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL must use https when '
+            'DJANGO_HTTPS_ENABLED=true.'
+        )
+    return origin.rstrip('/')
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -373,6 +422,16 @@ HTTPS_ENABLED = environment_boolean('DJANGO_HTTPS_ENABLED', default=False)
 SECURE_SSL_REDIRECT = HTTPS_ENABLED
 SESSION_COOKIE_SECURE = HTTPS_ENABLED
 CSRF_COOKIE_SECURE = HTTPS_ENABLED
+
+# When Django is reached through an internal service name, serializers must
+# still return a browser-reachable media origin. Forwarded host headers are not
+# trusted for this purpose; Hamza must configure this explicit public origin.
+PUBLIC_MEDIA_BASE_URL = os.getenv('DJANGO_PUBLIC_MEDIA_BASE_URL', '').strip()
+if PUBLIC_MEDIA_BASE_URL:
+    PUBLIC_MEDIA_BASE_URL = validate_public_media_base_url(
+        PUBLIC_MEDIA_BASE_URL,
+        require_https=HTTPS_ENABLED,
+    )
 
 # [ahmed] HSTS is intentionally opt-in. Hamza must enable it only after the
 # approved production domain and real TLS certificates are ready.
