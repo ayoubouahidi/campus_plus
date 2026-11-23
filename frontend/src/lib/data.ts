@@ -1,8 +1,8 @@
 import { cache } from 'react';
-import type { AttendeePreview, Club, Department, EventCategory, EventItem } from '@/types/api';
+import type { AttendeePreview, Club, Department, EventCategory, EventItem, User } from '@/types/api';
 import { ApiError, apiFetch, apiFetchAll, hasBackend, ApiUnavailable } from '@/lib/api/client';
-import { toAttendee, toClub, toClubs, toDepartment, toEventItem, toNotification } from '@/lib/api/mappers';
-import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawNotification, RawPage, RawRsvpState } from '@/lib/api/raw';
+import { toAttendee, toClub, toClubs, toDepartment, toEventItem, toNotification, toUser } from '@/lib/api/mappers';
+import type { RawAttendee, RawClub, RawDepartment, RawEvent, RawNotification, RawPage, RawRsvpState, RawUser } from '@/lib/api/raw';
 import { getMockAttendees, mockClubs, mockDepartments, mockEvents, mockNotifications } from '@/lib/mockData';
 import type { NotificationFeed } from '@/types/notification';
 
@@ -130,6 +130,30 @@ export const markNotificationRead = async (id: string, token: string): Promise<v
 export const markAllNotificationsRead = async (token: string): Promise<void> => {
   if (mocksOnly()) return;
   await apiFetch('/api/notifications/read-all/', { method: 'POST', token });
+};
+
+/* ------------------------------- Current user ------------------------------- */
+
+// The signed-in student as Django knows them right now (Step 21.2, GET /api/me/). The login cookie keeps the
+// values from login time; /profile reads this so an edit shows at once. null in mocks mode (dev without
+// Django: the session user is used instead) and without a Django token (dev login).
+export interface Me {
+  user: User;
+  phone: string; // "" when none; normalized "+212…" once Django validates it (TEAM_NEEDS BE12)
+}
+
+export const getMe = cache(async (token: string | null): Promise<Me | null> => {
+  if (mocksOnly() || !token) return null;
+  const raw = await apiFetch<RawUser>('/api/me/', { token });
+  return { user: toUser(raw), phone: raw.phone ?? '' };
+});
+
+// PATCH /api/me/ { phone } (Django keeps it on the student's UserMember). Returns the phone as Django saved it.
+// Mocks: nothing to save, the value is echoed back.
+export const updateMyPhone = async (phone: string, token: string): Promise<string> => {
+  if (mocksOnly()) return phone;
+  const raw = await apiFetch<RawUser>('/api/me/', { method: 'PATCH', token, body: { phone } });
+  return raw.phone ?? '';
 };
 
 /* ------------------------------- Departments ------------------------------ */

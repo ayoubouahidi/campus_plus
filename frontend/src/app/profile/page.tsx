@@ -5,7 +5,7 @@ import { ProfileView } from '@/components/profile/ProfileView';
 import { clearRealtimeCookie } from '@/app/realtime/actions';
 import { getMyEvents } from '@/lib/events';
 import { getBackendToken } from '@/lib/api/token';
-import { listEvents } from '@/lib/data';
+import { getMe, listEvents } from '@/lib/data';
 import { getRequestTime } from '@/lib/requestTime';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -33,12 +33,17 @@ export default async function ProfilePage() {
   const authSession = await auth(); // 42 login (not part of our User shape)
 
   // Only the student's RSVPs, past and upcoming (Django: ?rsvped=true, TEAM_NEEDS BE2), split at `now`.
-  const { upcoming, past } = getMyEvents(await listEvents({ rsvped: true }, await getBackendToken()), now);
+  const token = await getBackendToken();
+  const [events, me] = await Promise.all([listEvents({ rsvped: true }, token), getMe(token)]);
+  const { upcoming, past } = getMyEvents(events, now);
+  // Django's current values (Step 21.2): the login cookie keeps those from login time, so a saved phone (or a
+  // changed name or picture) shows at once. Mocks or dev login (me = null): the session user, no phone.
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <ProfileView
-        user={session.user}
+        user={me?.user ?? session.user}
+        phone={me?.phone ?? ''}
         login={authSession?.user.login ?? null}
         upcoming={upcoming}
         past={past}

@@ -1,18 +1,22 @@
 import React from 'react';
 import { useTranslations } from 'next-intl';
 import { Avatar } from '@/components/ui/Avatar';
+import { formatPhone } from '@/lib/phone';
+import { EditProfileDialog } from './EditProfileDialog';
 import type { User, UserRole } from '@/types/api';
 import { PROFILE_PANEL, profileChip, type ProfileChipTone } from './profileStyles';
 
 export interface ProfileHeroProps extends React.HTMLAttributes<HTMLElement> {
   user: User;
   login: string | null; // 42 login → "@mnajjar"
+  phone: string; // saved phone from GET /api/me/ ("" if none); edited with EditProfileDialog (Step 21.2)
   memberSince?: string | null; // "September 2024" once Django sends it (/api/me/); hidden when null
 }
 
 const ROLE_TONES: Record<UserRole, ProfileChipTone> = { STUDENT: 'violet', BOARD_MEMBER: 'emerald', SUPERADMIN: 'neutral' };
 
-// Disabled "· Soon" buttons from the design: visible so students know what's coming, not focusable as actions.
+// Disabled "· Soon" button from the design (Change photo, until TEAM_NEEDS BE16): visible so students know
+// what's coming, not focusable as an action.
 const SOON_BUTTON =
   'inline-flex h-11 cursor-not-allowed items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
 
@@ -21,7 +25,7 @@ const SOON_BUTTON =
 // Server Component. Arabic: everything mirrors with logical classes (ps-/pe-/start-), the avatar included, and
 // the banner gradient runs the other way (rtl:bg-gradient-to-l). Role labels: Profile.roles.<UserRole>.
 export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
-  ({ user, login, memberSince = null, className = '', ...props }, ref) => {
+  ({ user, login, phone, memberSince = null, className = '', ...props }, ref) => {
     const t = useTranslations('Profile');
     return (
       <header ref={ref} className={`relative overflow-hidden ${PROFILE_PANEL} ${className}`} {...props}>
@@ -60,14 +64,18 @@ export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
               <span className={profileChip(ROLE_TONES[user.role])}>{t(`roles.${user.role}`)}</span>
             </div>
             {user.email && <p className="truncate text-sm text-slate-600 dark:text-slate-400">{user.email}</p>}
+            {/* Only the student sees their own profile. dir="ltr" + text-start: the number reads left to right in
+                Arabic but stays on the start side of the column. */}
+            {phone && (
+              <p dir="ltr" className="text-start text-sm text-slate-600 rtl:text-end dark:text-slate-400">
+                {formatPhone(phone)}
+              </p>
+            )}
             {memberSince && <p className="text-xs text-slate-500 dark:text-slate-500">{t('memberSince', { date: memberSince })}</p>}
           </div>
 
           <div className="flex gap-2 sm:flex-col">
-            <button type="button" disabled className={SOON_BUTTON}>
-              <span className="sm:hidden">{t('editSoon')}</span>
-              <span className="hidden sm:inline">{t('editProfileSoon')}</span>
-            </button>
+            <EditProfileDialog phone={phone} />
             <button type="button" disabled className={SOON_BUTTON}>
               {t('changePhotoSoon')}
             </button>

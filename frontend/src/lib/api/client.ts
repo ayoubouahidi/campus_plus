@@ -31,7 +31,7 @@ export class ApiUnavailable extends Error {
 const TIMEOUT_MS = 8_000;
 
 export interface ApiRequest {
-  method?: 'GET' | 'POST' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   token?: string | null; // Django's DRF token (getBackendToken); omitted = anonymous request
   body?: unknown;
 }

@@ -68,6 +68,7 @@ const privacy: LegalDocument = {
           <LegalList>
             <li>les événements auxquels vous vous inscrivez (et vos annulations) ;</li>
             <li>les clubs dont vous êtes membre, et votre rôle (étudiant, membre du bureau d’un club ou administrateur) ;</li>
+            <li>votre numéro de téléphone, seulement si vous l’ajoutez sur votre profil (facultatif ; vous pouvez le modifier ou le supprimer à tout moment) ;</li>
             <li>pour les membres du bureau d’un club : les événements, affiches et images du club que vous publiez.</li>
           </LegalList>
         </>
@@ -103,8 +104,12 @@ const privacy: LegalDocument = {
           </li>
           <li>
             <LegalTerm>Les étudiants connectés</LegalTerm> : le nom et la photo des personnes qui participent à un
-            événement, et les coordonnées du président d’un club. Les visiteurs sans compte voient seulement combien
-            de personnes participent.
+            événement, et les coordonnées du président d’un club (e-mail, et numéro de téléphone si le président l’a
+            ajouté). Les visiteurs sans compte voient seulement combien de personnes participent.
+          </li>
+          <li>
+            <LegalTerm>Votre numéro de téléphone</LegalTerm> : vous seul le voyez sur votre profil. Si vous êtes
+            président d’un club, les étudiants connectés le voient sur la fiche de contact de votre club.
           </li>
           <li>
             <LegalTerm>Les membres du bureau d’un club</LegalTerm> : qui s’est inscrit aux événements de leur club et

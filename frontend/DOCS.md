@@ -5538,7 +5538,7 @@ The profile (`/profile`, §7.7–7.8) had three placeholders from the Figma desi
 | Step | Scope | Status |
 | --- | --- | --- |
 | 21.1 | Remove the campus chip and the "Clubs" stat (decision) | ✅ done 2026-11-23 |
-| 21.2 | Edit profile: phone number, validated in the browser and by Django (`PATCH /api/me/`) | ⏳ next |
+| 21.2 | Edit profile: phone number, validated in the browser and in the server action, saved with `PATCH /api/me/`; Privacy Policy updated; live on `/profile` (21.2b) | ✅ validated 2026-11-23 (button: "Edit number") |
 | 21.3 | Change photo: picker, type/size checks, preview, progress, delete (file upload module) | ⏳ needs BE16 |
 
 ### 21.1 No club and no campus on the profile (2026-11-23)
@@ -5560,3 +5560,144 @@ The profile (`/profile`, §7.7–7.8) had three placeholders from the Figma desi
 **Verified:**
 - `/profile` signed in shows the role chip, the email and the two stats; no campus, no clubs stat.
 - `tsc` passes; ESLint shows 0 problems.
+
+### 21.2 Edit profile: the phone number (Step 21.2, 2026-11-23)
+
+**Files:**
+
+| File | Kind | Role |
+|---|---|---|
+| `src/lib/phone.ts` | Pure (new) | `normalizePhone` (the rule) and `formatPhone` (display) |
+| `src/app/profile/actions.ts` | Server action (new) | `updatePhoneAction`: checks again, calls Django, maps errors |
+| `src/components/profile/EditProfileDialog.tsx` | Client component (new) | The button and the dialog |
+| `src/lib/data.ts` | Data | `getMe(token)` (GET `/api/me/`), `updateMyPhone` (PATCH) |
+| `src/lib/api/client.ts` | API | `PATCH` allowed |
+| `src/lib/login.ts` | Types | `ValidationKey` gets `phoneInvalid` |
+| `src/i18n/messages/{en,fr,ar}.ts` | Words | `Validation.phoneInvalid`; the `Profile.edit…`, `phone…`, `saved`, `removed`, `editErrors` keys |
+| `src/components/legal/content/{en,fr,ar}.tsx`, `src/lib/legal.ts` | Privacy | The phone number in "What we collect" and "Who can see it"; date 2026-11-23 |
+| `src/app/test/page.tsx` | Test | The dialog with the real saved number, and the checklist |
+
+**Status:** 🧪 Built on `/test`, then integrated (21.2b) at Mouad's request: it needs no backend work beyond what exists (`GET` / `PATCH /api/me/`). Waiting for Mouad's check on `/profile`. Checks: `tsc` passes, ESLint 0 problems, and the server action was tested against Django (below).
+
+#### 1. Purpose
+
+Students can add, change or remove a phone number. Today it matters most for **club presidents**: Django shows the president's phone on the club's contact card to signed-in students (`president_phone` = `club.head.phone`, §6.13, TEAM_NEEDS BE1). It's also the first editable form of the profile, and the subject requires every form to be **validated in the frontend and the backend**.
+
+What a student can edit depends on Django: `PATCH /api/me/` accepts only `phone`. Name and email come from 42 or the sign-up (name editing for email accounts: TEAM_NEEDS BE18). The dialog says so.
+
+#### 2. The rule (`lib/phone.ts`)
+
+```
+normalizePhone(raw):
+  1. remove separators: spaces . - ( )
+  2. ""                                       → ok, ""            (removes the number)
+  3. matches ^(?:\+212|00212|0)([67]\d{8})$   → ok, "+212" + the 9 digits
+  4. anything else                            → { key: 'phoneInvalid' }
+```
+
+| Typed | Result |
+|---|---|
+| `06 12 34 56 78`, `+212 6 12 34 56 78`, `00212612345678`, `06-12-34-56-78` | `+212612345678` |
+| `0712345678` | `+212712345678` |
+| `abc` / `0512345678` (landline) / `06 12 34` / `+33612345678` | refused |
+| `` (empty) | `""`: number removed |
+
+- **Why Moroccan mobiles only:** Campus Hub is for 1337 students (§13), and the number is for calling or messaging a student. Landlines (05…) and foreign numbers are refused. A wider rule (any E.164 number) is a one-line change if the team decides so.
+- **Why store `+212…` (E.164):** one format whatever the student typed. Comparison, display and `tel:` links then work the same everywhere.
+- **`formatPhone`** writes it back readably: `+212 6 12 34 56 78`.
+
+#### 3. Validated on both sides (subject requirement)
+
+| Where | When | Why |
+|---|---|---|
+| Browser (`EditProfileDialog`) | When the student leaves the field or presses Save | Instant feedback, nothing sent for nothing |
+| Server action (`updatePhoneAction`) | Before calling Django, every time | A server action is a public endpoint: anyone can call it with any value, without our form |
+| Django (`PATCH /api/me/`) | Today: max 30 characters only | **TEAM_NEEDS BE12** asks Ayoub for the same rule; when it lands, its 400 `{"phone": ["…"]}` shows under the field as Django wrote it |
+
+**Hardening found while testing:** the first version treated a value that isn't text (a scripted call sending `123` or an object) as empty, which would have **removed** the saved number. Such values are now refused as invalid. Tested: `123` → invalid, `{phone: 'x'}` → invalid, the saved number untouched.
+
+#### 4. The server action's answers
+
+| Situation | Result | Shown as |
+|---|---|---|
+| Saved | `{ ok: true, phone }` | Green toast ("Your phone number was saved" / "was removed"), dialog closed, `router.refresh()` |
+| Invalid (our rule, or Django's 400) | `{ ok: false, error: 'invalid', fieldError }` | Under the field |
+| Not signed in, expired, or dev login with Django set | `'signed-out'` | Red message in the dialog: log in again |
+| Django 409 (phone data to reconcile, `accounts/views.py me`) | `'conflict'` | Red message: an administrator must check it |
+| Django down or 5xx | `'unavailable'` | Red message: try again; what was typed stays |
+
+#### 5. The dialog (accessibility and behaviour)
+
+- **Uses the `Modal` molecule:** focus trap, Escape, backdrop, focus back to the button. Title and description via `ModalTitle` / `ModalDescription`.
+- **The field:**
+  - `type="tel"` + `inputMode="tel"`: phone keypad on phones;
+  - `autoComplete="tel"`: the browser can fill it;
+  - `dir="ltr"`: numbers read left to right in Arabic too;
+  - `maxLength={20}`.
+- **Errors appear at the right time:** when the student leaves the field or tries to save, never while typing the first digits. They disappear as soon as the value is valid. The help text is replaced by the error (one description at a time; `Input` links it with `aria-describedby` and sets `aria-invalid`).
+- **Save** is the form's submit button (`form={formId}`, outside the `<form>` in the footer), so Enter in the field saves. It shows a spinner while saving (`useTransition`).
+- **Each opening** starts from the saved number, formatted.
+- **Privacy text in the dialog:** "Only you see it, unless you lead a club: then signed-in students see it on your club's contact card."
+
+#### 6. Privacy Policy updated (3 languages)
+
+Collecting a new piece of personal data must be in the policy (§9):
+- **What we collect:** "your phone number, only if you add one on your profile (optional; you can change or remove it there at any time)".
+- **Who can see it:** the club president's contact details now say "email, and phone number if the president added one". A new line, "Your phone number", says only you see it, unless you're a club president.
+- **The date** changed to 2026-11-23 (`LEGAL_LAST_UPDATED`).
+
+#### 7. Verified (server action called like the browser, against Ahmed's Django)
+
+| Input | Action | Django `phone` after |
+|---|---|---|
+| `06 12 34 56 78` / `+212 6 12 34 56 78` / `00212612345678` / `06-12-34-56-78` | ok, `+212612345678` | `+212612345678` |
+| `0712345678` | ok, `+212712345678` | `+212712345678` |
+| `abc`, `0512345678`, `06 12 34`, `+33612345678` | invalid (`phoneInvalid`) | unchanged |
+| `` | ok, `""` | `""` |
+| signed out | signed-out | unchanged |
+| `123`, `{phone:'x'}` (scripted) | invalid | unchanged |
+
+#### 8. Tradeoffs
+
+| Chosen | Alternative | Why |
+|---|---|---|
+| Dialog | A separate `/profile/edit` page | One field: a page would be heavy. The dialog keeps the profile in view, and the Modal already handles focus. |
+| Validate when leaving the field | On every key | Errors while typing "06 1…" are noise. |
+| Server action | The browser calls Django directly | The Django token never reaches the browser (§14.1). |
+| `router.refresh()` after saving | Patch the page state locally | The profile is server-rendered from `/api/me/`: one source of truth. |
+| Moroccan mobile rule | Any phone number | 1337 students; refusing landlines and typos is more useful than accepting anything. |
+
+#### 9. Study questions
+
+1. Why validate the phone in the browser **and** in the server action, when the form already checks it?
+2. What bug did the `typeof rawPhone !== 'string'` check prevent?
+3. Why store `+212612345678` rather than what the student typed?
+4. Why does the error appear only after leaving the field?
+5. How does the Save button in the dialog's footer submit a form it isn't inside?
+6. Why did the Privacy Policy have to change in this step?
+
+#### 10. Step 21.2b: on `/profile`
+
+**Changes:**
+- **`/profile` reads `GET /api/me/` on the server** (`getMe`, in parallel with the RSVPs). The user shown is Django's current one, so a saved phone, name or picture shows at once (`router.refresh()` after saving). The login cookie still holds the values from login time.
+- **Mocks or dev login** (`getMe` → `null`): the session user is shown, without a phone.
+- **`ProfileHero`** gets a `phone` prop:
+  - the saved number shows under the email, formatted (`+212 6 12 34 56 22`), `dir="ltr"` and aligned to the start in Arabic too;
+  - the disabled "Edit profile · Soon" button is replaced by `EditProfileDialog`;
+  - "Change photo · Soon" stays until TEAM_NEEDS BE16.
+- **`ProfileView`** passes `phone` through.
+- **The `Profile.editSoon` / `editProfileSoon` messages** were removed in the 3 languages; `/test` was reset.
+
+**Backend check before integrating** (Mouad's rule: build nothing that waits on uncoded backend work): only existing endpoints are used. BE12 (Django's own phone check) would add a third layer of validation; the browser and the server action already validate.
+
+**Verified:**
+- signed in, `/profile` shows "Edit profile" (phone: "Edit") and `+212 6 12 34 56 22`, the number Mouad saved while testing; Django's `/api/me/` returns `+212612345622`;
+- signed out, `/profile` → 307 to login;
+- `tsc` passes; ESLint 0 problems.
+
+**Wording change (Mouad, after checking it):**
+- The button says **"Edit number"** ("Add number" when no number is saved), not "Edit profile".
+- The dialog title is "Phone number".
+- The "name and email come from 42" line was removed: the dialog only edits the number.
+- Messages: `Profile.editNumber`, `addNumber`, `editTitle` replaced `editProfile`, `edit`, `editTitle`, `editDescription` (3 languages).
+- Status: ✅ validated by Mouad (2026-11-23).

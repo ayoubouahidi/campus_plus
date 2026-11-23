@@ -253,8 +253,22 @@ const en = {
     tagline: 'Your campus. Your community.',
     roles: { STUDENT: 'Student', BOARD_MEMBER: 'Club board', SUPERADMIN: 'Admin' },
     memberSince: 'Member since {date}',
-    editSoon: 'Edit · Soon',
-    editProfileSoon: 'Edit profile · Soon',
+    editNumber: 'Edit number',
+    addNumber: 'Add number',
+    editTitle: 'Phone number',
+    phone: 'Phone number',
+    phonePlaceholder: '06 12 34 56 78',
+    phoneHelp: 'Optional. Only you see it, unless you lead a club: then signed-in students see it on your club’s contact card.',
+    noPhone: 'No phone number',
+    save: 'Save',
+    cancel: 'Cancel',
+    saved: { title: 'Profile updated', description: 'Your phone number was saved.' },
+    removed: { title: 'Profile updated', description: 'Your phone number was removed.' },
+    editErrors: {
+      unavailable: 'Couldn’t save your changes. Try again in a moment.',
+      'signed-out': 'Your session expired. Log in again to edit your profile.',
+      conflict: 'Your phone number needs a check by an administrator before it can be changed.',
+    },
     changePhotoSoon: 'Change photo · Soon',
   },
   // Step 12.5: /clubs and /clubs/[slug].
@@ -370,6 +384,7 @@ const en = {
     nameTooLong: 'Use at most {max} characters.',
     yearRequired: 'Choose your year of study.',
     schoolRequired: 'Choose your school.',
+    phoneInvalid: 'Enter a Moroccan mobile number, like 06 12 34 56 78.',
   },
   // Step 12.7: legal page frame, error and 404 pages, browser tab titles.
   Legal: {

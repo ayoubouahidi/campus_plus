@@ -66,6 +66,7 @@ const privacy: LegalDocument = {
           <LegalList>
             <li>the events you RSVP to (and cancel);</li>
             <li>the clubs you are a member of, and your role (student, club board member or administrator);</li>
+            <li>your phone number, only if you add one on your profile (optional; you can change or remove it there at any time);</li>
             <li>
               for club board members: the events, flyers and club images you publish.
             </li>
@@ -103,8 +104,12 @@ const privacy: LegalDocument = {
           </li>
           <li>
             <LegalTerm>Signed-in students</LegalTerm>: the name and picture of people going to an event, and a
-            club president&apos;s contact details. Visitors without an account only see how many people are
-            going.
+            club president&apos;s contact details (email, and phone number if the president added one). Visitors
+            without an account only see how many people are going.
+          </li>
+          <li>
+            <LegalTerm>Your phone number</LegalTerm>: only you see it on your profile. If you are a club
+            president, signed-in students see it on your club&apos;s contact card.
           </li>
           <li>
             <LegalTerm>Club board members</LegalTerm>: who RSVPed to their club&apos;s events and who is in their

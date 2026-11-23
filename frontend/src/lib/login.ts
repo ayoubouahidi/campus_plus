@@ -73,7 +73,8 @@ export type ValidationKey =
   | 'lastNameRequired'
   | 'nameTooLong'
   | 'yearRequired'
-  | 'schoolRequired';
+  | 'schoolRequired'
+  | 'phoneInvalid';
 
 export type FieldError = { key: ValidationKey; values?: { min?: number; max?: number } } | { text: string };
 

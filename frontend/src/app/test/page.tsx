@@ -45,7 +45,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 20.1, lint clean + Chrome console check</p>
+        <p className="font-semibold">Test page: ready for the next step (Edit profile is live on /profile)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -130,17 +130,6 @@ export default async function TestPage() {
               <>Mocks (no <code>BACKEND_URL</code>): {liveEvents.length} events and {liveClubs.length} clubs from lib/mockData.ts, the dev fallback.</>
             )}
           </p>
-        </div>
-
-        <div>
-          <h3 className="font-semibold">What to check (Step 20.1): Chrome console on every page (mandatory item)</h3>
-          <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>Open Chrome DevTools → Console, tick &quot;Preserve log&quot;, set the level to &quot;Default levels&quot; + &quot;Verbose&quot; off. Reload each page once signed out and once signed in: <Link href="/" className="underline">/</Link>, <Link href="/calendar" className="underline">/calendar</Link>, <Link href="/clubs" className="underline">/clubs</Link>, <Link href="/clubs/leet-dev" className="underline">/clubs/leet-dev</Link>, <Link href="/events/22" className="underline">/events/22</Link>, <Link href="/search?q=demo" className="underline">/search</Link>, <Link href="/design-system" className="underline">/design-system</Link>, <Link href="/privacy" className="underline">/privacy</Link>, <Link href="/terms" className="underline">/terms</Link>, <Link href="/auth/login" className="underline">/auth/login</Link>, <Link href="/profile" className="underline">/profile</Link>.</li>
-            <li>Expected: no red errors, no yellow warnings from our code (no &quot;hydration&quot;, no &quot;Each child in a list should have a key&quot;, no &quot;Invalid src prop&quot;). Messages from Chrome extensions or React DevTools&apos; &quot;Download the React DevTools&quot; line are not ours.</li>
-            <li>Interact: open the bell (relative times show &quot;… ago&quot;, not &quot;56 years ago&quot;), the search palette (⌘K shows on Mac, Ctrl K elsewhere), the phone menu (narrow window), a dialog (attendees &quot;See all&quot;). Nothing in the console.</li>
-            <li>Feed: &quot;Search Demo 01&quot; now has a flyer from Django (https://localhost/media/…). Locally the image itself is a 404 (our nginx isn&apos;t wired to Ahmed&apos;s media volume), but the page must render, not crash: before this step it showed the error page.</li>
-            <li>Paste anything red or yellow from our code here in the chat and I fix it.</li>
-          </ul>
         </div>
 
         <div>
