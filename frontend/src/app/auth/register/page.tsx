@@ -7,6 +7,7 @@ import { RegisterForm } from '@/components/auth/RegisterForm';
 import { RegisterPanel } from '@/components/auth/RegisterPanel';
 import { safeNextPath } from '@/lib/login';
 import { listDepartments } from '@/lib/data';
+import { signInWith42 } from '../login/actions';
 import { registerWithEmail } from './actions';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -36,7 +37,7 @@ export default async function RegisterPage({
 
   return (
     <LoginLayout>
-      <RegisterPanel next={next}>
+      <RegisterPanel next={next} fortyTwoAction={signInWith42}>
         <RegisterForm action={registerWithEmail} next={next} departments={departments} />
       </RegisterPanel>
     </LoginLayout>

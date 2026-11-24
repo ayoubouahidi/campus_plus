@@ -5821,12 +5821,12 @@ Meanwhile our two layers apply the two cheapest rules:
 - **Students have no relation to clubs.** They see events and clubs and RSVP to events; no joining, no membership, no club at sign-up (§23.2 already removed the field). Club membership is only for board members, in the dashboard.
 - **Only 1337 students get an account**, two ways in:
   - **"Continue with 42"**: nothing to fill in. 42 proves identity and campus.
-  - **Email sign-up**: only `…@student.1337.ma`, and the address will be **verified by an emailed link** before the account works.
+  - **Email sign-up**: only `…@student.1337.ma`, and the address will be **verified with a 6-digit code** sent by email before the account works (Mouad, 2026-11-24: a code the student types on the sign-up page, not a link).
 
 | Step | Scope | Status |
 | --- | --- | --- |
-| 24.1 | `@student.1337.ma` rule on the sign-up form (browser + server action), hint and placeholder; backend requests BE21–BE27 | 🧪 checks run, waiting for Mouad's check |
-| 24.2 | "Check your email" screen, `/auth/verify` page, "Confirm your email first" on login, privacy policy line about the email | ⏸ waits for Ayoub's BE22–BE24 (not built before the endpoints exist) |
+| 24.1 | `@student.1337.ma` rule on the sign-up form (browser + server action), hint and placeholder; sign-up page offers "Continue with 42" + "or sign up with email"; new intro; backend requests BE21–BE27 | 🧪 checks run, waiting for Mouad's check |
+| 24.2 | 6-digit code field after sign-up ("We sent a code to …", "Send a new code"), the same field on login for an unverified account, privacy policy line about the codes | ⏸ waits for Ayoub's BE22–BE24 (not built before the endpoints exist) |
 
 ### 24.1 The student-email rule (2026-11-24)
 
@@ -5834,19 +5834,24 @@ Meanwhile our two layers apply the two cheapest rules:
 - `src/lib/register.ts`: `STUDENT_EMAIL_DOMAIN = 'student.1337.ma'`, `isStudentEmail(email)`, used in `validateRegistration`.
 - `src/lib/login.ts`: `ValidationKey` gets `emailNotStudent`.
 - `src/components/auth/RegisterForm.tsx`: the email field has the placeholder `login@student.1337.ma` and the hint `Auth.emailStudentHelp`.
-- The 3 message files: `Validation.emailNotStudent`, `Auth.emailStudentHelp`.
+- `src/components/auth/RegisterPanel.tsx`: the sign-up page now offers **both ways**, like the login page: the "Continue with 42 Intra" button (new prop `fortyTwoAction`), the divider "or sign up with email", then the email form. The intro used to send 42 students to the login page ("For students without a 42 account…"); it now reads "Continue with your 42 account, or sign up with your 1337 student email: we'll send you a verification code."
+- `src/app/auth/login/actions.ts`: `signInWith42` moved here from the login page, so `/auth/login` and `/auth/register` use the **same** server action (same id: posting either page's button gives the same 303 to `api.intra.42.fr/oauth/authorize`).
+- `src/components/auth/LoginPanel.tsx`: `LoginDivider` takes an optional `label`.
+- The 3 message files: `Validation.emailNotStudent`, `Auth.emailStudentHelp`, new `Auth.registerIntro`, `Auth.orSignUpEmail`.
+
+**42 is optional.** The button works as soon as Ayoub's 42 app keys (`AUTH_42_SCHOOL_ID` / `AUTH_42_SCHOOL_SECRET`) are in `.env`; without them 42 answers with an error page (the redirect has `client_id=` empty). The email sign-up doesn't depend on 42: it depends on SMTP (BE26) for the code.
 
 #### 2. Business & product purpose
 Campus Hub is for 1337 students only (§13). Every student has a `login@student.1337.ma` address from 42, so sign-up asks for exactly that. The browser tells the student at once, before sending; the server action refuses it again, because a server action is a public endpoint.
 
-**What this check does not do:** prove the student owns the address. Anyone can type `someone.else@student.1337.ma`. That's why Django must send a verification link (BE22) and link a 42 login only to a **verified** email account (BE25). Today Django's 42 login answers 409 when an email account already uses the address, so an impostor's sign-up would lock the real student out: BE25 fixes that.
+**What this check does not do:** prove the student owns the address. Anyone can type `someone.else@student.1337.ma`. That's why Django must send a verification code (BE22) and link a 42 login only to a **verified** email account (BE25). Today Django's 42 login answers 409 when an email account already uses the address, so an impostor's sign-up would lock the real student out: BE25 fixes that.
 
 #### 3. Core concepts & engineering decisions
 - **Exact domain, not "ends with".** The address is trimmed, lower-cased and split on `@`; it must have exactly two parts, a non-empty local part, and the domain must equal `student.1337.ma`. `endsWith('student.1337.ma')` would let `x@evil-student.1337.ma` through.
 - **Order of messages:** empty → "Enter your email"; bad format → "Enter a valid email"; right format, wrong school → "Use your 1337 student email". The student always gets the most useful message for what they typed.
 - **One function, two layers:** `validateRegistration` runs in the form (`onSubmit`) and in the register server action, so the rule can't drift between them.
 - **Login is not restricted.** Board members and staff accounts can use other addresses, and login answers must not reveal which addresses exist; Django decides.
-- **The hint doesn't promise a confirmation link yet.** No email is sent until BE22 exists; the wording will be added with step 24.2.
+- **The intro already announces the code** (Mouad's wording). Until BE22 is merged Django still creates the account and logs the student in at once, without a code; step 24.2 adds the code field when the endpoint exists.
 - **Accessibility:** the hint is the field's `aria-describedby`; when there's an error, the error replaces it (the `Input` primitive).
 
 #### 4. Architectural tradeoffs
@@ -5854,7 +5859,7 @@ Campus Hub is for 1337 students only (§13). Every student has a `login@student.
 |---|---|
 | Domain check only, no verification | Anyone could create an account with another student's address and block their 42 login |
 | 42 only, set a password later | No email needed, but the subject's email sign-up would be missing as a real form |
-| A 6-digit code instead of a link | Needs a stored, hashed code and an attempts limit; a signed link (Django's token generator) needs no table and is one click |
+| A signed link instead of a 6-digit code | No table to store, one click, but the student leaves the page for their mail app and comes back on a new tab (often on a phone, not the computer they signed up on). The code keeps them on the sign-up page; its cost on Django's side is a hashed code, a 15-minute expiry and a 5-attempt limit (BE22) |
 | `type="email"` + `pattern` attribute only | The browser check can be skipped; the server action and Django must check anyway, and our message is clearer and translated |
 
 #### 5. Contract
@@ -5884,6 +5889,121 @@ isStudentEmail('x@evil-student.1337.ma');     // false
 1. Why is `email.endsWith('student.1337.ma')` a security bug? Give an address it would wrongly accept.
 2. The browser and the server action already refuse other domains. Why must Django check it too (BE21)?
 3. Why doesn't the domain check prove the person is a 1337 student, and what does (two answers)?
-4. Why is a link signed with `PasswordResetTokenGenerator` single-use once its hash includes `email_verified`?
-5. Why must "resend the link" (BE23) answer 200 even for an address with no account?
+4. A 6-digit code has a million values. Why does a 5-attempt limit make guessing it hopeless, and why must the code be stored hashed?
+5. Why must "send a new code" (BE23) answer 200 even for an address with no account?
 6. Why is the login form not restricted to `@student.1337.ma`?
+
+---
+
+## 25. First real 42 login, and the avatar that showed the full name (2026-11-24)
+
+### 25.1 42 login works end to end
+- **What:** Ayoub's 42 app keys are in the root `.env` (never in git). His app now allows `https://localhost/api/auth/callback/42-school`. A real login (Mouad, `monajjar`) went 42 → our Auth.js callback → `POST /auth/sync` → Django.
+- **Account created:** `forty_two_id` 194793, `monajjar@student.1337.ma`, Mouad Najjar, campus `Benguerir`, role `STUDENT`, active, `avatar_url` from 42.
+- **Gotchas found on the way:**
+  - The first try failed with "The redirect uri included is not valid": the 42 app only knew `http://localhost:3000`.
+  - The first secret was valid only until 2026-11-29. Ayoub renewed it; the new one is valid until 2026-12-22 and the old one is revoked.
+  - `BACKEND_INTERNAL_KEY` must be the same in the frontend and in Django. If Django's is empty, `/auth/sync` answers 403 for everyone.
+
+### 25.2 Avatar bug: the full name squeezed in the circle
+- **File:** `src/components/ui/Avatar.tsx`
+- **Purpose:** a student's photo, or their initials when the photo can't load. Never a broken image.
+- **Symptom:** on `/profile` and in the navbar, the photo circle showed the full name in small text.
+- **Cause:**
+  - 42's image CDN (`cdn.intra.42.fr`, behind Cloudflare) refused the photo with 403. Every size from 42's API (`link`, `large`, `medium`, `small`, `micro`) was refused from outside a browser.
+  - The `<img>` comes in the server HTML, so the browser starts loading it before React hydrates. If it fails first, the `error` event fires before React has attached `onError`, and nothing replays it.
+  - The broken image stays and shows its `alt` text (the full name) inside the circle.
+- **Fix:**
+  1. A callback ref on the `<img>`: when React attaches it, `img.complete && img.naturalWidth === 0` means it already failed, so the initials are shown.
+  2. The state stores **which `src` failed** (`failedSrc`) instead of a boolean. A new `src` (another user, a new photo) gets its own try without an effect that resets state.
+  3. `referrerPolicy="no-referrer"`: 42's CDN may block hotlinked images by `Referer`, and other hosts don't need our page URLs.
+- **Tradeoffs:**
+
+| Option | Why not / why |
+|---|---|
+| `useEffect` that checks the image after mount | Same check, but setting state in an effect is flagged by the React lint rules and renders twice. The callback ref runs once, when the element is attached |
+| Render the `<img>` only on the client (`useIsClient`) | The photo would appear late on every page, and the server HTML would have no avatar |
+| `next/image` through Next's optimizer | The server would fetch from 42's CDN, which refuses it too (403), and it adds a round trip (§20) |
+| **Chosen:** callback ref + `failedSrc` + no referrer | Fixes the early-error case, no extra render, works for every avatar on the site |
+| Long term | Django downloads the 42 photo once at sync and serves it from `/media/` (with Ayoub's photo upload, BE16–BE17). Then no request ever depends on 42's CDN |
+
+- **Contract:** unchanged (`src`, `alt`, `name`, `size`, `status`).
+- **Checked:** typecheck and lint clean in the container. In the browser: refresh `/profile`. Either the 42 photo shows, or the initials "MN" in a violet circle, never the full name.
+
+**Study questions**
+1. Why can an `onError` handler on a server-rendered `<img>` never run?
+2. What do `img.complete` and `img.naturalWidth` mean for an image that failed?
+3. Why store the failed `src` rather than `hasError: true`?
+4. What does `referrerPolicy="no-referrer"` change in the request, and why is it also a privacy gain?
+
+---
+
+## 26. Change photo: profile photo upload (file upload module, 2026-11-24)
+
+**Status:** built and tested against Ayoub's backend (`Ayoub-backend` `1777905`, run locally as `ayoub-web`). It works on the real stack as soon as `Ayoub-backend` is merged into `Ahmed` (TEAM_NEEDS). On `/test` for validation, and already live on `/profile`, in place of "Change photo · Soon".
+
+### 26.1 Files
+| File | Role |
+|---|---|
+| `src/lib/avatar.ts` | Shared rules: JPEG/PNG/WebP, size strictly under 2 MB, magic-byte check (`sniffAvatarType`), `formatFileSize` |
+| `src/app/profile/photo/route.ts` | `POST` (multipart `file`) and `DELETE /profile/photo`: same-origin check, session, the same rules again, then Django with the token; refreshes the login cookie |
+| `src/lib/data.ts` | `uploadMyAvatar`, `deleteMyAvatar` (`POST`/`DELETE /api/me/avatar/`) |
+| `src/lib/api/client.ts` | `apiFetch` sends a `FormData` body as multipart; `apiFetchAll` also accepts a bare array |
+| `src/auth.ts` | `updateSession` (`unstable_update`): trigger `'update'` re-reads `/api/me/` so the navbar photo changes |
+| `src/components/profile/ChangePhotoDialog.tsx` | The dialog: choose or drop, preview, checks, progress bar, cancel, remove |
+| `src/components/profile/ProfileHero.tsx` | Renders the dialog's button next to "Edit number" |
+| `src/i18n/messages/{en,fr,ar}.ts` | `Profile.photo.*` (replaces `changePhotoSoon`) |
+| `infrastructure/nginx/nginx.conf` (local test config) | `client_max_body_size 10m`, like Hamza's `Developer` config |
+
+### 26.2 Purpose
+Students put their own face on their profile and in the navbar, instead of the 42 picture (which 42's CDN often refuses to show, §25.2) or their initials. It is also the **"file upload and management" minor module** (1 pt): type and size validation, preview, progress, delete, on both sides.
+
+### 26.3 Core concepts and decisions
+- **Three checks, in three places.** The browser checks type, size and the first bytes, so the student learns at once. The route handler checks the same with the same functions, because anyone can post to it. Django opens the image with Pillow, the real proof. `file.type` comes from the extension, so it is only the first filter. The magic bytes (`FF D8 FF`, `89 50 4E 47…`, `RIFF…WEBP`) catch a renamed text file.
+- **Route handler, not a server action.** Upload progress needs `XMLHttpRequest`'s `upload.onprogress`. Server actions go through `fetch` (no upload progress) and refuse bodies over 1 MB by default.
+- **`/profile/photo`, not `/api/...`:** nginx sends `/api/*` to Django.
+- **CSRF by hand.** Server actions check the `Origin` header for us; a route handler doesn't. The `Origin` host must equal the request `Host` (nginx forwards it), otherwise **403**, including when the header is missing.
+- **Preview** with `URL.createObjectURL`, revoked in an effect cleanup when the selection changes or the dialog unmounts. Nothing is uploaded before "Upload".
+- **The navbar picture lives in the login cookie** (`token.picture`, set at login). After an upload or delete, `updateSession({})` runs the jwt callback with `trigger: 'update'`. The callback **ignores what the caller sends** and asks Django `/api/me/`. Reason: Auth.js also accepts `POST /api/auth/session` from the browser, which would otherwise let a student put any URL in their cookie. Tested: a forged update leaves the picture unchanged.
+- **Accessible picker:** the real `<input type="file">` is `sr-only` but focusable, with the rules as its description. The label is styled as a button and shows the focus ring through `peer-focus-visible`. `role="progressbar"` has `aria-valuenow`, errors use `role="alert"`, and the dialog is our `Modal` (focus trap, Escape).
+- **Errors:** `type`, `size`, `content`, `missing` (ours), `signed-out`, `forbidden`, `unavailable`, `aborted`, and `invalid` with Django's own message shown as written. A 413 page from a proxy counts as `size`.
+
+### 26.4 Tradeoffs
+| Choice | Alternative | Why |
+|---|---|---|
+| XHR to a route handler | Server action | Progress bar and the 2 MB body; the cost is the hand-written Origin check |
+| Upload through our server | Browser → Django directly | The Django token never reaches JavaScript (§14); one origin, no CORS |
+| Magic bytes in the browser too | Type and size only | Instant answer for a fake image instead of a round trip |
+| Refresh the cookie from Django | Put the returned URL in the cookie | The cookie only ever holds values Django confirms |
+| Accept a bare array in `apiFetchAll` | Keep assuming pages | Ayoub's branch predates pagination; tolerating both costs 2 lines, and a wrong shape is now a clear `ApiUnavailable` instead of a crash |
+
+### 26.5 Contract
+```ts
+// src/components/profile/ChangePhotoDialog.tsx
+interface ChangePhotoDialogProps {
+  currentUrl: string | null; // saved photo, null = initials ("Remove photo" hidden)
+  name: string;              // initials and alt text of the preview
+  className?: string;
+}
+// POST /profile/photo (multipart "file") | DELETE /profile/photo → PhotoResult
+type PhotoResult = { ok: true; avatarUrl: string | null } | { ok: false; error: PhotoError; message?: string };
+// 200 ok · 400 type|size|content|missing|invalid · 401 signed-out · 403 forbidden · 503 unavailable
+```
+
+### 26.6 Usage
+```tsx
+<ChangePhotoDialog currentUrl={user.avatar_url} name={user.full_name} />
+```
+
+### 26.7 Checked (2026-11-24)
+- **Ayoub's endpoint directly, 12/12:** 401 without a token; JPEG, PNG and WebP → 200; GIF, a text file named `.jpg`, 2.1 MB and a missing file → 400 with a clear message; a 1200×900 photo is stored at 512×384; EXIF removed (a test tag was gone); nginx serves the file; DELETE → `""`.
+- **End to end through nginx, 15/15:** signed out → 401; another `Origin` or none → 403; GIF, 2.1 MB, fake image and no file stopped by our handler with the right error; PNG → 200 and served; the session picture and `/profile` show the new photo; DELETE clears both; a forged `POST /api/auth/session` can't change the picture.
+- Typecheck and lint clean on the whole project.
+- **Found in Ayoub's code** (TEAM_NEEDS): replacing a photo leaves the old file on disk; a 42 login still overwrites an uploaded photo (BE17).
+
+**Study questions**
+1. Why can't the profile photo upload be a server action if we want a progress bar?
+2. What does the `Origin` check protect against, and why does a server action not need it?
+3. Why is checking `file.type` not enough, and what do the first bytes of a PNG look like?
+4. Why does the jwt callback ignore the data passed to `updateSession`?
+5. When is `URL.revokeObjectURL` called, and what happens if it never is?

@@ -8,7 +8,7 @@ import { EmailLoginForm } from '@/components/auth/EmailLoginForm';
 import { LoginLayout } from '@/components/auth/LoginLayout';
 import { LoginDivider, LoginPanel } from '@/components/auth/LoginPanel';
 import { getLoginErrorKind, registerHref, safeNextPath } from '@/lib/login';
-import { signInWithEmail } from './actions';
+import { signInWith42, signInWithEmail } from './actions';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('Meta');
@@ -22,13 +22,8 @@ export async function generateMetadata(): Promise<Metadata> {
 // The hidden `redirectTo` field can be edited in the browser: clean it again on the server.
 const redirectTarget = (formData: FormData) => safeNextPath(formData.get('redirectTo')?.toString());
 
-// Server actions (run on the server when the form is posted). signIn() answers with a redirect: to 42
-// (then back to /api/auth/callback/42-school), or straight to `redirectTo` for the dev login.
-async function signInWith42(formData: FormData) {
-  'use server';
-  await signIn('42-school', { redirectTo: redirectTarget(formData) });
-}
-
+// Dev login server action: signIn() redirects straight to `redirectTo`. The 42 action (signInWith42) lives in
+// ./actions.ts, shared with /auth/register.
 async function signInWithDevLogin(formData: FormData) {
   'use server';
   if (!DEV_LOGIN_ENABLED) return;

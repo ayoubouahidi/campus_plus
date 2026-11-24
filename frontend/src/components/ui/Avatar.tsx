@@ -60,13 +60,22 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
     },
     ref
   ) => {
-    const [hasError, setHasError] = useState(false);
+    // The src that failed to load, not a boolean: a new src (another user, a new photo) gets its own try without
+    // resetting state in an effect.
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
     const t = useTranslations('Common');
 
     // Derived states
     const initials = getInitials(name);
     const accessibleAlt = alt || name || t('avatar'); // last resort, in the visitor's language (Step 12.8)
-    const showImage = Boolean(src) && !hasError;
+    const showImage = Boolean(src) && failedSrc !== src;
+
+    // The <img> comes in the server HTML, so the browser may finish (or fail) loading it before React hydrates;
+    // that early error event is lost and onError never runs, leaving a broken image that shows its alt text (the
+    // full name) inside the circle (DOCS.md §25). When React attaches the element, check whether it already failed.
+    const checkAlreadyFailed = (img: HTMLImageElement | null) => {
+      if (img && img.complete && img.naturalWidth === 0 && src) setFailedSrc(src);
+    };
 
     return (
       <div
@@ -88,10 +97,13 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
             // in the initials. next/image would add a server round trip for no visible gain.
             // eslint-disable-next-line @next/next/no-img-element
             <img
+              ref={checkAlreadyFailed}
               decoding="async"
               src={src!}
               alt={accessibleAlt}
-              onError={() => setHasError(true)}
+              // No Referer: 42's CDN (Cloudflare) refuses hotlinked images, and other hosts don't need our URLs.
+              referrerPolicy="no-referrer"
+              onError={() => setFailedSrc(src ?? null)}
               className="h-full w-full object-cover"
             />
           ) : initials ? (

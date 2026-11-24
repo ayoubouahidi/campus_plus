@@ -191,7 +191,7 @@ The frontend builds each part as soon as its endpoint exists (Edit profile start
 1. **Students have no relation to clubs.** They see events and clubs, RSVP to events, and that's all: no joining, no membership, no club at sign-up. Club membership exists only for board members, managed in the dashboard. (The student site already has no join button; BE13–BE15 were dropped; BE20 removes the last way in.)
 2. **Only 1337 students can have an account**, and there are two ways in, both ending in the same kind of account:
    - **"Continue with 42"**: one click, nothing to fill in. 42 proves who the student is and their campus (`ALLOWED_42_CAMPUSES` = the 1337 campuses, BE3).
-   - **Email sign-up** (mandatory in the subject): only addresses ending in **`@student.1337.ma`**, and the address must be **verified** by a link sent to it before the account can be used.
+   - **Email sign-up** (mandatory in the subject): only addresses ending in **`@student.1337.ma`**, and the address must be **verified** with a **6-digit code** sent to it before the account can be used (Mouad, 2026-11-24: a code, not a link; the student types it on the sign-up page).
 
 **Why verification and not just a domain check:** anyone can type `someone.else@student.1337.ma`. Without proof that the person owns the mailbox, they could create an account in another student's name. Worse, today that also **locks the real student out**: their 42 login then gets `409 "This email is already linked to another account"` (`accounts/views.py`, 42 sync).
 
@@ -202,19 +202,20 @@ The frontend builds each part as soon as its endpoint exists (Edit profile start
 | # | Who | What we need (contract) | Why |
 |---|---|---|---|
 | BE21 | Ayoub | **Only `@student.1337.ma` on `POST /api/signup/`.** In `SignupSerializer.validate_email`, after `strip().lower()`: the part after the last `@` must be **exactly** `student.1337.ma` (not "ends with": `x@evil-student.1337.ma` must fail). Otherwise **400** `{"email": ["Use your 1337 student email (…@student.1337.ma)."]}` | Only 1337 students; checked in Django because anyone can call the API directly. The student site checks the same rule in the browser |
-| BE22 | Ayoub | **Sign-up doesn't log in any more; it sends a verification link.** Add `email_verified` (bool, default `False`) to `User` (not `is_active`: that already means "account disabled", and the 42 login treats it so). `POST /api/signup/` creates the account with `email_verified=False`, sends the email (BE26) and returns **201** `{"detail": "verification-sent", "email": "<address>"}`, **no token**. The link is `https://<host>/auth/verify?uid=<uidb64>&token=<token>`: build the token with a subclass of Django's `PasswordResetTokenGenerator` whose hash includes `email_verified`, so a used link stops working. Valid **24 h**. New endpoint `POST /api/signup/verify/` `{"uid", "token"}` → sets `email_verified=True` and returns **200** `{"token", "member"}` exactly like today's sign-up response (the student is logged in); bad or expired → **400** `{"detail": "invalid-or-expired"}` | Proves the student owns the mailbox. Signed token: no table to store, one click, works from the phone's mail app |
-| BE23 | Ayoub | **Resend the link:** `POST /api/signup/resend/` `{"email"}` → **always 200** `{"detail": "verification-sent"}`, whether or not an unverified account exists (don't reveal who has an account). Throttle per email and per IP (e.g. 1 per minute, 5 per day; DRF `ScopedRateThrottle`) → **429** | Lost or expired emails, without becoming a way to spam a mailbox or list accounts |
-| BE24 | Ayoub | **Login of an unverified account:** `POST /api/auth/login/` with the **right** password but `email_verified=False` → **403** `{"detail": "email-not-verified"}`. Wrong password → the usual 401 (so this answer never reveals anything to someone without the password) | The student site then shows "Confirm your email first" with a "Send the link again" button (BE23) |
+| BE22 | Ayoub | **Sign-up doesn't log in any more; it sends a 6-digit verification code.** Add `email_verified` (bool, default `False`) to `User` (not `is_active`: that already means "account disabled", and the 42 login treats it so). `POST /api/signup/` creates the account with `email_verified=False`, sends the code by email (BE26) and returns **201** `{"detail": "verification-sent", "email": "<address>"}`, **no token**. The code: 6 digits from `secrets.randbelow(10**6)` (zero-padded), stored **hashed** (`make_password`, never in clear) with its expiry (**15 minutes**) and an attempts counter, e.g. an `EmailVerification(user, code_hash, expires_at, attempts)` model. New endpoint `POST /api/signup/verify/` `{"email", "code"}` → right code → `email_verified=True`, the code is deleted, **200** `{"token", "member"}` exactly like today's sign-up response (the student is logged in). Wrong code → **400** `{"code": ["Wrong code."]}` and `attempts + 1`; expired, no pending code, or **5 wrong attempts** (the code is then deleted) → **400** `{"detail": "code-expired"}` (the student asks for a new one, BE23). Unknown email → the same 400 as a wrong code (doesn't reveal accounts) | Proves the student owns the mailbox. A 6-digit code with 5 attempts can't be guessed (5 in a million); the student stays on the same page and types it |
+| BE23 | Ayoub | **Send a new code:** `POST /api/signup/resend/` `{"email"}` → **always 200** `{"detail": "verification-sent"}`, whether or not an unverified account exists (don't reveal who has an account). A new code replaces the old one (new expiry, attempts back to 0). Throttle per email and per IP (e.g. 1 per minute, 5 per day; DRF `ScopedRateThrottle`) → **429** | Lost or expired codes, without becoming a way to spam a mailbox or list accounts |
+| BE24 | Ayoub | **Login of an unverified account:** `POST /api/auth/login/` with the **right** password but `email_verified=False` → **403** `{"detail": "email-not-verified"}`. Wrong password → the usual 401 (so this answer never reveals anything to someone without the password) | The student site then shows the code field again ("Enter the code we sent you", with "Send a new code", BE23) |
 | BE25 | Ayoub | **42 login with an address that already has an email account** (42 sync in `accounts/views.py`, today always 409): **verified** email account → **link it**: set `forty_two_id`, `campus`, `avatar_url` on that account and keep its password, so both ways log into the same account. **Unverified** email account → it was never proven, so **delete it** and create the 42 account as usual. Accounts created by 42 get `email_verified=True`. Keep 409 only for the real conflict (a *different* `forty_two_id` already owns the address) | The real student must never be locked out by someone who typed their address; one student = one account whichever way they come in |
-| BE26 | Ayoub + Hamza | **Sending email.** In settings, from the environment: `EMAIL_BACKEND` (dev: `django.core.mail.backends.console.EmailBackend`, prints the email in `docker compose logs backend`; real run: SMTP), `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`, `EMAIL_USE_TLS=true`, `EMAIL_HOST_USER=campushub.1337.team@gmail.com`, `EMAIL_HOST_PASSWORD` (a Gmail **app password**, never the account password, only in `.env`), `DEFAULT_FROM_EMAIL="Campus Hub <campushub.1337.team@gmail.com>"`, `FRONTEND_URL=https://localhost` (to build the link). **Hamza:** add the names to `.env.example` with empty values. Email: plain text + simple HTML, subject "Confirm your Campus Hub email", the link, "valid 24 hours", "If you didn't sign up, ignore this email" | Without it nothing can be sent. The console backend lets everyone test without a real mailbox |
+| BE26 | Ayoub + Hamza | **Sending email.** In settings, from the environment: `EMAIL_BACKEND` (dev: `django.core.mail.backends.console.EmailBackend`, prints the email in `docker compose logs backend`; real run: SMTP), `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`, `EMAIL_USE_TLS=true`, `EMAIL_HOST_USER=campushub.1337.team@gmail.com`, `EMAIL_HOST_PASSWORD` (a Gmail **app password**, never the account password, only in `.env`), `DEFAULT_FROM_EMAIL="Campus Hub <campushub.1337.team@gmail.com>"`. **Hamza:** add the names to `.env.example` with empty values. Email: plain text + simple HTML, subject "Your Campus Hub verification code", the code in large digits, "valid 15 minutes", "If you didn't sign up, ignore this email". `FRONTEND_URL` isn't needed (no link) | Without it nothing can be sent. The console backend lets everyone test without a real mailbox |
 | BE27 | Ayoub | *(Optional)* **Clean up:** a management command that deletes accounts still unverified after 7 days (`python manage.py purge_unverified`), run at start or by hand | Abandoned sign-ups don't keep an address taken |
 
-**Tests Ayoub should add:** other domain → 400; `x@evil-student.1337.ma` → 400; sign-up → 201 without token and one email in `mail.outbox`; verify with the right link → 200 + token; the same link twice → 400; expired link → 400; login before verifying → 403 `email-not-verified`, wrong password → 401; resend for an unknown email → 200 and nothing sent; 42 login over a verified email account → same user, linked; over an unverified one → that account deleted, 42 account created.
+**Tests Ayoub should add:** other domain → 400; `x@evil-student.1337.ma` → 400; sign-up → 201 without token and one email in `mail.outbox` containing a 6-digit code; the code is not stored in clear; verify with the right code → 200 + token; the same code twice → 400; wrong code → 400 `code`; 5 wrong codes then the right one → 400 `code-expired`; code after 15 minutes → 400 `code-expired`; resend → the old code stops working; login before verifying → 403 `email-not-verified`, wrong password → 401; resend for an unknown email → 200 and nothing sent; 42 login over a verified email account → same user, linked; over an unverified one → that account deleted, 42 account created.
 
 **What the student site does (Mouad):**
 - Now (no backend needed): the sign-up form accepts only `@student.1337.ma` (browser and server action, same rule as BE21), with the hint "Use your 1337 student email".
-- When BE22–BE24 are merged: the "Check your email" screen after sign-up (with "Send the link again"), the `/auth/verify` page that confirms the link and logs the student in, and the "Confirm your email first" message on the login form.
-- The privacy policy will say we send one verification email to that address.
+- Done now: the sign-up page offers both ways: "Continue with 42 Intra" (optional, works once the 42 keys are in `.env`), then "or sign up with email" and the form. Intro: "Continue with your 42 account, or sign up with your 1337 student email: we'll send you a verification code."
+- When BE22–BE24 are merged: after sign-up, the same page shows a 6-digit code field ("We sent a code to …", "Send a new code"); the right code logs the student in. The login form shows the code field too for an unverified account.
+- The privacy policy will say we send verification codes to that address.
 
 ## 1g. Review of `Developer` (Hamza) and Ahmed's BE11 answer (Mouad, 2026-11-23)
 
@@ -238,6 +239,68 @@ The frontend builds each part as soon as its endpoint exists (Edit profile start
 **Hamza: merge `codex/infra-config-fixes` into `Developer`, then do H4.** `Developer` has no `frontend/` or backend code: they come in from `Mouad` and `Ahmed` at the merge (M4).
 
 - **Ayoub:** no new push since 2026-11-23 00:54 (`Ayoub` `54c28b4`, `Ayoub-backend` `e05d94b`). The 42 keys are secrets, so they never appear in git: he sends `AUTH_42_SCHOOL_ID` / `AUTH_42_SCHOOL_SECRET` privately for `.env`, with the redirect URI `https://localhost/api/auth/callback/42-school` registered in the 42 app. Still not in `Ahmed`: BE12 (phone accepts any text), BE16/BE17 (photo upload), BE19 (no `validate_password` on sign-up), BE20 (`SignupSerializer` still takes `club_id`).
+
+### Re-check, evening (Mouad, 2026-11-24 18:15)
+
+- **Hamza ✅:** `Developer` is now at `43580e5`, so `codex/infra-config-fixes` is merged and that branch is deleted. Checked: `docker compose config` valid (with `.env.example` copied to `.env`), `nginx -t` OK.
+  - **H2, H3, H5 are in `Developer`.** `.env.example` also has the BE26 email settings (`EMAIL_*`, console backend by default).
+  - **H4 done:** `grafana/dashboards/campus-hub.json` is provisioned from `/var/lib/grafana/dashboards`. It has 6 panels: targets up, host CPU, memory, disk, container CPU, container memory. The images are pinned: Prometheus `v2.55.1`, Grafana `11.3.0`, node-exporter `v1.8.2`, cAdvisor `v0.49.1`.
+  - **Optional for the demo:** a panel for HTTP requests or errors. Today Prometheus scrapes only itself, node-exporter and cAdvisor; nginx and Django don't expose metrics.
+  - **Still open:** H7 (dashboard not in compose, needs AY1) and H9 (not blocking).
+- **Ayoub:** still no push since 2026-11-23 00:54.
+  - **Dashboard (`dashboard_campus`), read only:** pages `admin`, `admin/events`, `admin/members`, `admin/registrations`, `admin/announcements` and `super_admin`. They read Django (`/api/board/*`, `/api/superadmin/*`) but **never write**: no create, edit or delete of users, roles, clubs or members.
+  - **Backend (in `Ahmed`):** `/api/superadmin/users/` and `/organizations/` are GET + PATCH only, with no create or delete.
+  - **So:** both User Mgmt majors (permissions, organization) need the CRUD screens and endpoints.
+  - **Remove:** `api/clubs/<slug>/join/` (`dashboard/urls.py`) goes against the 2026-11-24 decision that students have no club relation.
+  - **Still missing:** the 42 keys (private, for `.env`), BE12, BE16/BE17 (photo upload), BE19, BE20 and BE21–BE27 (1337 sign-up with code).
+
+### Ayoub's push of 2026-11-24 evening (Mouad, 21:30)
+
+`Ayoub-backend` `1777905` ("42 files done") and `Ayoub` `de79aff` (dashboard). Read from the diff; his tests were not run here.
+
+**Backend (`Ayoub-backend`)**
+| Request | Status |
+|---|---|
+| BE12 phone validation | ✅ Moroccan mobile only (`+2126/7…` or `06/07…`), spaces removed, stored as `+212…`, `""` clears it; `phone` now in `UserSerializer` |
+| BE16 photo upload | ✅ `POST /api/me/avatar/` (multipart `file`): ≤ 2 MB, JPEG/PNG/WebP checked by content (Pillow), EXIF rotation applied then metadata stripped, resized to ≤ 512 px, random file name, `avatar_url` = public media URL. `DELETE` removes it. Differences from the request: too big → **400** (not 413), `DELETE` sets `avatar_url` to `""` instead of going back to the 42 photo. Both fine for the frontend |
+| BE17 keep an uploaded photo at 42 login | ❌ `/auth/sync` still sets `avatar_url = imageUrl` at **every** 42 login (`accounts/views.py` ~line 176), so a 42 student's uploaded photo is replaced at their next login |
+| 1337 only for 42 | ✅ `ALLOWED_42_CAMPUSES` defaults to `Benguerir,Khouribga,Tetouan,Rabat` (also in compose); names compared case-insensitively, a leading "1337 " ignored. **An empty list now refuses every campus** (was: allow all) |
+| New: `GET`/`PATCH /api/board/club/` | ✅ the board member's own club settings (name, description, contact email, meeting day/time/location), audit-logged |
+| BE19 password validators at sign-up | ❌ |
+| BE20 remove `club_id` from sign-up | ❌ still in `SignupSerializer` |
+| BE21–BE27 1337 sign-up with a 6-digit code | ❌ nothing yet |
+| `api/clubs/<slug>/join/` | ❌ still there (students have no club relation) |
+| Superadmin users / organizations | ❌ still `GET` list + `PATCH` detail only. **No `POST` (create) or `DELETE`** |
+
+**Dashboard (`Ayoub`)**: big step. New super-admin pages `users`, `organizations`, `approvals`, `analytics`, `audit-logs`, `settings`; board pages `events` (create/edit/delete through `EventsManager`) and `settings` (profile, phone, photo upload, club settings). Calls go through a server proxy `app/api/backend/[...path]`. Mock data files removed.
+- **Mismatch:** `SuperAdminResourceManager` sends `POST` and `DELETE` to `api/superadmin/users/` and `api/superadmin/organizations/`, which Django doesn't have yet → those buttons fail with **405**. Ayoub: add create + delete for users and organizations, and add/remove board members of a club. This is what the permissions and organization majors (4 pts) need.
+
+**Merge state:** `Ayoub-backend` is **17 commits behind `Ahmed`**, and merging it into `Ahmed` conflicts in `accounts/views.py`, `accounts/tests.py`, `dashboard/views.py` and `dashboard/serializers.py`. **Ayoub + Ahmed:** merge `Ahmed` into `Ayoub-backend` (or open a PR into `Ahmed`), solve the 4 conflicts, run the whole test suite. Until then the student site's test stack (Ahmed's backend) has no `/api/me/avatar/`, so "Change photo" waits.
+
+### Photo upload tested against `Ayoub-backend` (Mouad, 2026-11-24 22:00)
+
+Ayoub's branch runs locally as `ayoub-web`. His `POST`/`DELETE /api/me/avatar/` passes 12/12 direct checks, and the student site's "Change photo" passes 15/15 end to end (DOCS §26). Found:
+
+| # | Who | Request |
+|---|---|---|
+| BE28 | Ayoub | **Delete the old file when a photo is replaced.** `me_avatar` sets `member.image_path = normalized_image` without deleting the previous file. After 3 uploads, 3 files stay in `media/avatars/`. Call `member.image_path.delete(save=False)` before assigning the new one |
+| BE17 | Ayoub | **Confirmed by Mouad in the browser (2026-11-24):** upload a photo, log out, log in with 42 → the 42 picture is back. The uploaded file is still in `media/avatars/`, but `/auth/sync` (`accounts/views.py`, the `else:` branch for an existing user) runs `user.avatar_url = identity.get("imageUrl") or ""` at every login. Fix: only take 42's picture when no photo was uploaded: `has_upload = UserMember.objects.filter(user=user).exclude(image_path="").exists()` then `if not has_upload: user.avatar_url = identity.get("imageUrl") or ""`. Add a test: upload, sync again, `avatar_url` unchanged |
+| BE30 | — | ~~Password for 42 accounts~~ **Decided by Mouad (2026-11-24): 42 accounts log in with 42 only.** `/auth/sync` keeps `set_unusable_password()`; nothing to do. The login page's wrong-password message says "If you joined with 42, your account has no password: use 'Continue with 42 Intra'" |
+| BE29 | Ayoub + Ahmed | **Merge `Ayoub-backend` into `Ahmed`** (4 conflicts, see above). Until then the real stack has no `/api/me/avatar/`. Note: `Ayoub-backend` still returns `GET /api/club-events/` as a bare array; `Ahmed`'s paginated shape is the contract |
+| H10 | Hamza | Keep `client_max_body_size 10m` in `Developer`'s nginx (it's there). Without it nginx refuses photos over 1 MB before the app sees them |
+
+### 42 keys received (Mouad, 2026-11-24 19:45)
+
+Ayoub sent `env.local.download` privately; the keys are in the root `.env` only, never in git. Checked:
+
+- **Keys valid:** 42's `/oauth/token` (client credentials) answers 200 with scope `public`.
+- **Secret renewed (2026-11-24 20:42):** Ayoub sent a new secret, valid until **2026-12-22 20:25 UTC**; the old one is revoked (401). If the evaluation is after Dec 22, renew it again. His new file also has `NEXTAUTH_URL=https://localhost`.
+- **Sign-in start works:** the 42 button on `https://localhost` sends the browser to `api.intra.42.fr/oauth/authorize` with the real `client_id`, `redirect_uri=https://localhost/api/auth/callback/42-school`, scope `public` and state/PKCE.
+- **Sync works:** the frontend server's `POST /auth/sync` with the shared `BACKEND_INTERNAL_KEY` returns 200 `{token, user}`. A wrong key gets 403. The test user was deleted afterwards.
+- **Ayoub's file is for his own dev setup.** Its `NEXTAUTH_URL=http://localhost:3000` and `BACKEND_URL=http://127.0.0.1:8000` don't fit our compose stack. Its `AUTH_SECRET` and `BACKEND_INTERNAL_KEY` are his own values, so we keep ours.
+- **Ayoub: register `https://localhost/api/auth/callback/42-school`** in the 42 app's redirect URIs (one per line, next to `http://localhost:3000/...`). **Confirmed 2026-11-24 by a real login from `https://localhost`: 42 answers "The redirect uri included is not valid".** Ayoub must add this URI in the 42 app (Settings → Redirect URI, one per line); the keys don't change.
+- **Ayoub (new, from the first real login):** 42's image CDN refuses our requests (403, Cloudflare), so `avatar_url` pointing at `cdn.intra.42.fr` may not display. With BE16–BE17, download the 42 photo once at `/auth/sync` into `/media/` and return that URL (DOCS §25.2).
+- **Ayoub + Hamza: set `ALLOWED_42_CAMPUSES`** to the 1337 campuses (it's empty today, so any 42 campus can log in) and add it to `.env.example`.
 
 ### Ahmed: `feat/ahmed-final-requirements` at `792ac56`, BE11 answered ✅
 
@@ -470,19 +533,20 @@ Mouad compared every branch with the subject (`en.subject.pdf`, v21.2). **Any ma
 | Web Minor: ORM (Django ORM) | 1 | ✅ |
 | Web Minor: SSR (Next.js Server Components) | 1 | ✅ |
 | Web Minor: custom design system (≥10 components, palette, typography, icons) | 1 | ✅ **Done (2026-11-23):** `/design-system` shows everything by Atomic Design level (foundations, atoms, molecules, organisms, templates & pages) with the real components (DOCS §17) |
-| User Mgmt Minor: OAuth 2.0 (42) | 1 | ⚠️ frontend done; 42 keys + `/auth/sync` missing |
+| User Mgmt Minor: OAuth 2.0 (42) | 1 | ✅ **Done (2026-11-24):** real 42 login on `https://localhost` creates the Django account (`monajjar`, Benguerir, STUDENT), DOCS §25.1. Secret valid until 2026-12-22 |
 | Web Major: real-time WebSockets | 2 | ✅ **Done (2026-11-22):** Ahmed's `/ws/calendar/` + the student site's live pages (DOCS §15.1–15.2). Show it on the merged stack |
-| Web Minor: notification system (all create/update/delete) | 1 | ✅ **Done (2026-11-23):** Ahmed's stored notifications (PR #5, `event_title` in his final branch) + the live bell (DOCS §15.3). ⚠️ BE11: "new event" only reaches club members |
+| Web Minor: notification system (all create/update/delete) | 1 | ✅ **Done (2026-11-23):** Ahmed's stored notifications (PR #5, `event_title` in his final branch) + the live bell (DOCS §15.3). BE11 fixed (every active student gets "new event", merged in `Ahmed` 2026-11-23) |
 | Web Minor: advanced search (filters, sorting, **pagination**) | 1 | ✅ **Done (2026-11-23):** `/search`, opened from the navbar search: words, category, date, club; 4 sorts; 12 per page with page links; every result list has its own URL (DOCS §18) |
-| User Mgmt Major: advanced permissions (user CRUD, roles, views per role) | 2 | ⚠️ Ayoub: roles defined, superadmin user CRUD needed |
-| User Mgmt Major: organization system (clubs: create/edit/delete, add/remove members) | 2 | ⚠️ Ayoub dashboard (mock data) + Ahmed |
-| Web Minor: file upload & management (types, validation, preview, progress, delete) | 1 | ⚠️ flyers/logos/avatars, nothing built |
+| User Mgmt Major: advanced permissions (user CRUD, roles, views per role) | 2 | ⚠️ Ayoub: roles and per-role views exist (`board` vs `super_admin`); user **create/delete** endpoints and dashboard screens to create, edit and delete users and change roles are missing (today read-only, PATCH only) |
+| User Mgmt Major: organization system (clubs: create/edit/delete, add/remove members) | 2 | ⚠️ Ayoub: dashboard reads clubs and members from Django but has no create/edit/delete club or add/remove board member screens; `/api/superadmin/organizations/` is GET + PATCH only |
+| Web Minor: file upload & management (types, validation, preview, progress, delete) | 1 | 🟡 **Student site done (2026-11-24, DOCS §26):** "Change photo" with checks on both sides, preview, progress, cancel, remove; tested 15/15 against `Ayoub-backend`. Counts once `Ayoub-backend` is merged into `Ahmed` (BE29) |
 | A11y Minor: RTL (Arabic) | 1 | ✅ **Student site done (2026-11-22, DOCS §12):** `dir="rtl"` in Arabic, every layout uses logical sides, mirrored drawer, icons and arrow keys. ⚠️ Ayoub's dashboard is a separate app: if evaluators open it, it has no RTL yet |
 | A11y Minor: ≥3 languages + switcher | 1 | ✅ **Student site done (2026-11-22, DOCS §12):** English, French, Arabic, switcher in the navbar and phone menu, choice kept in a cookie, every page and message translated (274 messages × 3), dates in each language. ⚠️ Same dashboard caveat: decide whether the dashboard needs languages too, or whether we present the module on the student site only |
 | Web Major: public API (API key, rate limiting, docs, GET/POST/PUT/DELETE) | 2 | ⚠️ Swagger docs exist; no API key, no throttling |
+| DevOps Major: monitoring (Prometheus + Grafana) | 2 | ✅ **Done (Hamza, 2026-11-24, `Developer` `43580e5`):** Prometheus + alert rules, Grafana behind `/grafana/` with login, a provisioned 6-panel dashboard, pinned images (H4). Show it live on the merged stack |
 | A11y Major: WCAG 2.1 AA | 2 | Possible (student site built with ARIA), risky: whole app incl. dashboard must pass |
 
-**Count:** ✅ demonstrable today ≈ **5** · with the ⚠️ items in progress finished ≈ **15** · + RTL and 3 languages ≈ **17** · + public API ≈ **19**. Target: 14 for sure + 2–3 extra as a safety margin (modules that fail the demo count 0).
+**Count (Mouad, 2026-11-24, 21:00):** ✅ done = **14** (frameworks 2, ORM 1, SSR 1, design system 1, WebSockets 2, notifications 1, advanced search 1, RTL 1, 3 languages 1, monitoring 2, OAuth 1). Minimum to pass: **14** reached. Next: + file upload (BE16–17) = 15 · + Ayoub's permissions and organization majors (CRUD screens) = 19 · + public API = 21. Modules only count if they work at the demo, on the merged stack; aim for 16+ as a safety margin.
 
 **Not for us:** game-dependent modules, chat/friends ("User interaction" major, "Standard user management" major both require friends).
 

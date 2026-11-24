@@ -73,12 +73,13 @@ LoginPanel.displayName = 'LoginPanel';
 
 // "or" between the 42 button and the email form. A plain line with text: decorative for screen readers,
 // which already hear two separate forms ("Continue with 42 Intra", then the "Log in with email" form).
-export const LoginDivider = ({ className = '' }: { className?: string }) => {
+// `label` replaces the default "or with email" (the sign-up page says "or sign up with email").
+export const LoginDivider = ({ label, className = '' }: { label?: string; className?: string }) => {
   const t = useTranslations('Auth');
   return (
     <div aria-hidden="true" className={`my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 ${className}`}>
       <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-      {t('orEmail')}
+      {label ?? t('orEmail')}
       <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
     </div>
   );

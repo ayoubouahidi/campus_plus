@@ -156,6 +156,21 @@ export const updateMyPhone = async (phone: string, token: string): Promise<strin
   return raw.phone ?? '';
 };
 
+// POST /api/me/avatar/ (multipart `file`, Ayoub's TEAM_NEEDS BE16): Django re-checks the image, resizes it to
+// 512 px, strips its metadata and returns the user with the new public URL. DELETE removes it ("" → initials).
+// Step 26, DOCS.md §26. No mocks branch: the route handler answers "unavailable" without Django.
+export const uploadMyAvatar = async (file: Blob, fileName: string, token: string): Promise<string | null> => {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  const raw = await apiFetch<RawUser>('/api/me/avatar/', { method: 'POST', token, body: form });
+  return raw.avatar_url || null;
+};
+
+export const deleteMyAvatar = async (token: string): Promise<string | null> => {
+  const raw = await apiFetch<RawUser>('/api/me/avatar/', { method: 'DELETE', token });
+  return raw.avatar_url || null;
+};
+
 /* ------------------------------- Departments ------------------------------ */
 
 export const listDepartments = cache(async (): Promise<Department[]> => {

@@ -182,7 +182,29 @@ if (DEV_LOGIN_ENABLED) {
   );
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+// After a profile change (a new photo, Step 26), the cookie still holds the picture from login time, and the
+// navbar reads the cookie. `updateSession()` re-runs the jwt callback with trigger 'update', which asks Django.
+// What the caller passes is ignored on purpose: Auth.js also accepts POST /api/auth/session from the browser,
+// so the cookie must only ever take values Django confirms (otherwise a student could put any URL there).
+const refreshFromBackend = async (backendToken: unknown): Promise<{ name: string; picture: string | null } | null> => {
+  const base = process.env.BACKEND_URL;
+  if (!base || typeof backendToken !== 'string' || !backendToken || backendToken === 'dev-token') return null;
+  try {
+    const res = await fetch(`${base}/api/me/`, {
+      headers: { Accept: 'application/json', Authorization: `Token ${backendToken}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const me = (await res.json()) as { full_name?: unknown; avatar_url?: unknown };
+    if (typeof me.full_name !== 'string') return null;
+    return { name: me.full_name, picture: typeof me.avatar_url === 'string' && me.avatar_url ? me.avatar_url : null };
+  } catch {
+    return null; // Django down: keep the cookie as it is
+  }
+};
+
+export const { handlers, auth, signIn, signOut, unstable_update: updateSession } = NextAuth({
   providers,
   session: { strategy: 'jwt' }, // encrypted cookie, no database on the Next.js side
   // Our page handles both sign-in and errors (?error=AccessDenied | Configuration | …, see lib/login.ts)
@@ -207,8 +229,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
 
-    // Builds the encrypted cookie. `user` is only there on the sign-in request.
-    jwt({ token, user }) {
+    // Builds the encrypted cookie. `user` is only there on the sign-in request; 'update' comes from updateSession().
+    async jwt({ token, user, trigger }) {
+      if (trigger === 'update') {
+        const fresh = await refreshFromBackend(token.backendToken);
+        if (fresh) {
+          token.name = fresh.name;
+          token.picture = fresh.picture;
+        }
+        return token;
+      }
       if (user) {
         token.backendToken = user.backendToken;
         token.userId = user.backendUserId ?? user.id;

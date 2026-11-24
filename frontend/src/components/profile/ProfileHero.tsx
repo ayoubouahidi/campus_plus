@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslations } from 'next-intl';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPhone } from '@/lib/phone';
+import { ChangePhotoDialog } from './ChangePhotoDialog';
 import { EditProfileDialog } from './EditProfileDialog';
 import type { User, UserRole } from '@/types/api';
 import { PROFILE_PANEL, profileChip, type ProfileChipTone } from './profileStyles';
@@ -15,13 +16,8 @@ export interface ProfileHeroProps extends React.HTMLAttributes<HTMLElement> {
 
 const ROLE_TONES: Record<UserRole, ProfileChipTone> = { STUDENT: 'violet', BOARD_MEMBER: 'emerald', SUPERADMIN: 'neutral' };
 
-// Disabled "· Soon" button from the design (Change photo, until TEAM_NEEDS BE16): visible so students know
-// what's coming, not focusable as an action.
-const SOON_BUTTON =
-  'inline-flex h-11 cursor-not-allowed items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
-
 // Figma "ProfileHero": violet gradient banner, 104px avatar overlapping it, name (the page h1), @login + role chip,
-// email, member since. No campus chip and no club (Mouad's decision, 2026-11-23, DOCS.md §21.1); "Edit profile / Change photo · Soon" on the right (under, on phones).
+// email, member since. No campus chip and no club (Mouad's decision, 2026-11-23, DOCS.md §21.1); "Edit number" and "Change photo" (Step 26, DOCS.md §26) on the right (under, on phones).
 // Server Component. Arabic: everything mirrors with logical classes (ps-/pe-/start-), the avatar included, and
 // the banner gradient runs the other way (rtl:bg-gradient-to-l). Role labels: Profile.roles.<UserRole>.
 export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
@@ -76,9 +72,7 @@ export const ProfileHero = React.forwardRef<HTMLElement, ProfileHeroProps>(
 
           <div className="flex gap-2 sm:flex-col">
             <EditProfileDialog phone={phone} />
-            <button type="button" disabled className={SOON_BUTTON}>
-              {t('changePhotoSoon')}
-            </button>
+            <ChangePhotoDialog currentUrl={user.avatar_url} name={user.full_name} />
           </div>
         </div>
       </header>

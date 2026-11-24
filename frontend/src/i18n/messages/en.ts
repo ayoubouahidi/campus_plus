@@ -269,7 +269,33 @@ const en = {
       'signed-out': 'Your session expired. Log in again to edit your profile.',
       conflict: 'Your phone number needs a check by an administrator before it can be changed.',
     },
-    changePhotoSoon: 'Change photo · Soon',
+    photo: {
+      open: 'Change photo',
+      title: 'Profile photo',
+      rules: 'JPEG, PNG or WebP, under 2 MB. It’s resized to 512 × 512 and its hidden data (like location) is removed.',
+      choose: 'Choose a photo',
+      chooseAnother: 'Choose another photo',
+      dropHint: 'or drop it here',
+      upload: 'Upload',
+      cancel: 'Cancel',
+      cancelUpload: 'Cancel upload',
+      remove: 'Remove photo',
+      progressLabel: 'Upload progress',
+      uploading: 'Uploading… {percent}%',
+      saved: { title: 'Photo updated', description: 'Your new photo is on your profile.' },
+      removed: { title: 'Photo removed', description: 'Your initials show instead.' },
+      errors: {
+        type: 'This file type isn’t supported. Choose a JPEG, PNG or WebP image.',
+        size: 'This photo is 2 MB or more. Choose a smaller one.',
+        content: 'This file isn’t a real image. Choose a JPEG, PNG or WebP photo.',
+        missing: 'Choose a photo first.',
+        'signed-out': 'Your session expired. Log in again to change your photo.',
+        forbidden: 'This request was refused. Reload the page and try again.',
+        invalid: 'This photo was refused. Try another one.',
+        unavailable: 'Couldn’t save your photo. Try again in a moment.',
+        aborted: 'Upload cancelled.',
+      },
+    },
   },
   // Step 12.5: /clubs and /clubs/[slug].
   Clubs: {
@@ -328,7 +354,7 @@ const en = {
     emailErrors: {
       invalid: {
         title: 'Wrong email or password',
-        description: 'Check both and try again. Students with a 42 account can use “Continue with 42 Intra”.',
+        description: 'Check both and try again. If you joined with 42, your account has no password: use “Continue with 42 Intra”.',
       },
       unavailable: {
         title: 'Login is temporarily unavailable',
@@ -336,7 +362,8 @@ const en = {
       },
     },
     registerTitle: 'Create your account',
-    registerIntro: 'For students without a 42 account. With 42, just <link>continue with 42 Intra</link>: it creates your account.',
+    registerIntro: 'Continue with your 42 account, or sign up with your 1337 student email: we’ll send you a verification code.',
+    orSignUpEmail: 'or sign up with email',
     firstName: 'First name',
     lastName: 'Last name',
     confirmPassword: 'Confirm password',

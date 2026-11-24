@@ -33,7 +33,7 @@ const TIMEOUT_MS = 8_000;
 export interface ApiRequest {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   token?: string | null; // Django's DRF token (getBackendToken); omitted = anonymous request
-  body?: unknown;
+  body?: unknown; // JSON-encoded, or a FormData sent as multipart as is (file uploads, Step 26)
 }
 
 export const hasBackend = (): boolean => Boolean(process.env.BACKEND_URL);
@@ -44,15 +44,17 @@ export async function apiFetch<T>(path: string, { method = 'GET', token, body }:
 
   let res: Response;
   try {
+    // FormData: fetch writes the multipart Content-Type itself, with the boundary; setting it by hand breaks it.
+    const isForm = body instanceof FormData;
     res = await fetch(`${base}${path}`, {
       method,
       headers: {
         Accept: 'application/json',
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(body === undefined || isForm ? {} : { 'Content-Type': 'application/json' }),
         // DRF TokenAuthentication expects "Token <key>", not "Bearer".
         ...(token ? { Authorization: `Token ${token}` } : {}),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       cache: 'no-store', // per-visitor data (RSVP state, attendee names): never shared through Next's cache
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -79,7 +81,10 @@ export async function apiFetchAll<T>(path: string, request: ApiRequest = {}, max
   const results: T[] = [];
   let next: string | null = path;
   for (let page = 0; next && page < maxPages; page += 1) {
-    const data: RawPage<T> = await apiFetch<RawPage<T>>(next, request);
+    const data: RawPage<T> | T[] = await apiFetch<RawPage<T> | T[]>(next, request);
+    // A bare array: a branch from before pagination (e.g. Ayoub-backend, DOCS.md §26). Everything is there.
+    if (Array.isArray(data)) return [...results, ...data];
+    if (!Array.isArray(data.results)) throw new ApiUnavailable(path, new Error('unexpected list shape'));
     results.push(...data.results);
     next = data.next ? `${path.split('?')[0]}${new URL(data.next).search}` : null;
   }

@@ -40,3 +40,10 @@ export async function signInWithEmail(_previous: EmailLoginState, formData: Form
   }
   return { error: null, fieldErrors: {}, email }; // not reached: signIn() redirects on success
 }
+
+// "Continue with 42 Intra" (Step 5.2), on /auth/login and /auth/register (DOCS.md §24): the same action, so
+// both pages start the same 42 sign-in. signIn() redirects to 42, then back to /api/auth/callback/42-school; a
+// first 42 login creates the account. The hidden `redirectTo` can be edited in the browser: cleaned again here.
+export async function signInWith42(formData: FormData): Promise<void> {
+  await signIn('42-school', { redirectTo: safeNextPath(formData.get('redirectTo')?.toString()) });
+}

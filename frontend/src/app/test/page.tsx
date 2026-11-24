@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 import { DEV_LOGIN_ENABLED, getSessionState, signOut } from '@/auth';
+import { ChangePhotoDialog } from '@/components/profile/ChangePhotoDialog';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { LOCALE_INFO } from '@/i18n/config';
 import { hasBackend } from '@/lib/api/client';
@@ -45,7 +46,7 @@ export default async function TestPage() {
         aria-label="Test controls"
         className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-200"
       >
-        <p className="font-semibold">Test page: Step 23.1, form validation audit (sign-up)</p>
+        <p className="font-semibold">Test page: Step 26, profile photo upload (Change photo)</p>
         <p className="mt-2">
           Live since Phase 5:{' '}
           <Link href="/auth/login" className="font-medium underline underline-offset-2">/auth/login</Link> (42,
@@ -133,12 +134,24 @@ export default async function TestPage() {
         </div>
 
         <div>
-          <h3 className="font-semibold">What to check (Step 23.1): <Link href="/auth/register" className="underline underline-offset-2">/auth/register</Link>, signed out</h3>
+          <h3 className="font-semibold">What to check (Step 26): Change photo, signed in with a Django account</h3>
+          {session.status === 'signed-in' ? (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <ChangePhotoDialog currentUrl={session.user.avatar_url} name={session.user.full_name} />
+              <span className="text-slate-500 dark:text-slate-400">Same dialog as on <Link href="/profile" className="underline underline-offset-2">/profile</Link>.</span>
+            </div>
+          ) : (
+            <p className="mt-2 text-slate-500 dark:text-slate-400">Log in first (the dev login has no Django token: it gets &quot;session expired&quot;).</p>
+          )}
           <ul className="mt-2 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">
-            <li>No &quot;Club&quot; field any more: name, email, password, confirm, year, school (already chosen: 1337).</li>
-            <li>Password <code>12345678</code> → &quot;Use letters too, not only numbers.&quot; Your first name, last name or the start of your email inside the password (any case) → &quot;Don&apos;t use your name or email in your password.&quot; Nothing is sent.</li>
-            <li><code>Campus-Hub-2026</code> with a new email creates the account and logs you in (it lands in Django; delete it afterwards or keep it as a test account).</li>
-            <li>Français / العربية: the two new messages are translated.</li>
+            <li>Choose a JPEG, PNG or WebP under 2 MB: the preview shows in the circle with the file name and size, nothing is sent yet.</li>
+            <li>A GIF or PDF (picker on &quot;All files&quot;) → &quot;This file type isn&apos;t supported&quot;. A photo of 2 MB or more → &quot;2 MB or more&quot;. A text file renamed <code>x.jpg</code> → &quot;isn&apos;t a real image&quot;. Nothing is sent.</li>
+            <li>Drag a photo onto the dashed zone: same as choosing it.</li>
+            <li>Upload: the progress bar fills (DevTools → Network → Slow 4G to see it move), &quot;Cancel upload&quot; stops it (&quot;Upload cancelled.&quot;).</li>
+            <li>After the upload: toast, dialog closed, the new photo on /profile <strong>and in the navbar</strong> (reload: it stays).</li>
+            <li>&quot;Remove photo&quot; → initials everywhere.</li>
+            <li>Keyboard: Tab reaches &quot;Choose a photo&quot; (focus ring), Enter/Space opens the picker, Escape closes the dialog. Screen reader: the rules are read with the picker; the progress bar announces its value.</li>
+            <li>Dark mode, phone width, Français / العربية (mirrored).</li>
           </ul>
         </div>
 
