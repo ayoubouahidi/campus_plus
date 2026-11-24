@@ -71,6 +71,10 @@ export async function apiFetch<T>(path: string, { method = 'GET', token, body }:
   } catch (error) {
     throw new ApiUnavailable(path, error);
   }
+  // A read refused with "Invalid token": the student's Django token no longer exists (they logged out of the
+  // dashboard, which deletes all their tokens; or the database was reset). Public pages must not crash for that:
+  // read again as a visitor. Signed-in-only reads get their 401 again and their caller handles it (DOCS.md §27).
+  if (res.status === 401 && token && method === 'GET') return apiFetch<T>(path, { method, body });
   if (!res.ok) throw new ApiError(res.status, data, path);
   return data as T;
 }

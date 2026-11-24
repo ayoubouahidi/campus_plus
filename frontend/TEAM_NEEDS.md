@@ -289,6 +289,40 @@ Ayoub's branch runs locally as `ayoub-web`. His `POST`/`DELETE /api/me/avatar/` 
 | BE29 | Ayoub + Ahmed | **Merge `Ayoub-backend` into `Ahmed`** (4 conflicts, see above). Until then the real stack has no `/api/me/avatar/`. Note: `Ayoub-backend` still returns `GET /api/club-events/` as a bare array; `Ahmed`'s paginated shape is the contract |
 | H10 | Hamza | Keep `client_max_body_size 10m` in `Developer`'s nginx (it's there). Without it nginx refuses photos over 1 MB before the app sees them |
 
+### Merge into `Developer`: dry run (Mouad, 2026-11-24 23:45)
+
+`git merge-tree` of each branch into `Developer` (`43580e5`). Nothing is merged yet.
+
+| Order | Merge | Conflicts | How to resolve |
+|---|---|---|---|
+| 1 | `Ayoub-backend` → `Ahmed` (BE29) | 6 blocks in 4 files | See the BE29 guide below. **New (21:55):** Ayoub's "merging" commit `8ad51cc` doesn't merge `Ahmed`; it **removes** his 1337 campus default (`ALLOWED_42_CAMPUSES`), so an empty value allows every 42 campus again. Put it back, or set `ALLOWED_42_CAMPUSES=Benguerir,Khouribga,Tetouan,Rabat` in `.env.example` and compose |
+| 2 | `Ahmed` → `Developer` | 11 files | `Dockerfile`, `docker-compose.yml`, `.env.example`, `.vscode/settings.json`: keep **Developer's** (Hamza already took Ahmed's fixes, H1–H3), then add any Ahmed variable that's missing. `requirements.txt`, `.gitignore`: **union** of both. `README.md`: keep one, rewritten at the end. **`frontend/` in `Ahmed`** is an old copy (57 files from 2026-11-04): Ahmed should `git rm -r frontend` before merging. Otherwise it collides with the real one from `Mouad` (4 conflicts already) |
+| 3 | `Mouad` → `Developer` | 76 files | **71 are modify/delete:** Hamza's "Remove all files" deleted `frontend/` in `Developer`. Keep Mouad's: `git checkout --theirs -- frontend && git add frontend`. 4 content conflicts: `Dockerfile` (root, Django) → Developer's; `docker-compose.yml` → Developer's (it has the `frontend` service with `BACKEND_URL`, `AUTH_*`); `infrastructure/nginx/nginx.conf` → Developer's (it has `/api/auth/callback/` rate limit and `client_max_body_size 10m`); `Makefile` → Developer's + Mouad's `dev`, `lint`, `typecheck`, `build-check` targets (H8). Keep `docker-compose.dev.yml` from Mouad. Mouad deletes the root leftovers first: `package-lock.json` (empty), `infrastructure_documentation copy.md` |
+| 4 | `Ayoub` (dashboard) → `Developer` | 0 | Merges cleanly (`dashboard_campus/` only), but **H7**: it's not in `docker-compose.yml`. It uses Auth.js too, so it can't share `/api/auth/` with the student site: run it on its own port (e.g. `https://localhost:8443`) or a subdomain, with its own `AUTH_URL` and 42 redirect URI |
+
+**After the merge, before calling it done:** `cp .env.example .env` + secrets → `make re` on a **fast connection** (it re-downloads everything) → 42 login, email login, RSVP, live update in two browsers, notifications, photo upload, dashboard event shows on the student site, Grafana → then `master`.
+
+### BE29 merge guide: `Ahmed` + `Ayoub-backend` (Mouad, 2026-11-24 22:30)
+
+`git merge-tree origin/Ahmed origin/Ayoub-backend`: **6 conflict blocks in 4 files**. No migration clash: Ayoub adds none, Ahmed adds `core_data` 0007–0012 and `notifications` 0001–0002. In every block **both sides are wanted**:
+
+| File | Conflict | Keep |
+|---|---|---|
+| `accounts/views.py` (imports) | Ahmed imports `phone_reconciliation`; Ayoub imports `ALLOWED_IMAGE_FORMATS`, `validate_file_size`, `validate_image_content` | Both import lines |
+| `accounts/views.py` (before `logout`) | Ahmed added `@extend_schema(...)` (Swagger) on `logout`; Ayoub inserted `me_avatar` at the same place | `me_avatar` first (give it its own `@extend_schema`), then Ahmed's decorator + `logout` |
+| `accounts/tests.py` | Ahmed's 5 phone-reconciliation tests vs Ayoub's `test_me_rejects_invalid_phone_and_allows_clearing_it` | All 6 tests |
+| `dashboard/views.py` (imports) | `BoardStatsSerializer` vs `BoardClubSettingsSerializer` | Both |
+| `dashboard/views.py` (before `board_registrations_weekly`) | Ahmed's `@extend_schema` vs Ayoub's new `board_club_settings` | `board_club_settings` (with an `@extend_schema`), then Ahmed's decorator |
+| `dashboard/serializers.py` `get_status` | Ahmed: no linked user → `"active"`, with `-> str`; Ayoub: no linked user → `"inactive"` | **Decide together** what a member row without an account means; keep the `-> str` hint |
+
+**Breaks after the merge even without a text conflict (fix before pushing):**
+1. **Phone tests:** Ahmed's `test_me_only_updates_phone` (line 298) saves `"+123456"`; Ayoub's BE12 validation now refuses it (400). Use a Moroccan number (`"+212612345678"`). Also check that the validation runs **before** Ahmed's `classify_phone_pair` in `me`.
+2. **Campus list:** Ayoub's `get_campus_allow_list()` now **refuses every campus when the list is empty**, with a default of `Benguerir,Khouribga,Tetouan,Rabat` in settings. Ahmed's sync tests use `"Benguerir"`, so they should pass; any test that syncs a user from another campus (or with no campus) now gets 403. Use a 1337 campus, or `override_settings(ALLOWED_42_CAMPUSES=...)`.
+3. **Swagger:** Ahmed documents every view with `@extend_schema`; Ayoub's 2 new views (`me_avatar`, `board_club_settings`) need it too, or `/api/docs/` shows them without schemas.
+4. **README:** both edited it; read the merged text once.
+
+**Steps:** Ayoub (or Ahmed), on `Ayoub-backend`: `git merge origin/Ahmed` → solve the 6 blocks as above → fix points 1–3 → `python manage.py makemigrations --check` (must say "No changes") → `python manage.py test` (all green) → push → PR `Ayoub-backend` → `Ahmed`, reviewed by the other one. Then Mouad re-runs the photo tests (DOCS §26.7) on the merged backend.
+
 ### 42 keys received (Mouad, 2026-11-24 19:45)
 
 Ayoub sent `env.local.download` privately; the keys are in the root `.env` only, never in git. Checked:

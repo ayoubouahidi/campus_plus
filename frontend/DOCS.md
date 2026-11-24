@@ -6007,3 +6007,21 @@ type PhotoResult = { ok: true; avatarUrl: string | null } | { ok: false; error: 
 3. Why is checking `file.type` not enough, and what do the first bytes of a PNG look like?
 4. Why does the jwt callback ignore the data passed to `updateSession`?
 5. When is `URL.revokeObjectURL` called, and what happens if it never is?
+
+---
+
+## 27. A Django token that no longer exists must not crash the site (2026-11-24)
+
+- **Symptom (Mouad, after switching backends and `make re`):** every page showed "Something went wrong", error code `819157699`. Server log: `ApiError 401 on /api/club-events/?… {"detail": "Invalid token."}`.
+- **Cause:** the login cookie still held a Django token that the backend doesn't know: it came from another database (Ayoub's test backend, §26). The same happens for real when a token is deleted: Ahmed's `POST /api/auth/logout/` (used by Ayoub's dashboard) deletes **all** of the user's tokens, and a database reset does too. Every page sends the token, Django answers 401 even for public lists, and the page crashed.
+- **Fix:**
+  - `src/lib/api/client.ts` `apiFetch`: a **GET** refused with 401 **while sending a token** is retried once **without** it, so public reads (events, clubs, one event) still work, shown as to a visitor.
+  - Signed-in-only reads get their 401 again and now handle it in `src/lib/data.ts`: `getMe` → `null` (the profile uses the session user), `listEvents({ rsvped })` → `[]`, `getAttendees` → `[]`.
+  - Writes (RSVP, phone, photo) already turned 401 into "your session expired, log in again".
+- **Tradeoff:** retrying costs one extra request, and only for a broken token. The alternative was to sign the student out automatically when Django refuses the token. That's cleaner for the session, but it needs the cookie to change during a page render, which Server Components can't do. Kept as a possible later step: the student sees public data and a clear message as soon as they act.
+- **Checked:** with a cookie whose Django token doesn't exist, `/`, `/calendar`, `/clubs`, `/search`, `/profile` and `/events/1` render their real content (31 event links on `/`, 4 clubs, the event title), with no server error. Typecheck and lint clean.
+
+**Study questions**
+1. Why does a public page fail when the visitor's token is invalid, even though the page doesn't need a token?
+2. Why retry only GET requests, and not an RSVP?
+3. Why can't a Server Component sign the student out by itself?

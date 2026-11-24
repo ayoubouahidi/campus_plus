@@ -46,8 +46,13 @@ export const listEvents = cache(async (query: EventQuery = {}, token: string | n
   if (query.club) params.set('club', query.club);
   if (query.rsvped) params.set('rsvped', 'true');
   if (query.category) params.set('category', query.category);
-  const raws = await apiFetchAll<RawEvent>(`/api/club-events/?${params}`, { token });
-  return raws.map(toEventItem);
+  try {
+    return (await apiFetchAll<RawEvent>(`/api/club-events/?${params}`, { token })).map(toEventItem);
+  } catch (error) {
+    // "My events" with a token Django no longer knows (DOCS.md §27): none, like a signed-out visitor.
+    if (query.rsvped && error instanceof ApiError && error.status === 401) return [];
+    throw error;
+  }
 });
 
 // null when the event doesn't exist (404), so the page can call notFound(). Non-numeric ids (old links with
@@ -68,8 +73,13 @@ export const getEvent = cache(async (id: string, token: string | null = null): P
 export const getAttendees = async (event: EventItem, token: string | null): Promise<AttendeePreview[]> => {
   if (mocksOnly()) return getMockAttendees(event);
   if (!token) return [];
-  const page = await apiFetch<RawPage<RawAttendee>>(`/api/club-events/${event.id}/attendees/?page_size=100`, { token });
-  return page.results.map(toAttendee);
+  try {
+    const page = await apiFetch<RawPage<RawAttendee>>(`/api/club-events/${event.id}/attendees/?page_size=100`, { token });
+    return page.results.map(toAttendee);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return []; // stale token (DOCS.md §27): no names
+    throw error;
+  }
 };
 
 // RSVP or cancel (Step 14.3). POST and DELETE are idempotent on Django's side. Throws ApiError (401 signed out,
@@ -144,8 +154,14 @@ export interface Me {
 
 export const getMe = cache(async (token: string | null): Promise<Me | null> => {
   if (mocksOnly() || !token) return null;
-  const raw = await apiFetch<RawUser>('/api/me/', { token });
-  return { user: toUser(raw), phone: raw.phone ?? '' };
+  try {
+    const raw = await apiFetch<RawUser>('/api/me/', { token });
+    return { user: toUser(raw), phone: raw.phone ?? '' };
+  } catch (error) {
+    // The token is no longer valid (DOCS.md §27): /profile falls back to the session user instead of crashing.
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
+  }
 });
 
 // PATCH /api/me/ { phone } (Django keeps it on the student's UserMember). Returns the phone as Django saved it.
