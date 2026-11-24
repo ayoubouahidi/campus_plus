@@ -1,0 +1,81 @@
+import { cache } from 'react';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { getSessionState } from '@/auth';
+import { ClubEvents } from '@/components/clubs/ClubEvents';
+import { ClubHeader } from '@/components/clubs/ClubHeader';
+import { IconBase } from '@/components/ui/layout/navIcons';
+import { formatClubSince, getClubContact, getClubEvents } from '@/lib/clubs';
+import { getBackendToken } from '@/lib/api/token';
+import { getClub, listEvents } from '@/lib/data';
+import { eventsForVisitor } from '@/lib/events';
+import { getEventSchedules } from '@/lib/time';
+import { getRequestTime } from '@/lib/requestTime';
+
+interface ClubPageProps {
+  params: Promise<{ slug: string }>;
+}
+
+// One lookup per request, shared by generateMetadata and the page. Phase 7: GET /api/clubs/:slug here.
+const loadClub = cache(async (slug: string) => getClub(slug, await getBackendToken()));
+
+export async function generateMetadata({ params }: ClubPageProps): Promise<Metadata> {
+  const club = await loadClub((await params).slug);
+  if (!club) return { title: (await getTranslations('Meta'))('clubNotFound') };
+
+  return {
+    title: club.name, // + " | Campus Hub" from the root layout's title.template
+    description: club.description,
+    openGraph: { title: club.name, description: club.description, type: 'profile' },
+  };
+}
+
+// `/clubs/[slug]` (Phase 4). Server Component: looks the club up, splits its events at the request time,
+// formats dates in campus time, decides whether to send contact details, then renders.
+export default async function ClubPage({ params }: ClubPageProps) {
+  // Render per request: upcoming vs past uses the request time (same reason as `/`, DOCS.md §5.5).
+  const now = await getRequestTime();
+
+  const club = await loadClub((await params).slug);
+  if (!club) notFound(); // → ./not-found.tsx, HTTP 404
+
+  // The club's events (Django: ?club=<slug>; mocks: filtered), split at the request time.
+  const { upcoming, past } = getClubEvents(await listEvents({ club: club.slug }, await getBackendToken()), club.id, now);
+
+  // Decided on the server: signed-out visitors never receive the president's contact details, not even in the
+  // page data (DOCS.md §6.13). Same cached session read as the root layout (one cookie decode per request).
+  const isSignedIn = (await getSessionState()).status === 'signed-in';
+  const locale = await getLocale();
+  const t = await getTranslations('Clubs');
+
+  return (
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <Link
+        href="/clubs"
+        className="mb-6 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-slate-600 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:text-slate-400 dark:hover:text-slate-100"
+      >
+        {/* Points "back" in reading direction: flipped in RTL. */}
+        <IconBase className="h-4 w-4 rtl:-scale-x-100">
+          <path d="m15 18-6-6 6-6" />
+        </IconBase>
+        {t('allClubs')}
+      </Link>
+
+      <ClubHeader
+        club={club}
+        since={formatClubSince(club.created_at, locale)}
+        contact={isSignedIn ? getClubContact(club) : null}
+      />
+
+      <ClubEvents
+        className="mt-12"
+        // Signed out: no attendee names, no "Going" (DOCS.md §9.3, §9.4).
+        upcoming={eventsForVisitor(upcoming, isSignedIn)}
+        past={eventsForVisitor(past, isSignedIn)}
+        schedules={getEventSchedules([...upcoming, ...past], locale)}
+      />
+    </div>
+  );
+}

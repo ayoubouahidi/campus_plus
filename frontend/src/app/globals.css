@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Tailwind scans every non-ignored file for class names, Markdown included. The docs quote classes and
+   fragments of them ("[&…]:border-l"), which once produced invalid CSS and broke every page (DOCS.md §12.8).
+   Classes only live in src/, so the docs are left out. */
+@source not "../../*.md";
+
+/* Typography (DOCS.md §15.1b): Geist for text, Geist Mono for code and keyboard keys, both self-hosted by
+   next/font (layout.tsx sets --font-geist-sans / --font-geist-mono on <html>). `inline` makes Tailwind write the
+   var() where the font is used, so it resolves against <html>, where next/font defines it. Tailwind's base styles
+   apply --font-sans to the whole page; `font-mono` uses --font-mono. Before this, these two lines were missing:
+   the fonts were downloaded and preloaded but never applied (browser warning "preloaded but not used"). */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Arabic pages (DOCS.md §12.1): Noto Sans Arabic (layout.tsx, --font-arabic) first, then Geist for Latin words and
+   digits inside Arabic text, then the system fonts. */
+@layer base {
+  html:lang(ar) {
+    font-family: var(--font-arabic), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/* Overlay entrance animations: `animate-drawer-in`, `animate-fade-in` */
+@theme {
+  --animate-drawer-in: drawer-in 200ms ease-out;
+  /* Arabic (dir="rtl"): the drawer sits on the right, so it slides in from the right (DOCS.md §12.2). */
+  --animate-drawer-in-rtl: drawer-in-rtl 200ms ease-out;
+  --animate-fade-in: fade-in 200ms ease-out;
+
+  @keyframes drawer-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes drawer-in-rtl {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
