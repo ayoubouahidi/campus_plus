@@ -19,20 +19,32 @@ export default function LoginForm() {
     const data = new FormData(e.currentTarget);
     const email = String(data.get("email") ?? "");
     const password = String(data.get("password") ?? "");
-    const remember = data.get("remember") === "on";
 
     try {
-      void { email, password, remember };
-      setError("Use the 42 Intra button to sign in.");
+      const result = await signIn("credentials", {
+        email,
+        password,
+        callbackUrl: "/",
+        redirect: false,
+      });
+      if (result?.error) {
+        setError(
+          result.error === "AccessDenied"
+            ? "Campus Hub is for 1337 students"
+            : "Incorrect email or password. Try again."
+        );
+      } else if (result?.url) {
+        window.location.assign(result.url);
+      }
     } catch {
-      setError("Incorrect email or password. Try again.");
+      setError("Unable to sign in. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
   function handle42Login() {
-    void signIn("42-school", { callbackUrl: "/admin" });
+    void signIn("42-school", { callbackUrl: "/" });
   }
 
   return (
@@ -44,7 +56,7 @@ export default function LoginForm() {
           type="email"
           label="Email"
           autoComplete="email"
-          placeholder="you@um6p.ma"
+          placeholder="you@student.1337.ma"
           required
         />
 
@@ -115,7 +127,7 @@ export default function LoginForm() {
       </Button>
 
       <p className="mt-5 text-center text-xs text-slate-500">
-        Your club isn&rsquo;t on CampusPulse yet?{" "}
+        Your club isn&rsquo;t on Campus Hub yet?{" "}
         <Link href="/request-access" className="font-medium text-violet-600 hover:text-violet-700">
           Request access
         </Link>

@@ -7,6 +7,8 @@ export interface User {
     avatar_url : string | null;
     role: UserRole;
     club_id : string | null;
+    club_slug: string | null;
+    campus: string | null;
 }
 
 export interface AuthTokens{

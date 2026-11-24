@@ -1,14 +1,20 @@
-import { Input } from "@/components/ui/Input";
 import { Avatar } from "@/components/ui/Avatar";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import { backendFetch } from "@/lib/api";
 
-export default function Topbar({
+type DashboardIdentity = {
+  full_name: string;
+  avatar_url: string | null;
+};
+
+export default async function Topbar({
   title,
   subtitle,
 }: {
   title: string;
   subtitle?: string;
 }) {
+  const profile = await backendFetch<DashboardIdentity>("/api/me/");
   return (
     <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
       <div>
@@ -18,13 +24,7 @@ export default function Topbar({
 
       <div className="flex items-center gap-3">
         <ThemeToggle />
-        <Input
-          aria-label="Search dashboard"
-          className="w-64 rounded-full border-0 bg-slate-100 py-2"
-          placeholder="Search..."
-          leftIcon={<span className="h-2.5 w-2.5 rounded-full bg-slate-400" />}
-        />
-        <Avatar name="Salma Idrissi" size="sm" status="online" />
+        <Avatar src={profile.avatar_url} name={profile.full_name} size="sm" />
       </div>
     </header>
   );

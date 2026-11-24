@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sign in · CampusPulse",
+  title: "Sign in · Campus Hub",
 };
 
 export default function LoginLayout({

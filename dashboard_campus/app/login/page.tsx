@@ -2,9 +2,17 @@ import Image from "next/image";
 import LoginForm from "@/components/LoginForm";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 
-export const metadata = { title: "Sign in · CampusPulse" };
+export const metadata = { title: "Sign in · Campus Hub" };
+export const instant = false;
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const accessDenied = error === "AccessDenied";
+
   return (
     <main className="relative grid min-h-screen grid-cols-1 bg-white lg:grid-cols-2 dark:bg-slate-950">
       <div className="absolute right-6 top-6 z-10">
@@ -14,7 +22,7 @@ export default function LoginPage() {
       <div className="relative hidden lg:block">
         <Image
           src="/UM6P_Campus.webp"
-          alt="Campus building with orange concrete columns and glass facade"
+          alt="Campus building"
           fill
           priority
           sizes="50vw"
@@ -29,10 +37,15 @@ export default function LoginPage() {
             Welcome back
           </h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-            Sign in to manage your club on CampusPulse.
+            Sign in to manage your club on Campus Hub.
           </p>
 
           <LoginForm />
+          {accessDenied && (
+            <p role="alert" className="mt-4 text-sm font-medium text-red-600">
+              Campus Hub is for 1337 students
+            </p>
+          )}
         </div>
       </div>
     </main>
