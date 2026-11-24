@@ -49,8 +49,17 @@ def save_user_with_email_conflict_check(user, email):
 
 
 def get_campus_allow_list():
-    raw = os.getenv("ALLOWED_42_CAMPUSES", "")
-    return {value.strip().lower() for value in raw.split(",") if value.strip()}
+    raw = settings.ALLOWED_42_CAMPUSES
+    return {
+        normalize_campus_name(value)
+        for value in raw.split(",")
+        if value.strip()
+    }
+
+
+def normalize_campus_name(value):
+    normalized = " ".join(value.casefold().split())
+    return normalized[5:] if normalized.startswith("1337 ") else normalized
 
 
 @api_view(["POST"])
@@ -107,7 +116,10 @@ def auth_sync(request):
 
     campus = identity.get("campus", "")
     allowed_campuses = get_campus_allow_list()
-    if allowed_campuses and campus.lower() not in allowed_campuses:
+    if (
+        not allowed_campuses
+        or normalize_campus_name(campus) not in allowed_campuses
+    ):
         return Response(
             {"detail": "This campus is not allowed."},
             status=status.HTTP_403_FORBIDDEN,
