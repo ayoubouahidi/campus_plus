@@ -10,6 +10,23 @@ from .models import Announcement, AuditLog, MembershipRequest
 User = get_user_model()
 
 
+class BoardClubSettingsSerializer(serializers.ModelSerializer):
+    department_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Club
+        fields = [
+            "id",
+            "department_id",
+            "name",
+            "description",
+            "contact_email",
+            "meeting_day",
+            "meeting_time",
+            "meeting_location",
+        ]
+
+
 class AnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Announcement

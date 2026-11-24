@@ -1,9 +1,14 @@
 import hmac
 import os
+import uuid
+from io import BytesIO
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image, ImageOps
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
@@ -15,7 +20,8 @@ from rest_framework.decorators import (
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from core_data.models import UserMember
+from core_data.models import ALLOWED_IMAGE_FORMATS, UserMember
+from core_data.models import validate_file_size, validate_image_content
 from dashboard.models import AuditLog
 from .serializers import (
     AuthSyncSerializer,
@@ -193,6 +199,74 @@ def me(request):
         serializer.is_valid(raise_exception=True)
         request.user.phone = serializer.validated_data["phone"]
         request.user.save(update_fields=["phone"])
+    return Response(UserSerializer(request.user).data)
+
+
+@api_view(["POST", "DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def me_avatar(request):
+    member = UserMember.objects.filter(user=request.user).first()
+
+    if request.method == "DELETE":
+        if member and member.image_path:
+            member.image_path.delete(save=False)
+            member.image_path = ""
+            member.save(update_fields=["image_path"])
+            request.user.avatar_url = ""
+            request.user.save(update_fields=["avatar_url"])
+        return Response(UserSerializer(request.user).data)
+
+    image = request.FILES.get("file")
+    if image is None:
+        return Response({"file": ["This field is required."]}, status=400)
+    try:
+        validate_file_size(image)
+        validate_image_content(image)
+    except (
+        ValidationError,
+        SyntaxError,
+        OSError,
+        EOFError,
+        Image.DecompressionBombError,
+    ) as error:
+        messages = (
+            error.messages
+            if isinstance(error, ValidationError)
+            else ["The uploaded file is not a valid image."]
+        )
+        return Response({"file": messages}, status=400)
+
+    with Image.open(image) as opened_image:
+        image_format = opened_image.format
+        prepared_image = ImageOps.exif_transpose(opened_image)
+        prepared_image.thumbnail((512, 512))
+        if image_format == "JPEG" and prepared_image.mode not in ("RGB", "L"):
+            prepared_image = prepared_image.convert("RGB")
+        prepared_image.info.pop("exif", None)
+        output = BytesIO()
+        prepared_image.save(output, format=image_format, optimize=True)
+    extension = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}[image_format]
+    normalized_image = SimpleUploadedFile(
+        f"{uuid.uuid4().hex}{extension}",
+        output.getvalue(),
+        content_type=ALLOWED_IMAGE_FORMATS[image_format],
+    )
+
+    if member is None:
+        member = UserMember.objects.create(
+            user=request.user,
+            username=request.user.get_username(),
+        )
+    member.image_path = normalized_image
+    member.save(update_fields=["image_path"])
+    public_media_base_url = settings.DJANGO_PUBLIC_MEDIA_BASE_URL
+    request.user.avatar_url = (
+        f"{public_media_base_url}{member.image_path.url}"
+        if public_media_base_url
+        else request.build_absolute_uri(member.image_path.url)
+    )
+    request.user.save(update_fields=["avatar_url"])
     return Response(UserSerializer(request.user).data)
 
 

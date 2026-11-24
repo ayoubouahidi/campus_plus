@@ -74,6 +74,31 @@ class BoardApiTests(TestCase):
         self.assertEqual(announcements.status_code, 200)
         self.assertEqual(len(announcements.data), 1)
 
+    def test_board_can_read_and_update_only_supported_club_settings(self):
+        response = self.client.get("/api/board/club/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.club.pk)
+        self.assertEqual(response.data["department_id"], self.club.department_id)
+
+        updated = self.client.patch(
+            "/api/board/club/",
+            {"description": "Updated description", "meeting_day": "Friday"},
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.club.refresh_from_db()
+        self.assertEqual(self.club.description, "Updated description")
+        self.assertEqual(self.club.meeting_day, "Friday")
+
+        invalid = self.client.patch(
+            "/api/board/club/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.club.refresh_from_db()
+        self.assertTrue(self.club.is_active)
+
     def test_board_can_approve_own_club_join_request(self):
         response = self.client.post(
             f"/api/board/requests/{self.request.pk}/approve/",

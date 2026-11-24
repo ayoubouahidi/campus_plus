@@ -21,6 +21,7 @@ from .models import Announcement, AuditLog, MembershipRequest
 from .serializers import (
     AnnouncementSerializer,
     AuditLogSerializer,
+    BoardClubSettingsSerializer,
     BoardMemberSerializer,
     MembershipRequestSerializer,
     OrganizationAdminSerializer,
@@ -85,6 +86,43 @@ def board_stats(request):
             "registrations_last_month": registrations_last_month,
         }
     )
+
+
+@api_view(["GET", "PATCH"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsClubBoard])
+def board_club_settings(request):
+    club = board_club(request)
+    if club is None:
+        return Response({"detail": "No club is assigned to this board member."}, status=404)
+    if request.method == "PATCH":
+        allowed_fields = {
+            "name",
+            "description",
+            "contact_email",
+            "meeting_day",
+            "meeting_time",
+            "meeting_location",
+        }
+        unknown_fields = set(request.data) - allowed_fields
+        if unknown_fields:
+            return Response(
+                {"detail": "Unsupported club setting field."},
+                status=400,
+            )
+        serializer = BoardClubSettingsSerializer(
+            club,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        club = serializer.save()
+        AuditLog.objects.create(
+            actor=request.user,
+            action="club_settings_updated",
+            target=club.name,
+        )
+    return Response(BoardClubSettingsSerializer(club).data)
 
 
 @api_view(["GET"])

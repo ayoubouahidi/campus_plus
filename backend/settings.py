@@ -200,6 +200,7 @@ SPECTACULAR_SETTINGS = {
 import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+DJANGO_PUBLIC_MEDIA_BASE_URL = os.getenv('DJANGO_PUBLIC_MEDIA_BASE_URL', '').rstrip('/')
 
 
 # [ahmed] Configure Redis as the shared channel layer for WebSocket messaging.

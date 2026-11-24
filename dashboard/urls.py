@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AnnouncementViewSet,
+    board_club_settings,
     board_members,
     board_registrations_weekly,
     board_requests,
@@ -24,6 +25,7 @@ router = DefaultRouter()
 router.register("announcements", AnnouncementViewSet, basename="board-announcement")
 
 urlpatterns = [
+    path("api/board/club/", board_club_settings),
     path("api/board/stats/", board_stats),
     path("api/board/registrations/weekly/", board_registrations_weekly),
     path("api/board/members/", board_members),

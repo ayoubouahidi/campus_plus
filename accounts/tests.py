@@ -1,10 +1,14 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.db import IntegrityError, transaction
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from unittest.mock import patch
+from tempfile import TemporaryDirectory
+from io import BytesIO
+from PIL import Image
 
 from core_data.models import Club, Department, UserMember
 from dashboard.models import AuditLog
@@ -67,6 +71,7 @@ class AuthSyncTests(TestCase):
                 "full_name",
                 "login",
                 "avatar_url",
+                "phone",
                 "campus",
                 "role",
                 "club_id",
@@ -294,12 +299,33 @@ class UserApiTests(TestCase):
         self.assertIsNone(response.data["club_id"])
 
     def test_me_only_updates_phone(self):
-        response = self.client.patch("/api/me/", {"phone": "+123456"}, format="json")
+        response = self.client.patch(
+            "/api/me/",
+            {"phone": "06 12 34 56 78"},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.phone, "+123456")
+        self.assertEqual(self.user.phone, "+212612345678")
         self.assertEqual(self.user.username, "profile-user")
+
+    def test_me_rejects_invalid_phone_and_allows_clearing_it(self):
+        invalid = self.client.patch(
+            "/api/me/",
+            {"phone": "+123456"},
+            format="json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(
+            invalid.data["phone"][0],
+            "Enter a valid Moroccan mobile number.",
+        )
+
+        cleared = self.client.patch("/api/me/", {"phone": ""}, format="json")
+        self.assertEqual(cleared.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone, "")
 
     def test_logout_deletes_token(self):
         response = self.client.post("/api/auth/logout/")
@@ -307,6 +333,46 @@ class UserApiTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Token.objects.filter(user=self.user).exists())
         self.assertEqual(self.client.get("/api/me/").status_code, 401)
+
+    def test_avatar_upload_rejects_missing_or_invalid_images(self):
+        missing = self.client.post("/api/me/avatar/", {}, format="multipart")
+        invalid = self.client.post(
+            "/api/me/avatar/",
+            {"file": SimpleUploadedFile("avatar.png", b"not an image", content_type="image/png")},
+            format="multipart",
+        )
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn("file", missing.data)
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("file", invalid.data)
+
+    def test_avatar_upload_and_delete_update_the_user_profile(self):
+        output = BytesIO()
+        Image.new("RGB", (1024, 600), color="blue").save(output, format="PNG")
+        png = output.getvalue()
+        with TemporaryDirectory() as media_root:
+            with override_settings(
+                MEDIA_ROOT=media_root,
+                DJANGO_PUBLIC_MEDIA_BASE_URL="https://campushub.test",
+            ):
+                upload = self.client.post(
+                    "/api/me/avatar/",
+                    {"file": SimpleUploadedFile("avatar.png", png, content_type="image/png")},
+                    format="multipart",
+                )
+                self.assertEqual(upload.status_code, 200, upload.data)
+                self.user.refresh_from_db()
+                self.assertTrue(self.user.avatar_url.endswith(upload.data["avatar_url"].split("/")[-1]))
+                self.assertTrue(self.user.avatar_url.startswith("https://campushub.test/media/avatars/"))
+                member = UserMember.objects.get(user=self.user)
+                with Image.open(member.image_path.path) as saved_image:
+                    self.assertLessEqual(max(saved_image.size), 512)
+
+                deleted = self.client.delete("/api/me/avatar/")
+                self.assertEqual(deleted.status_code, 200)
+                self.user.refresh_from_db()
+                self.assertEqual(self.user.avatar_url, "")
 
 
 class ClubBoardPermissionTests(TestCase):
