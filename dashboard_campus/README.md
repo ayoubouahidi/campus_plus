@@ -16,6 +16,19 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## 42 School OAuth
+
+The dashboard uses `NEXTAUTH_URL` to construct the 42 callback URI. For the
+local HTTPS origin, set `NEXTAUTH_URL=https://localhost` in `.env.local` and
+register this URI in the 42 OAuth application settings:
+
+```text
+https://localhost/api/auth/callback/42-school
+```
+
+The redirect URI must match the origin where this Next.js dashboard is actually
+served.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
