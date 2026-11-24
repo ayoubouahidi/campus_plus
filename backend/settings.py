@@ -71,11 +71,6 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = 'accounts.User'
 BACKEND_INTERNAL_KEY = os.getenv('BACKEND_INTERNAL_KEY', '')
-DEFAULT_ALLOWED_42_CAMPUSES = 'Benguerir,Khouribga,Tetouan,Rabat'
-ALLOWED_42_CAMPUSES = (
-    os.getenv('ALLOWED_42_CAMPUSES', '').strip()
-    or DEFAULT_ALLOWED_42_CAMPUSES
-)
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

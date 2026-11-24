@@ -175,11 +175,9 @@ cutover; do not use `--fake` as a shortcut.
 
 The internal `POST /auth/sync` endpoint requires `x-internal-key` to match
 `BACKEND_INTERNAL_KEY`; it must only be reachable from the Next.js container.
-Configure `SUPERADMIN_LOGINS` as a comma-separated list. `ALLOWED_42_CAMPUSES`
-is a comma-separated allow-list and defaults to `Benguerir,Khouribga,Tetouan,Rabat`.
-An empty value is not treated as unrestricted: it denies 42 sign-ins. Campus
-names are matched case-insensitively, with an optional `1337 ` prefix. Do not
-commit `.env` files or send their secret values through chat.
+Configure `SUPERADMIN_LOGINS` as a comma-separated list and optionally
+`ALLOWED_42_CAMPUSES` as a comma-separated allow-list. Do not commit `.env`
+files or send their secret values through chat.
 
 The request uses the camelCase fields sent by the dashboard's current
 `auth.ts`: `fortyTwoId`, `login`, `email`, `firstName`, `lastName`, `imageUrl`,

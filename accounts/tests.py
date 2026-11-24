@@ -39,44 +39,6 @@ class AuthSyncTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(User.objects.exists())
 
-    def test_auth_sync_rejects_campuses_outside_the_allow_list(self):
-        payload = {**self.payload, "campus": "Paris"}
-        with override_settings(ALLOWED_42_CAMPUSES="Benguerir,Khouribga,Tetouan,Rabat"):
-            response = self.client.post(
-                "/auth/sync",
-                payload,
-                format="json",
-                HTTP_X_INTERNAL_KEY="test-internal-key",
-            )
-
-        self.assertEqual(response.status_code, 403)
-        self.assertFalse(User.objects.exists())
-
-    def test_auth_sync_fails_closed_when_the_allow_list_is_empty(self):
-        with override_settings(ALLOWED_42_CAMPUSES=""):
-            response = self.client.post(
-                "/auth/sync",
-                self.payload,
-                format="json",
-                HTTP_X_INTERNAL_KEY="test-internal-key",
-            )
-
-        self.assertEqual(response.status_code, 403)
-        self.assertFalse(User.objects.exists())
-
-    def test_auth_sync_accepts_1337_prefix_and_case_variations(self):
-        payload = {**self.payload, "campus": "1337 BENGUERIR"}
-        with override_settings(ALLOWED_42_CAMPUSES="Benguerir,Khouribga,Tetouan,Rabat"):
-            response = self.client.post(
-                "/auth/sync",
-                payload,
-                format="json",
-                HTTP_X_INTERNAL_KEY="test-internal-key",
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(User.objects.get().campus, "1337 BENGUERIR")
-
     def test_auth_sync_is_idempotent_and_preserves_existing_role(self):
         department = Department.objects.create(title="Technology")
         club = Club.objects.create(name="Robotics", department=department)

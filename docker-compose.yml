@@ -32,7 +32,6 @@ services:
 
       # [ahmed] Allow Nginx's Docker hostname and localhost.
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,web
-      ALLOWED_42_CAMPUSES: ${ALLOWED_42_CAMPUSES:-Benguerir,Khouribga,Tetouan,Rabat}
 
     depends_on:
       db:
