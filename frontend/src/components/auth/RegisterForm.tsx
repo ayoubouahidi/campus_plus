@@ -10,6 +10,7 @@ import { useFieldError } from '@/hooks/useFieldError';
 import { loginHref } from '@/lib/login';
 import {
   PASSWORD_MIN_LENGTH,
+  STUDENT_EMAIL_DOMAIN,
   REGISTER_INITIAL_STATE,
   YEARS,
   firstErrorField,
@@ -131,6 +132,8 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
           autoComplete="email"
           inputMode="email"
           spellCheck={false}
+          placeholder={`login@${STUDENT_EMAIL_DOMAIN}`}
+          helperText={t('emailStudentHelp')}
           defaultValue={values.email}
           error={errorText(fieldErrors.email)}
           onChange={clearError('email')}

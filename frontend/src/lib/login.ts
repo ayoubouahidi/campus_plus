@@ -62,6 +62,7 @@ export const getLoginErrorKind = (code: string | string[] | undefined | null): L
 export type ValidationKey =
   | 'emailRequired'
   | 'emailInvalid'
+  | 'emailNotStudent'
   | 'emailTaken'
   | 'passwordRequired'
   | 'passwordChoose'

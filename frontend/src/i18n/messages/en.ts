@@ -341,6 +341,7 @@ const en = {
     lastName: 'Last name',
     confirmPassword: 'Confirm password',
     passwordHelp: 'At least {min} characters.',
+    emailStudentHelp: 'Only 1337 student emails (@student.1337.ma).',
     year: 'Year of study',
     yearOption: '{year, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} year',
     choose: 'Choose…',
@@ -368,6 +369,7 @@ const en = {
   Validation: {
     emailRequired: 'Enter your email.',
     emailInvalid: 'Enter a valid email, like name@example.com.',
+    emailNotStudent: 'Use your 1337 student email, ending in @student.1337.ma.',
     emailTaken: 'This email already has an account.',
     passwordRequired: 'Enter your password.',
     passwordChoose: 'Choose a password.',

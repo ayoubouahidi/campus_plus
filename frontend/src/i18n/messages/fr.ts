@@ -328,6 +328,7 @@ const fr = {
     lastName: 'Nom',
     confirmPassword: 'Confirmer le mot de passe',
     passwordHelp: 'Au moins {min} caractères.',
+    emailStudentHelp: 'Uniquement les e-mails étudiants 1337 (@student.1337.ma).',
     year: 'Année d’études',
     yearOption: '{year, selectordinal, one {#re} other {#e}} année',
     choose: 'Choisir…',
@@ -355,6 +356,7 @@ const fr = {
   Validation: {
     emailRequired: 'Saisissez votre e-mail.',
     emailInvalid: 'Saisissez un e-mail valide, comme nom@exemple.com.',
+    emailNotStudent: 'Utilisez votre e-mail étudiant 1337, qui se termine par @student.1337.ma.',
     emailTaken: 'Cet e-mail a déjà un compte.',
     passwordRequired: 'Saisissez votre mot de passe.',
     passwordChoose: 'Choisissez un mot de passe.',

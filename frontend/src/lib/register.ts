@@ -87,6 +87,16 @@ const isTooSimilar = ({ password, first_name, last_name, email }: RegisterValues
   return parts.some((part) => lowered.includes(part));
 };
 
+// Only 1337 students can sign up (Mouad's decision, 2026-11-24, TEAM_NEEDS §1i): the address must be at
+// exactly `student.1337.ma`. "Exactly", not "ends with": `x@evil-student.1337.ma` is refused. Django must apply
+// the same rule (BE21) and verify the address by email (BE22) since anyone can type someone else's address.
+// Login is not restricted here: board members and staff accounts may use other addresses; Django decides.
+export const STUDENT_EMAIL_DOMAIN = 'student.1337.ma';
+export const isStudentEmail = (email: string): boolean => {
+  const parts = email.trim().toLowerCase().split('@');
+  return parts.length === 2 && parts[0] !== '' && parts[1] === STUDENT_EMAIL_DOMAIN;
+};
+
 // Messages say what to do. Order = form order, so the first error is the first field to fix.
 export const validateRegistration = (values: RegisterValues): RegisterFieldErrors => {
   const errors: RegisterFieldErrors = {};
@@ -98,6 +108,7 @@ export const validateRegistration = (values: RegisterValues): RegisterFieldError
 
   if (!values.email.trim()) errors.email = { key: 'emailRequired' };
   else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = { key: 'emailInvalid' };
+  else if (!isStudentEmail(values.email)) errors.email = { key: 'emailNotStudent' };
 
   if (!values.password) errors.password = { key: 'passwordChoose' };
   else if (values.password.length < PASSWORD_MIN_LENGTH) errors.password = { key: 'passwordTooShort', values: { min: PASSWORD_MIN_LENGTH } };

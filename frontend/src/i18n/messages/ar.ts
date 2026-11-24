@@ -340,6 +340,7 @@ const ar = {
     lastName: 'الاسم العائلي',
     confirmPassword: 'تأكيد كلمة المرور',
     passwordHelp: '{min} أحرف على الأقل.',
+    emailStudentHelp: 'بريد طلاب 1337 فقط (‎@student.1337.ma).',
     year: 'سنة الدراسة',
     yearOption:
       '{year, select, 1 {السنة الأولى} 2 {السنة الثانية} 3 {السنة الثالثة} 4 {السنة الرابعة} 5 {السنة الخامسة} 6 {السنة السادسة} 7 {السنة السابعة} other {السنة {year}}}',
@@ -367,6 +368,7 @@ const ar = {
   Validation: {
     emailRequired: 'أدخل بريدك الإلكتروني.',
     emailInvalid: 'أدخل بريدًا إلكترونيًا صحيحًا، مثل name@example.com.',
+    emailNotStudent: 'استخدم بريدك الطلابي في 1337، الذي ينتهي بـ ‎@student.1337.ma.',
     emailTaken: 'هذا البريد الإلكتروني مرتبط بحساب بالفعل.',
     passwordRequired: 'أدخل كلمة المرور.',
     passwordChoose: 'اختر كلمة مرور.',

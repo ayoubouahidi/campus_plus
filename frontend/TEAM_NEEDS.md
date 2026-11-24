@@ -178,14 +178,66 @@ The frontend builds each part as soon as its endpoint exists (Edit profile start
 | BE18 | Ayoub | *(Optional)* **Edit the name for email accounts:** `PATCH /api/me/` with `first_name` / `last_name` (1–150 characters, letters, spaces, `-` and `'`), refused (**403**) for 42 accounts, whose name comes from 42 | Students who signed up with email and made a typo can't fix their name today |
 
 | BE19 | Ayoub | **Run Django's password validators on `POST /api/signup/`:** call `django.contrib.auth.password_validation.validate_password(password, user)` (common passwords, only digits, too similar to the name or email, minimum length), and return the messages as a 400 field error `{"password": ["…", "…"]}`. **Tested 2026-11-23:** `"password": "12345678"` → **201, account created** | Mandatory item: forms validated on both sides. The student site already refuses only-digit passwords and passwords containing the name or email, but anyone calling Django directly gets a weak password through |
-| BE20 | Ayoub | **Stop accepting `club_id` at sign-up:** remove it from `SignupSerializer` (or ignore it). **Tested 2026-11-23:** sign-up with `"club_id": 1` → 201 and the new account is **immediately a member of LEET Dev**, with no board approval | Anyone can join any club by adding one field to the sign-up request, bypassing the join-request flow. The student site no longer sends it (decision: no club at sign-up, DOCS §23) |
+| BE20 | Ayoub | **Stop accepting `club_id` at sign-up:** remove it from `SignupSerializer` entirely (decision §1i: students have no club relation). **Tested 2026-11-23:** sign-up with `"club_id": 1` → 201 and the new account is **immediately a member of LEET Dev**, with no board approval | Anyone can join any club by adding one field to the sign-up request, bypassing the join-request flow. The student site no longer sends it (decision: no club at sign-up, DOCS §23) |
 
 **What the student site does meanwhile:**
 - Edit profile (phone, browser-side validation with the BE12 rule) is built now.
 - The profile reads `/api/me/` on the server, so a change shows at once (the login cookie keeps the values from login time).
 - The photo upload is built behind a `hasAvatarUpload` switch and turned on when BE16 is merged.
 
+## 1i. Sign-up for 1337 students only, with email verification (Mouad, 2026-11-24, owner Ayoub)
+
+**Decisions (Mouad, 2026-11-24):**
+1. **Students have no relation to clubs.** They see events and clubs, RSVP to events, and that's all: no joining, no membership, no club at sign-up. Club membership exists only for board members, managed in the dashboard. (The student site already has no join button; BE13–BE15 were dropped; BE20 removes the last way in.)
+2. **Only 1337 students can have an account**, and there are two ways in, both ending in the same kind of account:
+   - **"Continue with 42"**: one click, nothing to fill in. 42 proves who the student is and their campus (`ALLOWED_42_CAMPUSES` = the 1337 campuses, BE3).
+   - **Email sign-up** (mandatory in the subject): only addresses ending in **`@student.1337.ma`**, and the address must be **verified** by a link sent to it before the account can be used.
+
+**Why verification and not just a domain check:** anyone can type `someone.else@student.1337.ma`. Without proof that the person owns the mailbox, they could create an account in another student's name. Worse, today that also **locks the real student out**: their 42 login then gets `409 "This email is already linked to another account"` (`accounts/views.py`, 42 sync).
+
+**What Django does today (checked on `Ahmed` `6a0ca1f`):** `POST /api/signup/` accepts any email domain, saves the account and returns a login token at once (no verification). No email sending is configured.
+
+### Requests
+
+| # | Who | What we need (contract) | Why |
+|---|---|---|---|
+| BE21 | Ayoub | **Only `@student.1337.ma` on `POST /api/signup/`.** In `SignupSerializer.validate_email`, after `strip().lower()`: the part after the last `@` must be **exactly** `student.1337.ma` (not "ends with": `x@evil-student.1337.ma` must fail). Otherwise **400** `{"email": ["Use your 1337 student email (…@student.1337.ma)."]}` | Only 1337 students; checked in Django because anyone can call the API directly. The student site checks the same rule in the browser |
+| BE22 | Ayoub | **Sign-up doesn't log in any more; it sends a verification link.** Add `email_verified` (bool, default `False`) to `User` (not `is_active`: that already means "account disabled", and the 42 login treats it so). `POST /api/signup/` creates the account with `email_verified=False`, sends the email (BE26) and returns **201** `{"detail": "verification-sent", "email": "<address>"}`, **no token**. The link is `https://<host>/auth/verify?uid=<uidb64>&token=<token>`: build the token with a subclass of Django's `PasswordResetTokenGenerator` whose hash includes `email_verified`, so a used link stops working. Valid **24 h**. New endpoint `POST /api/signup/verify/` `{"uid", "token"}` → sets `email_verified=True` and returns **200** `{"token", "member"}` exactly like today's sign-up response (the student is logged in); bad or expired → **400** `{"detail": "invalid-or-expired"}` | Proves the student owns the mailbox. Signed token: no table to store, one click, works from the phone's mail app |
+| BE23 | Ayoub | **Resend the link:** `POST /api/signup/resend/` `{"email"}` → **always 200** `{"detail": "verification-sent"}`, whether or not an unverified account exists (don't reveal who has an account). Throttle per email and per IP (e.g. 1 per minute, 5 per day; DRF `ScopedRateThrottle`) → **429** | Lost or expired emails, without becoming a way to spam a mailbox or list accounts |
+| BE24 | Ayoub | **Login of an unverified account:** `POST /api/auth/login/` with the **right** password but `email_verified=False` → **403** `{"detail": "email-not-verified"}`. Wrong password → the usual 401 (so this answer never reveals anything to someone without the password) | The student site then shows "Confirm your email first" with a "Send the link again" button (BE23) |
+| BE25 | Ayoub | **42 login with an address that already has an email account** (42 sync in `accounts/views.py`, today always 409): **verified** email account → **link it**: set `forty_two_id`, `campus`, `avatar_url` on that account and keep its password, so both ways log into the same account. **Unverified** email account → it was never proven, so **delete it** and create the 42 account as usual. Accounts created by 42 get `email_verified=True`. Keep 409 only for the real conflict (a *different* `forty_two_id` already owns the address) | The real student must never be locked out by someone who typed their address; one student = one account whichever way they come in |
+| BE26 | Ayoub + Hamza | **Sending email.** In settings, from the environment: `EMAIL_BACKEND` (dev: `django.core.mail.backends.console.EmailBackend`, prints the email in `docker compose logs backend`; real run: SMTP), `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`, `EMAIL_USE_TLS=true`, `EMAIL_HOST_USER=campushub.1337.team@gmail.com`, `EMAIL_HOST_PASSWORD` (a Gmail **app password**, never the account password, only in `.env`), `DEFAULT_FROM_EMAIL="Campus Hub <campushub.1337.team@gmail.com>"`, `FRONTEND_URL=https://localhost` (to build the link). **Hamza:** add the names to `.env.example` with empty values. Email: plain text + simple HTML, subject "Confirm your Campus Hub email", the link, "valid 24 hours", "If you didn't sign up, ignore this email" | Without it nothing can be sent. The console backend lets everyone test without a real mailbox |
+| BE27 | Ayoub | *(Optional)* **Clean up:** a management command that deletes accounts still unverified after 7 days (`python manage.py purge_unverified`), run at start or by hand | Abandoned sign-ups don't keep an address taken |
+
+**Tests Ayoub should add:** other domain → 400; `x@evil-student.1337.ma` → 400; sign-up → 201 without token and one email in `mail.outbox`; verify with the right link → 200 + token; the same link twice → 400; expired link → 400; login before verifying → 403 `email-not-verified`, wrong password → 401; resend for an unknown email → 200 and nothing sent; 42 login over a verified email account → same user, linked; over an unverified one → that account deleted, 42 account created.
+
+**What the student site does (Mouad):**
+- Now (no backend needed): the sign-up form accepts only `@student.1337.ma` (browser and server action, same rule as BE21), with the hint "Use your 1337 student email".
+- When BE22–BE24 are merged: the "Check your email" screen after sign-up (with "Send the link again"), the `/auth/verify` page that confirms the link and logs the student in, and the "Confirm your email first" message on the login form.
+- The privacy policy will say we send one verification email to that address.
+
 ## 1g. Review of `Developer` (Hamza) and Ahmed's BE11 answer (Mouad, 2026-11-23)
+
+### Re-check (Mouad, 2026-11-24)
+
+- **Ahmed ✅:** `feat/ahmed-final-requirements` (PR #6) and `feat/ahmed-test-isolation` (PR #8, tests no longer depend on `.env.example` or `DJANGO_PUBLIC_MEDIA_BASE_URL`) are merged into `Ahmed` (`6a0ca1f`).
+- **Hamza:** the fixes are split over two branches. `Developer` (`f50dd10`) has H1 and H8. `codex/infra-config-fixes` (`d741964`, **not merged into `Developer` yet**) adds H2, H3 and H5. Checked on that branch: `docker compose config` valid, `nginx -t` OK.
+
+| # | Status |
+|---|---|
+| H1 Dockerfile `backend.asgi` | ✅ |
+| H2 `.env.example` complete (`AUTH_*`, `BACKEND_URL`, `BACKEND_INTERNAL_KEY`, media, CSRF, HTTPS; `NEXT_PUBLIC_API_URL` removed) | ✅ on `codex/infra-config-fixes` |
+| H3 placeholder secret + generate command, `DEBUG=false`, `DJANGO_HTTPS_ENABLED=true` | ✅ on `codex/infra-config-fixes` |
+| H4 Grafana dashboard | ❌ `campus-hub.json` still 0 bytes; images still `:latest` |
+| H5 rate limit on `/api/auth/callback/` (5 r/min, burst 5) | ✅ on `codex/infra-config-fixes` (a leftover `/api/v1/public/` block is harmless) |
+| H6 | note only, nothing to do |
+| H7 dashboard in compose | ❌ not yet (needs Ayoub's AY1 answer) |
+| H8 Makefile `dev`, `lint`, `typecheck`, `build-check` | ✅ (`docker-compose.dev.yml` comes from `Mouad` at the merge) |
+| H9 per-IP limit | open, not blocking |
+
+**Hamza: merge `codex/infra-config-fixes` into `Developer`, then do H4.** `Developer` has no `frontend/` or backend code: they come in from `Mouad` and `Ahmed` at the merge (M4).
+
+- **Ayoub:** no new push since 2026-11-23 00:54 (`Ayoub` `54c28b4`, `Ayoub-backend` `e05d94b`). The 42 keys are secrets, so they never appear in git: he sends `AUTH_42_SCHOOL_ID` / `AUTH_42_SCHOOL_SECRET` privately for `.env`, with the redirect URI `https://localhost/api/auth/callback/42-school` registered in the 42 app. Still not in `Ahmed`: BE12 (phone accepts any text), BE16/BE17 (photo upload), BE19 (no `validate_password` on sign-up), BE20 (`SignupSerializer` still takes `club_id`).
 
 ### Ahmed: `feat/ahmed-final-requirements` at `792ac56`, BE11 answered ✅
 

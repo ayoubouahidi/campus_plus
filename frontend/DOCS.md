@@ -5814,3 +5814,76 @@ Meanwhile our two layers apply the two cheapest rules:
 3. What could a student do with `club_id` in the sign-up request, and how was it fixed on each side?
 4. Which password rules run in the browser, and which should stay on the server (and why)?
 5. Why does the login form show one message for "wrong email" and "wrong password"?
+
+## 24. Sign-up for 1337 students only (2026-11-24)
+
+**Decisions (Mouad, 2026-11-24, TEAM_NEEDS §1i):**
+- **Students have no relation to clubs.** They see events and clubs and RSVP to events; no joining, no membership, no club at sign-up (§23.2 already removed the field). Club membership is only for board members, in the dashboard.
+- **Only 1337 students get an account**, two ways in:
+  - **"Continue with 42"**: nothing to fill in. 42 proves identity and campus.
+  - **Email sign-up**: only `…@student.1337.ma`, and the address will be **verified by an emailed link** before the account works.
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 24.1 | `@student.1337.ma` rule on the sign-up form (browser + server action), hint and placeholder; backend requests BE21–BE27 | 🧪 checks run, waiting for Mouad's check |
+| 24.2 | "Check your email" screen, `/auth/verify` page, "Confirm your email first" on login, privacy policy line about the email | ⏸ waits for Ayoub's BE22–BE24 (not built before the endpoints exist) |
+
+### 24.1 The student-email rule (2026-11-24)
+
+#### 1. Feature & files
+- `src/lib/register.ts`: `STUDENT_EMAIL_DOMAIN = 'student.1337.ma'`, `isStudentEmail(email)`, used in `validateRegistration`.
+- `src/lib/login.ts`: `ValidationKey` gets `emailNotStudent`.
+- `src/components/auth/RegisterForm.tsx`: the email field has the placeholder `login@student.1337.ma` and the hint `Auth.emailStudentHelp`.
+- The 3 message files: `Validation.emailNotStudent`, `Auth.emailStudentHelp`.
+
+#### 2. Business & product purpose
+Campus Hub is for 1337 students only (§13). Every student has a `login@student.1337.ma` address from 42, so sign-up asks for exactly that. The browser tells the student at once, before sending; the server action refuses it again, because a server action is a public endpoint.
+
+**What this check does not do:** prove the student owns the address. Anyone can type `someone.else@student.1337.ma`. That's why Django must send a verification link (BE22) and link a 42 login only to a **verified** email account (BE25). Today Django's 42 login answers 409 when an email account already uses the address, so an impostor's sign-up would lock the real student out: BE25 fixes that.
+
+#### 3. Core concepts & engineering decisions
+- **Exact domain, not "ends with".** The address is trimmed, lower-cased and split on `@`; it must have exactly two parts, a non-empty local part, and the domain must equal `student.1337.ma`. `endsWith('student.1337.ma')` would let `x@evil-student.1337.ma` through.
+- **Order of messages:** empty → "Enter your email"; bad format → "Enter a valid email"; right format, wrong school → "Use your 1337 student email". The student always gets the most useful message for what they typed.
+- **One function, two layers:** `validateRegistration` runs in the form (`onSubmit`) and in the register server action, so the rule can't drift between them.
+- **Login is not restricted.** Board members and staff accounts can use other addresses, and login answers must not reveal which addresses exist; Django decides.
+- **The hint doesn't promise a confirmation link yet.** No email is sent until BE22 exists; the wording will be added with step 24.2.
+- **Accessibility:** the hint is the field's `aria-describedby`; when there's an error, the error replaces it (the `Input` primitive).
+
+#### 4. Architectural tradeoffs
+| Option | Why not |
+|---|---|
+| Domain check only, no verification | Anyone could create an account with another student's address and block their 42 login |
+| 42 only, set a password later | No email needed, but the subject's email sign-up would be missing as a real form |
+| A 6-digit code instead of a link | Needs a stored, hashed code and an attempts limit; a signed link (Django's token generator) needs no table and is one click |
+| `type="email"` + `pattern` attribute only | The browser check can be skipped; the server action and Django must check anyway, and our message is clearer and translated |
+
+#### 5. Contract
+```ts
+export const STUDENT_EMAIL_DOMAIN = 'student.1337.ma';
+export const isStudentEmail: (email: string) => boolean; // trimmed, any case
+// validateRegistration(values).email: { key: 'emailRequired' | 'emailInvalid' | 'emailNotStudent' } | undefined
+```
+
+#### 6. Usage
+```ts
+isStudentEmail(' SIdrissi@Student.1337.MA '); // true
+isStudentEmail('x@evil-student.1337.ma');     // false
+```
+
+**Verified** (real `register.ts` run in Node):
+
+| Typed | Result |
+|---|---|
+| `sidrissi@student.1337.ma`, ` SIdrissi@Student.1337.MA ` | accepted |
+| `x@1337.ma`, `x@gmail.com`, `x@evil-student.1337.ma`, `x@student.1337.ma.com`, `x@sub.student.1337.ma` | "Use your 1337 student email" |
+| `@student.1337.ma`, `a@b@student.1337.ma` | "Enter a valid email" |
+
+`tsc` passes, ESLint 0 problems; `/auth/register` shows the placeholder and the hint in the 3 languages.
+
+**Study questions:**
+1. Why is `email.endsWith('student.1337.ma')` a security bug? Give an address it would wrongly accept.
+2. The browser and the server action already refuse other domains. Why must Django check it too (BE21)?
+3. Why doesn't the domain check prove the person is a 1337 student, and what does (two answers)?
+4. Why is a link signed with `PasswordResetTokenGenerator` single-use once its hash includes `email_verified`?
+5. Why must "resend the link" (BE23) answer 200 even for an address with no account?
+6. Why is the login form not restricted to `@student.1337.ma`?
