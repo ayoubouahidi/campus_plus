@@ -56,26 +56,26 @@ Images must be a real JPEG, PNG, or WEBP file and must be smaller than 2 MB.
 
 ## Filtering and search
 
-Club events can be filtered by department:
+Club events can be filtered by department slug:
 
 ```text
-GET /api/club-events/?department=1
+GET /api/club-events/?department=1337
 ```
 
-They can also be filtered by a word in the event name or description:
+They can also be filtered by the fixed event category:
 
 ```text
-GET /api/club-events/?category=football
+GET /api/club-events/?category=Tech
 ```
 
 Both filters can be used at the same time:
 
 ```text
-GET /api/club-events/?department=1&category=football
+GET /api/club-events/?department=1337&category=Tech
 ```
 
-The event endpoint also supports search. Search checks the event name,
-description, and department title:
+The event endpoint also supports search across event name, description, club
+name, and location:
 
 ```text
 GET /api/club-events/?search=technology
@@ -122,10 +122,23 @@ signup and 42 sync require a nonblank email. Roles are `STUDENT`,
 
 `core_data.UserMember` remains the club/department profile and links one-to-one
 to that identity. The agreed canonical location for `phone` is
-`UserMember.phone`, but that field is not yet present in this checkout; the
-temporary `User.phone` remains until Ahmed provides the `core_data` field and
-migration. Existing values will be copied only when the profile phone is blank;
-conflicting nonblank values must be resolved before migration.
+`UserMember.phone`, and Ahmed's `core_data.0007` adds that field. Ayoub's
+temporary `User.phone` is preserved for compatibility. Migration
+`core_data.0011` validates all populated account/profile pairs before copying
+an account phone into a blank canonical profile phone. Different nonblank
+values, or an account phone without a related profile, stop the migration
+without partial writes and require manual resolution. Its reverse operation is
+intentionally a no-op because a safe rollback cannot distinguish a backfilled
+value from a value that was already canonical.
+
+On a fresh database, `0011` normally runs before existing users are transferred
+and therefore cannot reconcile data that arrives later. The controlled transfer
+procedure must run `manage.py reconcile_profile_phones --dry-run` after account
+and profile rows exist, resolve every reported blocker, then run the same command
+with `--apply` inside the isolated rehearsal and again at the approved cutover.
+The operation is atomic and idempotent. Reports contain counts and record IDs
+only; phone values are never printed. Legacy `auth_user` rows are a separate
+schema and must not be treated as though they contain `accounts.User.phone`.
 
 `User.role` is the authorization role. `UserMember.role` is preserved profile
 data and is not an authorization source until an explicit mapping is approved.
@@ -152,7 +165,7 @@ multiple board users.
 | `MembershipRequest.member` | `core_data.UserMember` | Foreign key, cascade |
 | `MembershipRequest.decided_by` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
 | `AuditLog.actor` | `settings.AUTH_USER_MODEL` | Foreign key, set null |
-| `Rsvp` | Not present on this branch | Ahmed-owned; should use `settings.AUTH_USER_MODEL` |
+| `Rsvp.user` | `settings.AUTH_USER_MODEL` | Foreign key, cascade; created in `core_data.0010_rsvp` |
 | `ClubBoardAssignment.user` | `settings.AUTH_USER_MODEL` | One-to-one explicit board assignment |
 | `ClubBoardAssignment.club` | `core_data.Club` | Foreign key, cascade |
 
@@ -176,8 +189,9 @@ cutover; do not use `--fake` as a shortcut.
 The internal `POST /auth/sync` endpoint requires `x-internal-key` to match
 `BACKEND_INTERNAL_KEY`; it must only be reachable from the Next.js container.
 Configure `SUPERADMIN_LOGINS` as a comma-separated list and optionally
-`ALLOWED_42_CAMPUSES` as a comma-separated allow-list. Do not commit `.env`
-files or send their secret values through chat.
+`ALLOWED_42_CAMPUSES` as a comma-separated allow-list. When the campus list is
+unset or empty, campus filtering is disabled. Do not commit `.env` files or
+send their secret values through chat.
 
 The request uses the camelCase fields sent by the dashboard's current
 `auth.ts`: `fortyTwoId`, `login`, `email`, `firstName`, `lastName`, `imageUrl`,
@@ -298,17 +312,18 @@ different Django processes deliver messages to connected clients.
   this mode. There is no fallback to development tokens.
 - An unsupported value prevents application startup.
 
-The API still uses DRF tokens. Signup at `/api/signup/` returns a DRF token;
-it does **not** issue JWTs. The frontend session remains a mock. No JWT login,
-cookie issuance, refresh, logout, or 42 OAuth integration exists in this
-checkout. A NextAuth session token is not an established backend credential.
+The REST API uses DRF tokens. Email signup/login, `/api/me/`, logout and the
+internal 42 profile-sync contract are implemented. `POST /api/realtime/token/`
+exchanges an authenticated REST request for a short-lived socket JWT; Django
+does not set the browser cookie. An Auth.js session token is not automatically
+a backend SimpleJWT credential.
 
 For local JWT mode, start the existing Daphne application with
 `WS_AUTH_BACKEND=jwt .venv/bin/daphne backend.asgi:application` after configuring
 the environment, database, and Redis. This does not create a login endpoint.
 The authentication teammate must agree on issuance and set the `ws_access`
 cookie with `HttpOnly`, `Secure`, an appropriate `SameSite` policy, and a path
-covering `/ws/calendar/`. Middleware cannot infer these attributes from an
+covering `/ws/`. Middleware cannot infer these attributes from an
 incoming Cookie header. Keep access and refresh credentials out of URLs.
 
 No `SIMPLE_JWT` overrides are currently declared. Installed defaults use
@@ -319,9 +334,10 @@ an experimental verification contract, pending agreement with the login owner.
 
 Origins are checked using `AllowedHostsOriginValidator` and `ALLOWED_HOSTS`.
 This is a host-based policy, not an explicit HTTPS-origin allowlist. All
-authenticated users currently share the calendar group; private notifications
-are not implemented. Authentication runs at connection time: expiry, account
-disablement, logout, and revocation do not yet close an existing socket.
+authenticated users share the public calendar group; private notifications use
+a separate per-user group at `/ws/notifications/`. JWT expiry closes both
+consumers with code 4401. Logout/revocation does not close a socket before that
+JWT deadline.
 
 ### Environment and Docker
 
@@ -331,6 +347,10 @@ local default. Setting `POSTGRES_HOST` selects PostgreSQL and requires
 `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`; `POSTGRES_PORT` defaults
 to 5432. `DEBUG`, `DJANGO_ALLOWED_HOSTS`, and `WS_AUTH_BACKEND` control the
 development and authentication settings.
+`DJANGO_PUBLIC_MEDIA_BASE_URL` supplies a validated browser-visible origin for
+flyers, logos, and banners when Django receives an internal Docker hostname.
+Production HTTPS mode requires an HTTPS value. Nginx must serve `/media/` from
+the shared media volume at this public origin.
 
 Compose defines `web`, `frontend`, `nginx`, `redis`, and `db`. Inside its network,
 the database is `db:5432` and Redis is `redis:6379`; these names are not local
@@ -368,6 +388,30 @@ installed metadata lists Django through 5.2 and Python through 3.13; support
 for this newer runtime needs separate compatibility review. Docker installs
 `requirements.txt`, which already declares SimpleJWT.
 
-See [architecture](docs/ahmed/ARCHITECTURE.md),
-[learning journal](docs/ahmed/LEARNING_JOURNAL.md), and
-[Ahmed's changelog](CHANGELOG_AHMED.md) for flow, exercises, and actual results.
+## Ahmed's backend contribution
+
+Ahmed owns the shared `core_data`, `realtime`, and personal `notifications`
+work: event/club/department APIs, search/filter/pagination, RSVP capacity and
+attendee privacy, Django Channels/ASGI calendar broadcasts, JWT WebSocket
+validation and expiry, private persistent notification history, isolated live
+delivery, media URL security, forward migrations, and backend integration and
+security tests. Event management uses `ClubBoardAssignment`; new public-event
+alerts go to active non-administrator `STUDENT` and `BOARD_MEMBER` accounts,
+regardless of Club membership. Later event changes remain scoped to active RSVP
+attendees.
+
+The shared schema uses `accounts.User` as authentication identity,
+`core_data.ClubEvent` as the event model, `core_data.Rsvp` as the unique
+user/event registration, and `notifications.Notification` as durable personal
+history. Redis transports transient WebSocket messages; the database stores
+authoritative records. The public calendar projection excludes attendee
+identities and private contact data.
+
+Project-manager work includes maintaining backend/frontend contracts,
+documenting ownership and handoffs, reconciling shared model boundaries, and
+recording test evidence and external blockers. The team must still provide any
+mandatory Product Owner and Tech Lead identities; this README does not invent
+them.
+
+See the [real-time frontend handoff](docs/ahmed/REALTIME_FRONTEND_HANDOFF.md)
+for the current browser/client integration requirements.

@@ -11,14 +11,195 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+from ipaddress import ip_address
 import os
 from pathlib import Path
+import re
+from urllib.parse import urlsplit
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
+
+
+def environment_boolean(name, *, default):
+    """Read an explicit true/false value without unsafe truthy fallbacks."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized == 'true':
+        return True
+    if normalized == 'false':
+        return False
+    raise ImproperlyConfigured(
+        f"{name} must be exactly 'true' or 'false'."
+    )
+
+
+def environment_list(name, *, default=()):
+    """Read a comma-separated setting and reject an explicitly empty value."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return list(default)
+
+    raw_values = raw_value.split(',')
+    if any(not value.strip() for value in raw_values):
+        raise ImproperlyConfigured(
+            f'{name} must contain a comma-separated list without empty items.'
+        )
+    values = [value.strip() for value in raw_values]
+    return values
+
+
+def environment_nonnegative_integer(name, *, default):
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            f'{name} must be a nonnegative integer.'
+        ) from error
+    if value < 0:
+        raise ImproperlyConfigured(f'{name} must be a nonnegative integer.')
+    return value
+
+
+def validate_allowed_host(host):
+    """Reject broad or URL-shaped values; ALLOWED_HOSTS contains hostnames."""
+    if (
+        host == '*'
+        or host.startswith('.')
+        or '*' in host
+        or '://' in host
+        or '/' in host
+        or '@' in host
+        or ':' in host
+        or any(character.isspace() for character in host)
+    ):
+        raise ImproperlyConfigured(
+            'DJANGO_ALLOWED_HOSTS must contain explicit hostnames without '
+            'schemes, ports, paths, credentials, or wildcards.'
+        )
+
+    try:
+        ip_address(host)
+        return
+    except ValueError:
+        pass
+
+    hostname_label = re.compile(
+        r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+    )
+    if len(host) > 253 or not all(
+        hostname_label.fullmatch(label) for label in host.split('.')
+    ):
+        raise ImproperlyConfigured(
+            'DJANGO_ALLOWED_HOSTS contains a malformed hostname.'
+        )
+
+
+def validate_csrf_origin(origin, *, require_https):
+    """Accept explicit HTTP(S) origins only, with HTTPS required when enabled."""
+    try:
+        parsed = urlsplit(origin)
+        parsed_port = parsed.port
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            'DJANGO_CSRF_TRUSTED_ORIGINS contains a malformed origin.'
+        ) from error
+
+    if (
+        parsed.scheme not in {'http', 'https'}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+        or '*' in origin
+    ):
+        raise ImproperlyConfigured(
+            'DJANGO_CSRF_TRUSTED_ORIGINS must contain explicit HTTP(S) origins '
+            'without paths, credentials, queries, fragments, or wildcards.'
+        )
+    if parsed_port is not None and not 1 <= parsed_port <= 65535:
+        raise ImproperlyConfigured(
+            'DJANGO_CSRF_TRUSTED_ORIGINS contains an invalid port.'
+        )
+    try:
+        ip_address(parsed.hostname)
+    except ValueError:
+        hostname_label = re.compile(
+            r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+        )
+        if len(parsed.hostname) > 253 or not all(
+            hostname_label.fullmatch(label)
+            for label in parsed.hostname.split('.')
+        ):
+            raise ImproperlyConfigured(
+                'DJANGO_CSRF_TRUSTED_ORIGINS contains a malformed hostname.'
+            )
+    if require_https and parsed.scheme != 'https':
+        raise ImproperlyConfigured(
+            'DJANGO_CSRF_TRUSTED_ORIGINS must use https when '
+            'DJANGO_HTTPS_ENABLED=true.'
+        )
+
+
+def validate_public_media_base_url(origin, *, require_https):
+    """Return a safe public origin used only to construct browser media URLs."""
+    try:
+        parsed = urlsplit(origin)
+        parsed_port = parsed.port
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL contains a malformed origin.'
+        ) from error
+
+    if (
+        parsed.scheme not in {'http', 'https'}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {'', '/'}
+        or parsed.query
+        or parsed.fragment
+        or '*' in origin
+    ):
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL must be one explicit HTTP(S) origin '
+            'without a path, credentials, query, fragment, or wildcard.'
+        )
+    if parsed_port is not None and not 1 <= parsed_port <= 65535:
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL contains an invalid port.'
+        )
+    try:
+        ip_address(parsed.hostname)
+    except ValueError:
+        hostname_label = re.compile(
+            r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+        )
+        if len(parsed.hostname) > 253 or not all(
+            hostname_label.fullmatch(label)
+            for label in parsed.hostname.split('.')
+        ):
+            raise ImproperlyConfigured(
+                'DJANGO_PUBLIC_MEDIA_BASE_URL contains a malformed hostname.'
+            )
+    if require_https and parsed.scheme != 'https':
+        raise ImproperlyConfigured(
+            'DJANGO_PUBLIC_MEDIA_BASE_URL must use https when '
+            'DJANGO_HTTPS_ENABLED=true.'
+        )
+    return origin.rstrip('/')
 
 
 # Quick-start development settings - unsuitable for production
@@ -28,18 +209,25 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# [ahmed] Read DEBUG from the environment for Docker while defaulting to local development.
-DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
+# [ahmed] Local development remains the default; production must set false.
+DEBUG = environment_boolean('DEBUG', default=True)
+if not DEBUG and (
+    len(SECRET_KEY) < 50
+    or len(set(SECRET_KEY)) < 5
+    or SECRET_KEY.startswith('CHANGE_ME_')
+):
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY must be a strong, non-template value when '
+        'DEBUG=false.'
+    )
 
-# [ahmed] Allow the hostnames supplied by Docker and localhost during development.
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv(
-        'DJANGO_ALLOWED_HOSTS',
-        'localhost,127.0.0.1'
-    ).split(',')
-    if host.strip()
-]
+# [ahmed] Production hostnames are explicit; wildcard hosts are rejected.
+ALLOWED_HOSTS = environment_list(
+    'DJANGO_ALLOWED_HOSTS',
+    default=('localhost', '127.0.0.1'),
+)
+for allowed_host in ALLOWED_HOSTS:
+    validate_allowed_host(allowed_host)
 
 
 # Application definition
@@ -63,6 +251,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django_filters',
     'core_data',
+    'notifications.apps.NotificationsConfig',
 
     'realtime.apps.RealtimeConfig',  # [ahmed] Registers our real-time Django app.
 
@@ -224,14 +413,67 @@ CHANNEL_LAYERS = {
 }
 
 
-# [ahmed] Recognize HTTPS requests forwarded by the trusted Nginx reverse proxy.
+# [ahmed] Recognize HTTPS only from a trusted reverse proxy. The application
+# must not be exposed directly to clients that can spoof this header.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# [ahmed] Trust local HTTPS origins for Django's CSRF protection.
-CSRF_TRUSTED_ORIGINS = [
-    'https://localhost',
-    'https://127.0.0.1',
-]
+# [ahmed] Keep local HTTP available while allowing an explicit HTTPS production
+# mode behind the trusted proxy.
+HTTPS_ENABLED = environment_boolean('DJANGO_HTTPS_ENABLED', default=False)
+SECURE_SSL_REDIRECT = HTTPS_ENABLED
+SESSION_COOKIE_SECURE = HTTPS_ENABLED
+CSRF_COOKIE_SECURE = HTTPS_ENABLED
+
+# When Django is reached through an internal service name, serializers must
+# still return a browser-reachable media origin. Forwarded host headers are not
+# trusted for this purpose; Hamza must configure this explicit public origin.
+PUBLIC_MEDIA_BASE_URL = os.getenv('DJANGO_PUBLIC_MEDIA_BASE_URL', '').strip()
+if PUBLIC_MEDIA_BASE_URL:
+    PUBLIC_MEDIA_BASE_URL = validate_public_media_base_url(
+        PUBLIC_MEDIA_BASE_URL,
+        require_https=HTTPS_ENABLED,
+    )
+
+# [ahmed] HSTS is intentionally opt-in. Hamza must enable it only after the
+# approved production domain and real TLS certificates are ready.
+SECURE_HSTS_SECONDS = environment_nonnegative_integer(
+    'DJANGO_HSTS_SECONDS',
+    default=0,
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = environment_boolean(
+    'DJANGO_HSTS_INCLUDE_SUBDOMAINS',
+    default=False,
+)
+SECURE_HSTS_PRELOAD = environment_boolean(
+    'DJANGO_HSTS_PRELOAD',
+    default=False,
+)
+if SECURE_HSTS_SECONDS and not HTTPS_ENABLED:
+    raise ImproperlyConfigured(
+        'DJANGO_HSTS_SECONDS requires DJANGO_HTTPS_ENABLED=true.'
+    )
+if (
+    SECURE_HSTS_INCLUDE_SUBDOMAINS or SECURE_HSTS_PRELOAD
+) and not SECURE_HSTS_SECONDS:
+    raise ImproperlyConfigured(
+        'HSTS include-subdomains/preload requires a positive '
+        'DJANGO_HSTS_SECONDS value.'
+    )
+
+# [ahmed] Browser response protections remain explicit and testable.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+
+# [ahmed] Trust only explicitly configured cross-origin CSRF callers. Same-
+# origin requests do not need an entry.
+CSRF_TRUSTED_ORIGINS = environment_list(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    default=(),
+)
+for trusted_origin in CSRF_TRUSTED_ORIGINS:
+    validate_csrf_origin(trusted_origin, require_https=HTTPS_ENABLED)
 
 # [ahmed] Select JWT or development token authentication for WebSockets.
 WS_AUTH_BACKEND = os.getenv("WS_AUTH_BACKEND", "token_dev")

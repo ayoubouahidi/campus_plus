@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 from rest_framework.authtoken.models import Token
+from rest_framework.test import APIClient
 from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
@@ -67,6 +68,15 @@ class JWTWebSocketTests(TransactionTestCase):
     def test_valid_jwt_connects(self):
         token = str(AccessToken.for_user(self.user))
         async_to_sync(self.check_valid_token)(token)
+
+    def test_issued_http_token_authenticates_websocket(self):
+        http_token = Token.objects.create(user=self.user)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Token {http_token.key}')
+        response = client.post('/api/realtime/token/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        async_to_sync(self.check_valid_token)(response.data['access'])
 
     def test_other_cookies_do_not_prevent_authentication(self):
         token = str(AccessToken.for_user(self.user))
@@ -128,10 +138,13 @@ class JWTWebSocketTests(TransactionTestCase):
             str(RefreshToken.for_user(self.user))
         )
 
-    def test_deleted_user_is_rejected(self):
-        token = str(AccessToken.for_user(self.user))
-        self.user.delete()
-        async_to_sync(self.check_rejected_token)(token)
+    def test_nonexistent_user_id_is_rejected(self):
+        token = AccessToken.for_user(self.user)
+        nonexistent_user_id = self.user.pk + 1
+        self.assertFalse(User.objects.filter(pk=nonexistent_user_id).exists())
+        token["user_id"] = nonexistent_user_id
+
+        async_to_sync(self.check_rejected_token)(str(token))
 
     def test_missing_user_claim_is_rejected(self):
         token = AccessToken.for_user(self.user)

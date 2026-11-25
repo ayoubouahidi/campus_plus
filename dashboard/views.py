@@ -13,6 +13,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 
 from accounts.models import ClubBoardAssignment
 from accounts.permissions import IsClubBoard, IsSuperAdmin, user_club_id
@@ -22,10 +23,18 @@ from .serializers import (
     AnnouncementSerializer,
     AuditLogSerializer,
     BoardClubSettingsSerializer,
+    BoardStatsSerializer,
     BoardMemberSerializer,
     MembershipRequestSerializer,
+    EventWeekSerializer,
     OrganizationAdminSerializer,
     OrganizationStatusSerializer,
+    PaginatedAuditLogSerializer,
+    PaginatedOrganizationSerializer,
+    PaginatedSuperadminUserSerializer,
+    RegistrationWeekSerializer,
+    RoleDistributionSerializer,
+    SuperadminStatsSerializer,
     SuperadminUserSerializer,
     SuperadminUserUpdateSerializer,
 )
@@ -44,6 +53,7 @@ def board_club(request):
     return Club.objects.filter(pk=club_id).first()
 
 
+@extend_schema(responses={200: BoardStatsSerializer})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
@@ -88,6 +98,16 @@ def board_stats(request):
     )
 
 
+@extend_schema(
+    methods=["GET"],
+    request=None,
+    responses={200: BoardClubSettingsSerializer},
+)
+@extend_schema(
+    methods=["PATCH"],
+    request=BoardClubSettingsSerializer,
+    responses={200: BoardClubSettingsSerializer},
+)
 @api_view(["GET", "PATCH"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
@@ -125,6 +145,7 @@ def board_club_settings(request):
     return Response(BoardClubSettingsSerializer(club).data)
 
 
+@extend_schema(responses={200: RegistrationWeekSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
@@ -156,6 +177,7 @@ def board_registrations_weekly(request):
     )
 
 
+@extend_schema(responses={200: BoardMemberSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
@@ -167,6 +189,7 @@ def board_members(request):
     return Response(BoardMemberSerializer(members, many=True).data)
 
 
+@extend_schema(responses={200: MembershipRequestSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
@@ -178,6 +201,7 @@ def board_requests(request):
     return Response(MembershipRequestSerializer(requests, many=True).data)
 
 
+@extend_schema(request=None, responses={200: MembershipRequestSerializer})
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
@@ -223,8 +247,11 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsClubBoard]
     serializer_class = AnnouncementSerializer
+    queryset = Announcement.objects.none()
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Announcement.objects.none()
         club = board_club(self.request)
         if club is None:
             return Announcement.objects.none()
@@ -242,6 +269,10 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         )
 
 
+@extend_schema(
+    request=MembershipRequestSerializer,
+    responses={200: MembershipRequestSerializer, 201: MembershipRequestSerializer},
+)
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -285,6 +316,7 @@ def join_club(request, slug):
     )
 
 
+@extend_schema(responses={200: SuperadminStatsSerializer})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -306,6 +338,7 @@ def superadmin_stats(request):
     )
 
 
+@extend_schema(responses={200: PaginatedOrganizationSerializer})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -318,6 +351,10 @@ def superadmin_organizations(request):
     )
 
 
+@extend_schema(
+    request=OrganizationStatusSerializer,
+    responses={200: OrganizationAdminSerializer},
+)
 @api_view(["PATCH"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -347,6 +384,7 @@ def superadmin_organization_detail(request, organization_id):
     return Response(OrganizationAdminSerializer(organization).data)
 
 
+@extend_schema(responses={200: PaginatedSuperadminUserSerializer})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -376,6 +414,10 @@ def superadmin_users(request):
     )
 
 
+@extend_schema(
+    request=SuperadminUserUpdateSerializer,
+    responses={200: SuperadminUserSerializer},
+)
 @api_view(["PATCH"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -463,6 +505,7 @@ def superadmin_user_detail(request, user_id):
     return Response(SuperadminUserSerializer(target).data)
 
 
+@extend_schema(responses={200: RoleDistributionSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -480,6 +523,7 @@ def superadmin_role_distribution(request):
     )
 
 
+@extend_schema(responses={200: EventWeekSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
@@ -503,6 +547,7 @@ def superadmin_events_weekly(request):
     return Response(weeks)
 
 
+@extend_schema(responses={200: PaginatedAuditLogSerializer})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])

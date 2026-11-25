@@ -31,6 +31,9 @@ from core_data.views import (
     UserMemberViewSet,
     signup,
 )
+from backend.views import HealthLiveView, HealthView
+from realtime.views import RealtimeTokenView
+from notifications.views import NotificationViewSet
 
 
 router = DefaultRouter()
@@ -59,12 +62,28 @@ router.register(
     basename="club",
 )
 
+router.register(
+    "notifications",
+    NotificationViewSet,
+    basename="notification",
+)
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
 
     path("", include("accounts.urls")),
     path("", include("dashboard.urls")),
+
+    # [ahmed] Public liveness probes; neither endpoint touches external services.
+    path("api/health/", HealthView.as_view(), name="health"),
+    path("api/health/live", HealthLiveView.as_view(), name="health-live"),
+
+    path(
+        "api/realtime/token/",
+        RealtimeTokenView.as_view(),
+        name="realtime-token",
+    ),
 
     path("api/", include(router.urls)),
 

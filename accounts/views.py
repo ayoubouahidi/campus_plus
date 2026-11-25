@@ -19,12 +19,21 @@ from rest_framework.decorators import (
 )
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 
-from core_data.models import ALLOWED_IMAGE_FORMATS, UserMember
-from core_data.models import validate_file_size, validate_image_content
+from core_data.models import (
+    ALLOWED_IMAGE_FORMATS,
+    UserMember,
+    validate_file_size,
+    validate_image_content,
+)
+from core_data.phone_reconciliation import PhonePairState, classify_phone_pair
 from dashboard.models import AuditLog
 from .serializers import (
     AuthSyncSerializer,
+    AuthResponseSerializer,
+    AvatarUploadSerializer,
+    DetailResponseSerializer,
     EmailPasswordLoginSerializer,
     UserPhoneSerializer,
     UserSerializer,
@@ -53,6 +62,14 @@ def get_campus_allow_list():
     return {value.strip().lower() for value in raw.split(",") if value.strip()}
 
 
+@extend_schema(
+    request=EmailPasswordLoginSerializer,
+    responses={
+        200: AuthResponseSerializer,
+        400: DetailResponseSerializer,
+        401: DetailResponseSerializer,
+    },
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -89,6 +106,15 @@ def email_password_login(request):
     return Response({"token": token.key, "user": UserSerializer(user).data})
 
 
+@extend_schema(
+    request=AuthSyncSerializer,
+    responses={
+        200: AuthResponseSerializer,
+        400: DetailResponseSerializer,
+        403: DetailResponseSerializer,
+        409: DetailResponseSerializer,
+    },
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -190,6 +216,20 @@ def auth_sync(request):
     )
 
 
+@extend_schema(
+    methods=["GET"],
+    responses={200: UserSerializer, 401: DetailResponseSerializer},
+)
+@extend_schema(
+    methods=["PATCH"],
+    request=UserPhoneSerializer,
+    responses={
+        200: UserSerializer,
+        400: DetailResponseSerializer,
+        401: DetailResponseSerializer,
+        409: DetailResponseSerializer,
+    },
+)
 @api_view(["GET", "PATCH"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -197,11 +237,61 @@ def me(request):
     if request.method == "PATCH":
         serializer = UserPhoneSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        request.user.phone = serializer.validated_data["phone"]
-        request.user.save(update_fields=["phone"])
+        requested_phone = serializer.validated_data["phone"]
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            member = (
+                UserMember.objects.select_for_update()
+                .filter(user=user)
+                .first()
+            )
+            phone_state = classify_phone_pair(
+                user.phone,
+                member.phone if member is not None else None,
+                member_exists=member is not None,
+            )
+            if phone_state in {
+                PhonePairState.ACCOUNT_ONLY,
+                PhonePairState.CONFLICT,
+                PhonePairState.ACCOUNT_WITHOUT_MEMBER,
+            }:
+                return Response(
+                    {
+                        "phone": (
+                            "Existing phone data must be reconciled before it "
+                            "can be updated."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if member is None:
+                member = UserMember.objects.create(
+                    user=user,
+                    username=user.username,
+                )
+            member.phone = requested_phone
+            member.save(update_fields=["phone"])
+            # Keep the temporary accounts field synchronized for clients that
+            # still read it, while UserMember remains the canonical owner.
+            user.phone = requested_phone
+            user.save(update_fields=["phone"])
+            request.user = user
     return Response(UserSerializer(request.user).data)
 
 
+@extend_schema(
+    methods=["POST"],
+    request=AvatarUploadSerializer,
+    responses={
+        200: UserSerializer,
+        400: OpenApiResponse(description="The uploaded image is invalid."),
+    },
+)
+@extend_schema(
+    methods=["DELETE"],
+    request=None,
+    responses={200: UserSerializer},
+)
 @api_view(["POST", "DELETE"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -270,6 +360,13 @@ def me_avatar(request):
     return Response(UserSerializer(request.user).data)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        204: OpenApiResponse(description="Authentication token revoked."),
+        401: DetailResponseSerializer,
+    },
+)
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
