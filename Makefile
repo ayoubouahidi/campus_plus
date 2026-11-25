@@ -47,6 +47,5 @@ clean:
 
 fclean: clean
 	docker compose down --rmi all -v --remove-orphans
-	docker builder prune -f
 
 re: fclean up
