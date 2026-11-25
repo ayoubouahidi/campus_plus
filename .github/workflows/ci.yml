@@ -37,7 +37,7 @@ jobs:
 
       - name: Run Django Tests
         env:
-          DJANGO_SECRET_KEY: ci-test-secret-key
+          DJANGO_SECRET_KEY: ci-test-only-key-not-for-production-1234567890-abcdefghijklmnop
           DEBUG: "True"
           REDIS_URL: redis://127.0.0.1:6379/0
         run: |
