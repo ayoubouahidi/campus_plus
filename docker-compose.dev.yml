@@ -1,0 +1,18 @@
+# Opt-in dev overrides: `make dev` (or `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`).
+# The plain `make up` / docker-compose.yml run the production image (frontend DOCS.md §19).
+services:
+  frontend:
+    # Its own image name: the production image (`make up`) and this one would otherwise share one tag and
+    # replace each other at every switch.
+    image: transcendence-frontend-dev
+    build:
+      context: ./frontend
+      # The `dev` stage of frontend/Dockerfile (`next dev`); without it, the last stage (production) is built.
+      target: dev
+    volumes:
+      # Source from the host: edits hot-reload in `next dev` without rebuilding the image.
+      - ./frontend:/app
+      # Keep the container's own dependencies and build cache (the host has none, and a host copy
+      # built for macOS would be the wrong platform anyway).
+      - /app/node_modules
+      - /app/.next
