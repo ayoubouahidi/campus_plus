@@ -1,10 +1,35 @@
+# Git
 .git
-.venv
+
+# Environment variables
 .env
 .env.*
 !.env.example
-**/__pycache__/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+
+# Django
+*.log
 *.sqlite3
 media/
 staticfiles/
+
+# Tooling
+.vscode/
+
+# TLS certificates and private keys
 infrastructure/nginx/certs/*
+infrastructure/nginx/infrastructure/nginx/certs/*.pem
+infrastructure/nginx/infrastructure/nginx/certs/*.key
+
+# Local reports
+/diff
+/feedback
+/updates code
