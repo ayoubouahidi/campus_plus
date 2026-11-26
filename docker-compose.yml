@@ -22,9 +22,8 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,web,campushub.ma}
-      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://localhost,https://127.0.0.1,https://campushub.ma}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-https://localhost,https://127.0.0.1,https://campushub.ma}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,web,campushub.ma,dashboard.localhost,dashboard.campushub.ma}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://localhost,https://127.0.0.1,https://campushub.ma,https://dashboard.localhost,https://dashboard.campushub.ma}
       DJANGO_HTTPS_ENABLED: ${DJANGO_HTTPS_ENABLED:-true}
       DJANGO_SSL_REDIRECT: ${DJANGO_SSL_REDIRECT:-false}
       DJANGO_HSTS_SECONDS: ${DJANGO_HSTS_SECONDS:-0}
@@ -56,6 +55,20 @@ services:
       BACKEND_INTERNAL_KEY: ${BACKEND_INTERNAL_KEY:-}
       AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-false}
 
+  dashboard:
+    build: ./dashboard_campus
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: ${DASHBOARD_AUTH_URL:-https://dashboard.localhost}
+      AUTH_42_SCHOOL_ID: ${AUTH_42_SCHOOL_ID:-}
+      AUTH_42_SCHOOL_SECRET: ${AUTH_42_SCHOOL_SECRET:-}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
+      BACKEND_INTERNAL_KEY: ${BACKEND_INTERNAL_KEY:-}
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped
@@ -70,6 +83,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - dashboard
       - grafana
 
   redis:
@@ -120,8 +134,8 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: https://localhost/grafana/
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: https://localhost/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - grafana_data:/var/lib/grafana
