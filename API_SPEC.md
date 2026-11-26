@@ -333,9 +333,11 @@ must not treat them as stable public operations.
 
 Club and Department writes are fail-closed with 405 and are absent from OpenAPI.
 
-The legacy `POST /api/signup/` endpoint also exists and is documented in
-OpenAPI. It is not Ayoub's unfinished custom-user `/auth/sync`, `/api/me/`, and
-logout contract.
+`POST /api/signup/` starts a registration and emails a six-digit code.
+`POST /api/signup/verify/` creates the user and returns the member/token
+response only after valid verification; codes expire after ten minutes and
+five incorrect guesses. `POST /api/signup/resend/` rotates a pending code,
+with a one-minute resend interval.
 
 ## Personal notification API
 

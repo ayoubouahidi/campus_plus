@@ -130,6 +130,18 @@ class BoardApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {student_token.key}")
         self.assertEqual(self.client.get("/api/board/members/").status_code, 403)
 
+    def test_club_join_endpoint_is_removed(self):
+        requests_before = MembershipRequest.objects.count()
+
+        response = self.client.post(
+            f"/api/clubs/{self.club.slug}/join/",
+            {"note": "Please join"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(MembershipRequest.objects.count(), requests_before)
+
 
 class SuperadminApiTests(TestCase):
     def setUp(self):
@@ -153,6 +165,20 @@ class SuperadminApiTests(TestCase):
             self.client.get("/api/superadmin/stats/").status_code,
             401,
         )
+        self.assertEqual(
+            self.client.post(
+                "/api/superadmin/users/",
+                {},
+                format="json",
+            ).status_code,
+            401,
+        )
+        self.assertEqual(
+            self.client.delete(
+                f"/api/superadmin/organizations/{self.club.pk}/",
+            ).status_code,
+            401,
+        )
 
         student = User.objects.create_user(
             username="regular-student",
@@ -162,6 +188,20 @@ class SuperadminApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
         self.assertEqual(
             self.client.get("/api/superadmin/stats/").status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/superadmin/organizations/",
+                {},
+                format="json",
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.delete(
+                f"/api/superadmin/users/{self.admin.pk}/",
+            ).status_code,
             403,
         )
 
@@ -189,10 +229,71 @@ class SuperadminApiTests(TestCase):
 
         invalid_response = self.client.patch(
             f"/api/superadmin/organizations/{self.club.pk}/",
-            {"name": "Changed"},
+            {"not_supported": True},
             format="json",
         )
         self.assertEqual(invalid_response.status_code, 400)
+
+    def test_superadmin_can_create_update_and_delete_organizations(self):
+        created = self.client.post(
+            "/api/superadmin/organizations/",
+            {
+                "name": "New Organization",
+                "department": self.department.pk,
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(created.status_code, 201)
+        organization_id = created.data["id"]
+        self.assertEqual(created.data["department"], self.department.pk)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                actor=self.admin,
+                action="organization_created",
+                target="New Organization",
+            ).exists()
+        )
+
+        updated = self.client.patch(
+            f"/api/superadmin/organizations/{organization_id}/",
+            {"name": "Updated Organization"},
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.data["name"], "Updated Organization")
+
+        deleted = self.client.delete(
+            f"/api/superadmin/organizations/{organization_id}/",
+        )
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(Club.objects.filter(pk=organization_id).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                actor=self.admin,
+                action="organization_deleted",
+                target="Updated Organization",
+            ).exists()
+        )
+
+    def test_organization_cannot_be_deleted_with_board_assignments(self):
+        board_user = User.objects.create_user(
+            username="assigned-board-member",
+            password="unused",
+            role=User.Role.BOARD_MEMBER,
+        )
+        ClubBoardAssignment.objects.create(user=board_user, club=self.club)
+
+        response = self.client.delete(
+            f"/api/superadmin/organizations/{self.club.pk}/",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(Club.objects.filter(pk=self.club.pk).exists())
+        self.assertTrue(
+            ClubBoardAssignment.objects.filter(user=board_user).exists()
+        )
 
     def test_superadmin_stats_reports_platform_totals(self):
         response = self.client.get("/api/superadmin/stats/")
@@ -227,6 +328,77 @@ class SuperadminApiTests(TestCase):
                 action="role_changed",
             ).exists()
         )
+
+    def test_superadmin_can_create_manage_and_delete_users_and_board_assignments(self):
+        created = self.client.post(
+            "/api/superadmin/users/",
+            {
+                "username": "new-board-member",
+                "email": "new-board@example.com",
+                "password": "valid-password-123",
+                "role": User.Role.BOARD_MEMBER,
+                "club_id": self.club.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(created.status_code, 201)
+        user_id = created.data["id"]
+        board_user = User.objects.get(pk=user_id)
+        self.assertTrue(board_user.check_password("valid-password-123"))
+        self.assertEqual(board_user.board_assignment.club, self.club)
+
+        updated = self.client.patch(
+            f"/api/superadmin/users/{user_id}/",
+            {
+                "role": User.Role.STUDENT,
+                "club_id": None,
+                "email": "updated@example.com",
+            },
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        board_user.refresh_from_db()
+        self.assertEqual(board_user.role, User.Role.STUDENT)
+        self.assertEqual(board_user.email, "updated@example.com")
+        self.assertFalse(
+            ClubBoardAssignment.objects.filter(user=board_user).exists()
+        )
+
+        deleted = self.client.delete(f"/api/superadmin/users/{user_id}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(User.objects.filter(pk=user_id).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                actor=self.admin,
+                action="user_deleted",
+                target="new-board-member",
+            ).exists()
+        )
+
+    def test_superadmin_cannot_delete_own_account(self):
+        response = self.client.delete(
+            f"/api/superadmin/users/{self.admin.pk}/",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())
+
+    def test_last_active_superadmin_cannot_be_demoted_or_disabled(self):
+        for payload in (
+            {"role": User.Role.STUDENT},
+            {"is_active": False},
+        ):
+            with self.subTest(payload=payload):
+                response = self.client.patch(
+                    f"/api/superadmin/users/{self.admin.pk}/",
+                    payload,
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.admin.refresh_from_db()
+                self.assertEqual(self.admin.role, User.Role.SUPERADMIN)
+                self.assertTrue(self.admin.is_active)
 
     def test_board_role_requires_a_club(self):
         student = User.objects.create_user(

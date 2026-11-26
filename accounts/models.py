@@ -47,3 +47,13 @@ class ClubBoardAssignment(models.Model):
         on_delete=models.CASCADE,
         related_name="board_assignments",
     )
+
+
+class EmailVerification(models.Model):
+    email = models.EmailField(unique=True)
+    code_hash = models.CharField(max_length=128)
+    registration_data = models.JSONField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

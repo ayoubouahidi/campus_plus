@@ -1,9 +1,7 @@
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.core.exceptions import FieldDoesNotExist
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
-from django.utils.text import slugify
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import status, viewsets
@@ -11,7 +9,6 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
@@ -28,12 +25,12 @@ from .serializers import (
     MembershipRequestSerializer,
     EventWeekSerializer,
     OrganizationAdminSerializer,
-    OrganizationStatusSerializer,
     PaginatedAuditLogSerializer,
     PaginatedOrganizationSerializer,
     PaginatedSuperadminUserSerializer,
     RegistrationWeekSerializer,
     RoleDistributionSerializer,
+    SuperadminUserCreateSerializer,
     SuperadminStatsSerializer,
     SuperadminUserSerializer,
     SuperadminUserUpdateSerializer,
@@ -269,53 +266,6 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         )
 
 
-@extend_schema(
-    request=MembershipRequestSerializer,
-    responses={200: MembershipRequestSerializer, 201: MembershipRequestSerializer},
-)
-@api_view(["POST"])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def join_club(request, slug):
-    try:
-        Club._meta.get_field("slug")
-    except FieldDoesNotExist:
-        club = next(
-            (item for item in Club.objects.all() if slugify(item.name) == slug),
-            None,
-        )
-    else:
-        club = Club.objects.filter(slug=slug).first()
-    if club is None:
-        return Response({"detail": "Club not found."}, status=404)
-
-    try:
-        member = request.user.usermember
-    except UserMember.DoesNotExist:
-        member = UserMember.objects.create(
-            user=request.user,
-            username=request.user.username,
-        )
-
-    membership_request, created = MembershipRequest.objects.get_or_create(
-        club=club,
-        member=member,
-        kind=MembershipRequest.Kind.JOIN,
-        defaults={
-            "note": str(request.data.get("note", "")),
-        },
-    )
-    if not created:
-        return Response(
-            MembershipRequestSerializer(membership_request).data,
-            status=200,
-        )
-    return Response(
-        MembershipRequestSerializer(membership_request).data,
-        status=201,
-    )
-
-
 @extend_schema(responses={200: SuperadminStatsSerializer})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
@@ -338,11 +288,36 @@ def superadmin_stats(request):
     )
 
 
+@extend_schema(
+    methods=["POST"],
+    request=OrganizationAdminSerializer,
+    responses={201: OrganizationAdminSerializer},
+)
 @extend_schema(responses={200: PaginatedOrganizationSerializer})
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
 def superadmin_organizations(request):
+    if request.method == "POST":
+        if set(request.data) - {"name", "department", "is_active"}:
+            return Response(
+                {"detail": "Unsupported organization field."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = OrganizationAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            organization = serializer.save()
+            AuditLog.objects.create(
+                actor=request.user,
+                action="organization_created",
+                target=organization.name,
+            )
+        return Response(
+            OrganizationAdminSerializer(organization).data,
+            status=status.HTTP_201_CREATED,
+        )
+
     queryset = Club.objects.select_related("department").order_by("name")
     paginator = SuperadminPagination()
     page = paginator.paginate_queryset(queryset, request)
@@ -352,43 +327,125 @@ def superadmin_organizations(request):
 
 
 @extend_schema(
-    request=OrganizationStatusSerializer,
+    methods=["PATCH"],
+    request=OrganizationAdminSerializer,
     responses={200: OrganizationAdminSerializer},
 )
-@api_view(["PATCH"])
+@extend_schema(
+    methods=["DELETE"],
+    request=None,
+    responses={204: None},
+)
+@api_view(["PATCH", "DELETE"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
 def superadmin_organization_detail(request, organization_id):
-    unknown_fields = set(request.data) - {"is_active"}
-    if unknown_fields:
-        return Response(
-            {"detail": "Only is_active may be changed."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    serializer = OrganizationStatusSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-
     organization = Club.objects.filter(pk=organization_id).first()
     if organization is None:
         return Response({"detail": "Organization not found."}, status=404)
 
-    is_active = serializer.validated_data["is_active"]
-    if organization.is_active != is_active:
-        organization.is_active = is_active
-        organization.save(update_fields=["is_active"])
+    if request.method == "DELETE":
+        organization_name = organization.name
+        if organization.board_assignments.exists():
+            return Response(
+                {
+                    "detail": (
+                        "Reassign or demote this organization's board members "
+                        "before deleting it."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        with transaction.atomic():
+            AuditLog.objects.create(
+                actor=request.user,
+                action="organization_deleted",
+                target=organization_name,
+            )
+            organization.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    if set(request.data) - {"name", "department", "is_active"}:
+        return Response(
+            {"detail": "Unsupported organization field."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    previous_status = organization.is_active
+    serializer = OrganizationAdminSerializer(
+        organization,
+        data=request.data,
+        partial=True,
+    )
+    serializer.is_valid(raise_exception=True)
+    with transaction.atomic():
+        organization = serializer.save()
+        if previous_status != organization.is_active:
+            action = "club_reactivated" if organization.is_active else "club_suspended"
+        else:
+            action = "organization_updated"
         AuditLog.objects.create(
             actor=request.user,
-            action="club_reactivated" if is_active else "club_suspended",
+            action=action,
             target=organization.name,
         )
     return Response(OrganizationAdminSerializer(organization).data)
 
 
+@extend_schema(
+    methods=["POST"],
+    request=SuperadminUserCreateSerializer,
+    responses={201: SuperadminUserSerializer},
+)
 @extend_schema(responses={200: PaginatedSuperadminUserSerializer})
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
 def superadmin_users(request):
+    if request.method == "POST":
+        allowed_fields = {
+            "username",
+            "email",
+            "password",
+            "first_name",
+            "last_name",
+            "role",
+            "is_active",
+            "club_id",
+        }
+        if set(request.data) - allowed_fields:
+            return Response(
+                {"detail": "Unsupported user field."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = SuperadminUserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="user_created",
+                    target=user.username,
+                )
+        except IntegrityError:
+            username = serializer.validated_data["username"]
+            email = serializer.validated_data["email"]
+            if User.objects.filter(username__iexact=username).exists():
+                return Response(
+                    {"username": "A user with this username already exists."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {"email": "A user with this email already exists."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raise
+        return Response(
+            SuperadminUserSerializer(user).data,
+            status=status.HTTP_201_CREATED,
+        )
+
     queryset = User.objects.select_related(
         "board_assignment__club",
     ).order_by("username")
@@ -415,28 +472,90 @@ def superadmin_users(request):
 
 
 @extend_schema(
+    methods=["PATCH"],
     request=SuperadminUserUpdateSerializer,
     responses={200: SuperadminUserSerializer},
 )
-@api_view(["PATCH"])
+@extend_schema(
+    methods=["DELETE"],
+    request=None,
+    responses={204: None},
+)
+@api_view(["PATCH", "DELETE"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsSuperAdmin])
 def superadmin_user_detail(request, user_id):
-    unknown_fields = set(request.data) - {"role", "club_id"}
-    if unknown_fields:
-        return Response(
-            {"detail": "Only role and club_id may be changed."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    serializer = SuperadminUserUpdateSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-
     target = User.objects.filter(pk=user_id).first()
     if target is None:
         return Response({"detail": "User not found."}, status=404)
 
+    if request.method == "DELETE":
+        if target.pk == request.user.pk:
+            return Response(
+                {"detail": "You cannot delete your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            target.role == User.Role.SUPERADMIN
+            and target.is_active
+            and not User.objects.filter(
+                role=User.Role.SUPERADMIN,
+                is_active=True,
+            ).exclude(pk=target.pk).exists()
+        ):
+            return Response(
+                {"detail": "The last active superadmin cannot be deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        username = target.username
+        with transaction.atomic():
+            AuditLog.objects.create(
+                actor=request.user,
+                action="user_deleted",
+                target=username,
+            )
+            target.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    allowed_fields = {
+        "username",
+        "email",
+        "first_name",
+        "last_name",
+        "is_active",
+        "role",
+        "club_id",
+    }
+    if set(request.data) - allowed_fields:
+        return Response(
+            {"detail": "Unsupported user field."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    serializer = SuperadminUserUpdateSerializer(
+        target,
+        data=request.data,
+        partial=True,
+    )
+    serializer.is_valid(raise_exception=True)
     validated_data = serializer.validated_data
     new_role = validated_data.get("role", target.role)
+    remains_active_superadmin = (
+        new_role == User.Role.SUPERADMIN
+        and validated_data.get("is_active", target.is_active)
+    )
+    if (
+        target.role == User.Role.SUPERADMIN
+        and target.is_active
+        and not remains_active_superadmin
+        and not User.objects.filter(
+            role=User.Role.SUPERADMIN,
+            is_active=True,
+        ).exclude(pk=target.pk).exists()
+    ):
+        return Response(
+            {"detail": "The last active superadmin cannot be demoted or disabled."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     assignment = (
         ClubBoardAssignment.objects.filter(user=target)
         .select_related("club")
@@ -462,14 +581,28 @@ def superadmin_user_detail(request, user_id):
 
     with transaction.atomic():
         old_role = target.role
+        changed_user_fields = []
+        for field in ("username", "email", "first_name", "last_name", "is_active"):
+            if field in validated_data and getattr(target, field) != validated_data[field]:
+                setattr(target, field, validated_data[field])
+                changed_user_fields.append(field)
         if "role" in validated_data:
             target.role = new_role
-            target.save(update_fields=["role"])
             if old_role != new_role:
                 AuditLog.objects.create(
                     actor=request.user,
                     action="role_changed",
                     target=f"{target.username}: {old_role} -> {new_role}",
+                )
+            if old_role != new_role:
+                changed_user_fields.append("role")
+        if changed_user_fields:
+            target.save(update_fields=changed_user_fields)
+            if changed_user_fields != ["role"]:
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="user_updated",
+                    target=target.username,
                 )
 
         if new_role != User.Role.BOARD_MEMBER and assignment is not None:

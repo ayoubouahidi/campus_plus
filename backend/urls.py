@@ -29,7 +29,9 @@ from core_data.views import (
     ClubViewSet,
     DepartmentViewSet,
     UserMemberViewSet,
+    resend_signup_verification,
     signup,
+    verify_signup,
 )
 from backend.views import HealthLiveView, HealthView
 from realtime.views import RealtimeTokenView
@@ -91,6 +93,16 @@ urlpatterns = [
         "api/signup/",
         signup,
         name="signup",
+    ),
+    path(
+        "api/signup/verify/",
+        verify_signup,
+        name="signup-verify",
+    ),
+    path(
+        "api/signup/resend/",
+        resend_signup_verification,
+        name="signup-verification-resend",
     ),
 
     # [ahmed] Expose the generated OpenAPI schema.

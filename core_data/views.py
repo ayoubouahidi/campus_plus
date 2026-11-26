@@ -1,9 +1,13 @@
 # [ahmed] Run broadcasts after successful database commits.
-from datetime import datetime, time, timezone as datetime_timezone
+from datetime import datetime, time, timedelta, timezone as datetime_timezone
+import secrets
 
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_slug
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q
 from django.utils import timezone
@@ -31,7 +35,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
-from accounts.models import ClubBoardAssignment
+from accounts.models import ClubBoardAssignment, EmailVerification
 from accounts.permissions import IsSuperAdmin
 from .models import Club, ClubEvent, Department, Rsvp, UserMember
 from .serializers import (
@@ -41,7 +45,9 @@ from .serializers import (
     AttendeeSerializer,
     PaginatedAttendeeSerializer,
     RsvpStatusSerializer,
+    SignupResendSerializer,
     SignupSerializer,
+    SignupVerificationSerializer,
     UserMemberSerializer,
 )
 
@@ -61,6 +67,22 @@ VALIDATION_ERROR_RESPONSE = OpenApiResponse(
     },
     description='A query parameter is duplicate, empty, malformed, or unsupported.',
 )
+
+
+class EmailDeliveryFailed(Exception):
+    pass
+
+
+def send_signup_verification(email, code):
+    sent = send_mail(
+        'Your Campus Hub verification code',
+        f'Your verification code is {code}. It expires in 10 minutes.',
+        settings.DEFAULT_FROM_EMAIL,
+        [email],
+        fail_silently=False,
+    )
+    if sent != 1:
+        raise EmailDeliveryFailed
 
 
 # Shared calendar broadcasts are public. Keep this allowlist separate from the
@@ -879,16 +901,17 @@ class ClubViewSet(viewsets.ModelViewSet):
 @extend_schema(
     summary='Legacy email signup',
     description=(
-        'Preserved legacy email signup endpoint alongside the integrated accounts '
-        'authentication API.'
+        'Starts an email signup and sends a six-digit verification code. '
+        'The account is created only after POST /api/signup/verify/.'
     ),
     request=SignupSerializer,
     responses={
-        201: inline_serializer(
-            name='SignupResponse',
+        202: inline_serializer(
+            name='SignupVerificationPendingResponse',
             fields={
-                'token': serializers.CharField(read_only=True),
-                'member': UserMemberSerializer(read_only=True),
+                'detail': serializers.CharField(read_only=True),
+                'email': serializers.EmailField(read_only=True),
+                'verification_required': serializers.BooleanField(read_only=True),
             },
         ),
         400: VALIDATION_ERROR_RESPONSE,
@@ -900,18 +923,156 @@ class ClubViewSet(viewsets.ModelViewSet):
 def signup(request):
     serializer = SignupSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    identity = serializer.validated_data
+    email = identity['email']
+    if User.objects.filter(email__iexact=email).exists():
+        return Response(
+            {'email': 'An account with this email already exists.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    now = timezone.now()
+    code = f'{secrets.randbelow(900_000) + 100_000:06d}'
+    department = identity['department_id']
+    club = identity.get('club_id')
+    registration_data = {
+        'password_hash': make_password(identity['password']),
+        'first_name': identity['first_name'],
+        'last_name': identity['last_name'],
+        'year_of_study': identity['year_of_study'],
+        'department_id': department.pk,
+        'club_id': club.pk if club else None,
+    }
     try:
         with transaction.atomic():
-            member = serializer.save()
-    except IntegrityError:
-        email = serializer.validated_data['email']
+            existing = (
+                EmailVerification.objects.select_for_update()
+                .filter(email=email)
+                .first()
+            )
+            if (
+                existing is not None
+                and existing.updated_at > now - timedelta(seconds=60)
+            ):
+                return Response(
+                    {
+                        'detail': 'If signup is pending for this address, a verification code has been sent.',
+                        'email': email,
+                        'verification_required': True,
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
+            EmailVerification.objects.update_or_create(
+                email=email,
+                defaults={
+                    'code_hash': make_password(code),
+                    'registration_data': registration_data,
+                    'attempts': 0,
+                    'expires_at': now + timedelta(minutes=10),
+                },
+            )
+            send_signup_verification(email, code)
+    except EmailDeliveryFailed:
+        return Response(
+            {'detail': 'The verification email could not be sent. Please retry.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response(
+        {
+            'detail': 'A verification code has been sent to your email.',
+            'email': email,
+            'verification_required': True,
+        },
+        status=status.HTTP_202_ACCEPTED,
+    )
+
+
+@extend_schema(
+    request=SignupVerificationSerializer,
+    responses={
+        201: inline_serializer(
+            name='VerifiedSignupResponse',
+            fields={
+                'token': serializers.CharField(read_only=True),
+                'member': UserMemberSerializer(read_only=True),
+            },
+        ),
+        400: VALIDATION_ERROR_RESPONSE,
+    },
+    auth=[],
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_signup(request):
+    serializer = SignupVerificationSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    email = serializer.validated_data['email']
+    code = serializer.validated_data['code']
+    invalid_code = Response(
+        {'detail': 'The verification code is invalid or expired.'},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+    with transaction.atomic():
+        pending = (
+            EmailVerification.objects.select_for_update()
+            .filter(email=email)
+            .first()
+        )
+        if (
+            pending is None
+            or pending.expires_at <= timezone.now()
+            or pending.attempts >= 5
+        ):
+            return invalid_code
+        if not check_password(code, pending.code_hash):
+            pending.attempts += 1
+            pending.save(update_fields=['attempts', 'updated_at'])
+            return invalid_code
         if User.objects.filter(email__iexact=email).exists():
+            pending.delete()
             return Response(
                 {'email': 'An account with this email already exists.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        raise
-    token, _ = Token.objects.get_or_create(user=member.user)
+
+        data = pending.registration_data
+        department = Department.objects.filter(pk=data['department_id']).first()
+        club_id = data['club_id']
+        club = Club.objects.filter(pk=club_id).first() if club_id else None
+        if department is None or (
+            club_id is not None
+            and (club is None or club.department_id != department.pk)
+        ):
+            pending.delete()
+            return Response(
+                {'detail': 'Signup details are no longer valid. Please register again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        username = f'user_{secrets.token_hex(8)}'
+        while User.objects.filter(username=username).exists():
+            username = f'user_{secrets.token_hex(8)}'
+        user = User(
+            username=username,
+            email=email,
+            first_name=data['first_name'],
+            last_name=data['last_name'],
+        )
+        user.password = data['password_hash']
+        user.save()
+        member = UserMember.objects.create(
+            user=user,
+            username=username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            year_of_study=data['year_of_study'],
+            department_id=department,
+            club_id=club,
+        )
+        token, _ = Token.objects.get_or_create(user=user)
+        pending.delete()
+
     return Response(
         {
             'token': token.key,
@@ -919,3 +1080,54 @@ def signup(request):
         },
         status=status.HTTP_201_CREATED,
     )
+
+
+@extend_schema(
+    request=SignupResendSerializer,
+    responses={200: inline_serializer(
+        name='SignupResendResponse',
+        fields={'detail': serializers.CharField(read_only=True)},
+    )},
+    auth=[],
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def resend_signup_verification(request):
+    serializer = SignupResendSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    email = serializer.validated_data['email']
+    generic_response = {
+        'detail': 'If signup is pending for this address, a new code has been sent.'
+    }
+
+    try:
+        with transaction.atomic():
+            pending = (
+                EmailVerification.objects.select_for_update()
+                .filter(email=email)
+                .first()
+            )
+            if (
+                pending is not None
+                and not User.objects.filter(email__iexact=email).exists()
+            ):
+                now = timezone.now()
+                if pending.updated_at > now - timedelta(seconds=60):
+                    return Response(generic_response)
+                code = f'{secrets.randbelow(900_000) + 100_000:06d}'
+                pending.code_hash = make_password(code)
+                pending.attempts = 0
+                pending.expires_at = now + timedelta(minutes=10)
+                pending.save(update_fields=[
+                    'code_hash',
+                    'attempts',
+                    'expires_at',
+                    'updated_at',
+                ])
+                send_signup_verification(email, code)
+    except EmailDeliveryFailed:
+        return Response(
+            {'detail': 'The verification email could not be sent. Please retry.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response(generic_response)

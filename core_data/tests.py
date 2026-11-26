@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core import mail
 from django.test import SimpleTestCase, TestCase, override_settings
 from PIL import Image
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -1420,7 +1421,7 @@ class DepartmentAndMemberApiTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    def test_signup_assigns_department_and_club_without_approval(self):
+    def test_signup_assigns_department_and_club_after_email_verification(self):
         club = Club.objects.create(name='Programming', department=self.department)
 
         response = self.client.post(
@@ -1437,14 +1438,23 @@ class DepartmentAndMemberApiTests(TestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 202)
+        self.assertFalse(User.objects.filter(email='new-user@example.com').exists())
+        code = mail.outbox[0].body.split()[4].rstrip('.')
+        verified = self.client.post(
+            '/api/signup/verify/',
+            {'email': 'new-user@example.com', 'code': code},
+            format='json',
+        )
+
+        self.assertEqual(verified.status_code, 201)
         member = UserMember.objects.get(user__email='new-user@example.com')
         self.assertTrue(member.username.startswith('user_'))
         self.assertEqual(member.year_of_study, 2)
         self.assertEqual(member.user.email, 'new-user@example.com')
         self.assertEqual(member.club_id, club)
         self.assertTrue(member.user.check_password('safe-password-123'))
-        self.assertIn('token', response.data)
+        self.assertIn('token', verified.data)
 
     def test_signup_generates_unique_username_without_club(self):
         payload = {
@@ -1459,11 +1469,26 @@ class DepartmentAndMemberApiTests(TestCase):
         payload['email'] = 'second@example.com'
         second_response = self.client.post('/api/signup/', payload, format='json')
 
-        self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(first_response.status_code, 202)
+        self.assertEqual(second_response.status_code, 202)
+        first_code = mail.outbox[0].body.split()[4].rstrip('.')
+        second_code = mail.outbox[1].body.split()[4].rstrip('.')
+        first_verified = self.client.post(
+            '/api/signup/verify/',
+            {'email': 'first@example.com', 'code': first_code},
+            format='json',
+        )
+        second_verified = self.client.post(
+            '/api/signup/verify/',
+            {'email': 'second@example.com', 'code': second_code},
+            format='json',
+        )
+
+        self.assertEqual(first_verified.status_code, 201)
+        self.assertEqual(second_verified.status_code, 201)
         self.assertNotEqual(
-            first_response.data['member']['username'],
-            second_response.data['member']['username'],
+            first_verified.data['member']['username'],
+            second_verified.data['member']['username'],
         )
 
     def test_club_writes_remain_disabled_for_superadmin(self):
