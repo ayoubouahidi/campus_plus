@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from core_data.models import UserMember
 from .views import auth_sync, me_avatar
@@ -14,11 +15,15 @@ User = get_user_model()
 @permission_classes([AllowAny])
 def auth_sync_preserving_avatar(request):
     """Keep uploaded avatars when the 42 provider refreshes its profile data."""
+    # Cache the raw body before reading request.data, so the wrapped view can
+    # parse the same body again from the plain Django request.
+    django_request = request._request
+    django_request.body
     forty_two_id = request.data.get("fortyTwoId")
     try:
         forty_two_id = int(forty_two_id)
     except (TypeError, ValueError):
-        return auth_sync(request)
+        return auth_sync(django_request)
 
     with transaction.atomic():
         existing = (
@@ -28,7 +33,7 @@ def auth_sync_preserving_avatar(request):
         )
         custom_avatar = bool(existing and existing.avatar_is_custom)
         existing_avatar_url = existing.avatar_url if custom_avatar else ""
-        response = auth_sync(request)
+        response = auth_sync(django_request)
         if response.status_code < 400 and custom_avatar:
             existing.refresh_from_db()
             existing.avatar_url = existing_avatar_url
@@ -39,8 +44,8 @@ def auth_sync_preserving_avatar(request):
 
 
 @api_view(["POST", "DELETE"])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def me_avatar_with_cleanup(request):
     """Mark uploads as custom and remove replaced files after a successful save."""
     member = UserMember.objects.filter(user=request.user).first()
@@ -48,7 +53,9 @@ def me_avatar_with_cleanup(request):
     storage = member.image_path.storage if member and member.image_path else None
 
     with transaction.atomic():
-        response = me_avatar(request)
+        # Pass the plain Django request: the wrapped DRF view builds its own
+        # Request and parses the upload itself (request.data is not read here).
+        response = me_avatar(request._request)
         if response.status_code >= 400:
             return response
 

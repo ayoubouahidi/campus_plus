@@ -1038,7 +1038,9 @@ def verify_signup(request):
 
         data = pending.registration_data
         department = Department.objects.filter(pk=data['department_id']).first()
-        club_id = data['club_id']
+        # BE20: new pending sign-ups no longer store club_id; rows created
+        # before that change may still carry one, so read it optionally.
+        club_id = data.get('club_id')
         club = Club.objects.filter(pk=club_id).first() if club_id else None
         if department is None or (
             club_id is not None
