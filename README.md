@@ -1,495 +1,220 @@
-# Campus Plus API (Transcendence)
+# Campus Hub — Infrastructure & DevOps
 
-Backend for **Campus Plus**: a Django REST + WebSocket API running behind Nginx (HTTPS), with PostgreSQL and Redis. Everything runs with Docker Compose, so nobody needs to install Python, Postgres or Redis locally.
+Containerized production infrastructure for **Campus Hub**, orchestrated with **Docker Compose**, fronted by an **Nginx HTTPS reverse proxy**, and monitored with **Prometheus + Grafana**.
 
-## Tech stack
-
-| Layer | Tech |
-|---|---|
-| Language / framework | Python 3.11, Django, Django REST Framework |
-| API docs | drf-spectacular (OpenAPI + Swagger UI) |
-| Real-time | Django Channels + `channels-redis` (WebSockets) |
-| App server | Daphne (ASGI) |
-| Database | PostgreSQL 16 |
-| Cache / channel layer | Redis 7 |
-| Reverse proxy | Nginx (alpine): HTTPS, static/media files, WebSocket proxy, rate limiting |
-| Orchestration | Docker Compose |
+---
 
 ## Architecture
 
-```
-Browser / Client
-      │  :80 (redirects to 443)   :443 (HTTPS / WSS)
-      ▼
-┌───────────┐   /static/  /media/  → served directly from shared volumes
-│   nginx   │
-└─────┬─────┘
-      │ proxy_pass web:8000  (HTTP + WebSocket upgrade on /ws/)
-      ▼
-┌───────────┐        ┌──────────┐
-│    web    │───────▶│    db    │  PostgreSQL 16
-│  (daphne) │        └──────────┘
-│           │        ┌──────────┐
-│           │───────▶│  redis   │  Channels layer (pub/sub)
-└───────────┘        └──────────┘
+```text
+                         ┌──────────────────────────────┐
+                         │        Client / Browser      │
+                         └──────────────┬───────────────┘
+                                        │ :80 (301 -> HTTPS)
+                                        │ :443 (TLSv1.2 / TLSv1.3)
+                                        ▼
+                         ┌──────────────────────────────┐
+                         │        nginx (alpine)        │
+                         │   Reverse Proxy + Rate Limit │
+                         └──┬───────────┬───────────┬───┘
+                            │           │           │
+           /api/auth/* ─────┤           │           ├───── /grafana/
+           /           ─────┘           │           └────► grafana:3000
+                            │           │                  (Grafana 11.3.0)
+                            ▼           │                        │
+                 ┌──────────────────┐   │                        ▼
+                 │ frontend (Next)  │   │             ┌────────────────────┐
+                 │      :3000       │   │             │ prometheus:9090    │
+                 └────────┬─────────┘   │             │ (v2.55.1 + alerts) │
+                          │             │             └─────────┬──────────┘
+         BACKEND_URL      │             │ /api/*                │ scrapes
+      http://backend:8000 │             │ /admin/               ├──► node-exporter:9100
+                          ▼             │ /ws/ (WSS)            └──► cadvisor:8080
+                 ┌──────────────────────▼───┐
+                 │  backend (Django+Daphne) │
+                 │          :8000           │
+                 └───────┬──────────┬───────┘
+                         │          │
+                         ▼          ▼
+               ┌──────────────┐  ┌────────────┐
+               │ postgres:16  │  │ redis:7    │
+               │ (db:5432)    │  │ (redis:6379│
+               └──────────────┘  └────────────┘
 ```
 
-- Only **nginx** is exposed to the host (ports `80` and `443`). `web`, `db` and `redis` are reachable only inside the Docker network.
-- On container start, `entrypoint.sh` runs `migrate` and `collectstatic`, then starts Daphne.
-- `web` waits for `db` to be healthy and for `redis` to start.
+- **Network isolation:** Only **Nginx** exposes host ports (`80` and `443`). `backend`, `frontend`, `db`, `redis`, `prometheus`, `grafana`, `node-exporter`, and `cadvisor` communicate strictly over the internal Docker Compose network.
+- **Persistent volumes:** `postgres_data`, `static_data`, `media_data`, `prometheus_data`, and `grafana_data`.
 
-## Project structure
+---
 
+## Quick Start
+
+1. **Create your local `.env` from `.env.example`:**
+
+```bash
+cp .env.example .env
 ```
+
+2. **Generate strong secrets and update `.env`:**
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+Fill in `DJANGO_SECRET_KEY`, `BACKEND_INTERNAL_KEY`, `AUTH_SECRET`, `POSTGRES_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, plus your 42 OAuth / email credentials as needed.
+
+3. **Start the stack:**
+
+```bash
+make up
+```
+
+`make up` generates self-signed SSL certificates in `infrastructure/nginx/certs/` (if missing) and builds/starts all services via `docker compose up -d --build`.
+
+4. **Access the endpoints:**
+   - **App:** `https://localhost`
+   - **API:** `https://localhost/api/`
+   - **Grafana:** `https://localhost/grafana/`
+
+---
+
+## Services & Images
+
+| Service | Image / Build | Internal Port | Role |
+|---|---|---|---|
+| `nginx` | `nginx:alpine` | `80`, `443` (host-exposed) | TLS termination, routing, rate limiting, static & media serving |
+| `backend` | `./Dockerfile` (`python:3.14-slim`) | `8000` | Django + DRF + Channels ASGI server (`daphne`) |
+| `frontend` | `./frontend` | `3000` | Next.js student application & Auth.js |
+| `db` | `postgres:16` | `5432` | Primary relational database (with `pg_isready` healthcheck) |
+| `redis` | `redis:7-alpine` | `6379` | Channel layer for WebSockets (with `redis-cli ping` healthcheck) |
+| `prometheus` | `prom/prometheus:v2.55.1` | `9090` | Metrics scraper & alerting rules evaluator |
+| `grafana` | `grafana/grafana:11.3.0` | `3000` | Dashboards & visualization served at `/grafana/` |
+| `node-exporter` | `prom/node-exporter:v1.8.2` | `9100` | Host CPU, memory, disk, and network metrics |
+| `cadvisor` | `gcr.io/cadvisor/cadvisor:v0.49.1` | `8080` | Per-container CPU and memory metrics |
+
+---
+
+## Directory Structure
+
+```text
 .
 ├── docker-compose.yml
 ├── Dockerfile
-├── requirements.txt
-├── .env                      # local secrets (NOT committed)
-├── .gitignore
-├── README.md
+├── Makefile
+├── .env.example
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 └── infrastructure/
-    ├── entrypoint.sh         # migrate + collectstatic, then exec CMD
-    ├── app/                  # Django project (copied to /app in the image)
-    │   ├── manage.py
-    │   └── config/
-    │       ├── settings.py
-    │       ├── urls.py
-    │       ├── views.py
-    │       ├── asgi.py
-    │       ├── routing.py    # WebSocket routes
-    │       └── consumers.py  # WebSocket consumers
-    └── nginx/
-        ├── nginx.conf
-        ├── gen-certs.sh      # generates a self-signed cert for local dev
-        └── certs/            # cert.pem + key.pem (git-ignored)
+    ├── entrypoint.sh
+    ├── nginx/
+    │   ├── nginx.conf
+    │   ├── gen-certs.sh
+    │   └── certs/                         # cert.pem + key.pem (git-ignored)
+    └── monitoring/
+        ├── prometheus/
+        │   ├── prometheus.yml
+        │   └── alerts.yml
+        └── grafana/
+            ├── dashboards/
+            │   └── campus-hub.json
+            └── provisioning/
+                ├── dashboards/
+                │   └── dashboard.yml
+                └── datasources/
+                    └── datasource.yml
 ```
 
-> The `Dockerfile` copies `infrastructure/app` to `/app` and `infrastructure/entrypoint.sh` to `/entrypoint.sh`, and `docker-compose.yml` mounts `./infrastructure/nginx/...`. Keep the repo laid out exactly like this.
+---
 
-## Prerequisites
+## Reverse Proxy, HTTPS & Security (`infrastructure/nginx/`)
 
-- [Docker](https://docs.docker.com/get-docker/) 24+ with the Compose plugin (`docker compose version` must work)
-- `openssl` (to generate the local HTTPS certificate). Already installed on Linux/macOS; on Windows use Git Bash or WSL.
-- Free ports **80** and **443** on your machine
+- **HTTP to HTTPS redirect:** All traffic on port `80` returns `301 https://$host$request_uri`.
+- **TLS:** Port `443` terminates SSL using `TLSv1.2` and `TLSv1.3` with certificates in `infrastructure/nginx/certs/`.
+- **Self-signed cert generation:** `infrastructure/nginx/gen-certs.sh` generates a 2048-bit RSA certificate (`365` days) with SANs `DNS:localhost`, `DNS:campushub.ma`, and `IP:127.0.0.1`.
+- **Routing rules (`infrastructure/nginx/nginx.conf`):**
+  - `/static/` -> served directly by Nginx from `/app/staticfiles/` (`static_data` volume)
+  - `/media/` -> served directly by Nginx from `/app/media/` (`media_data` volume)
+  - `/grafana/` -> proxied to `http://grafana:3000` (with WebSocket upgrade support)
+  - `/api/auth/callback/` -> proxied to `frontend` with brute-force rate limiting
+  - `/api/auth/` -> proxied to `frontend` (Auth.js routes)
+  - `/api/` -> proxied to `django_backend` with API rate limiting
+  - `/admin/` -> proxied to `django_backend`
+  - `/ws/` -> proxied to `django_backend` (`Upgrade` + `$connection_upgrade`, `3600s` read/send timeouts)
+  - `/` -> proxied to `frontend`
+- **WebSocket connection handling:** Uses `map $http_upgrade $connection_upgrade` so regular HTTP requests close cleanly (`'' -> close`) while WebSocket requests upgrade (`default -> upgrade`).
+- **Rate limiting (`429` on limit exceeded):**
+  - `auth_callback_limit`: `5r/m`, `burst=5 nodelay` on `/api/auth/callback/`
+  - `api_limit`: `10r/s`, `burst=10 nodelay` on `/api/`
+- **Upload limit:** `client_max_body_size 10m`.
 
-## Getting started
+---
 
-### 1. Clone the repo
+## Backend Container & Entrypoint
 
-```bash
-git clone <repo-url>
-cd <repo-folder>
-```
+- **Base image:** `python:3.14-slim` (`Dockerfile`)
+- **Startup script (`infrastructure/entrypoint.sh`):**
+  1. Runs `python manage.py migrate --noinput`
+  2. Runs `python manage.py collectstatic --noinput`
+  3. Starts `daphne -b 0.0.0.0 -p 8000 backend.asgi:application`
+- **Startup ordering:** `backend` waits on `db` (`service_healthy`) and `redis` (`service_healthy`) before booting.
 
-### 2. Create the `.env` file
+---
 
-At the repo root, create a file named `.env`:
+## Monitoring & Alerting (`infrastructure/monitoring/`)
 
-```env
-POSTGRES_DB=campus_plus
-POSTGRES_USER=campus_user
-POSTGRES_PASSWORD=change_me
-SECRET_KEY=change_me_to_a_long_random_string
-DEBUG=true
-```
+### Prometheus (`prometheus.yml` & `alerts.yml`)
+- **Scrape interval:** `15s` (evaluation interval: `15s`)
+- **Targets:** `localhost:9090` (`prometheus`), `node-exporter:9100` (`node_exporter`), `cadvisor:8080` (`cadvisor`)
+- **Alert rules (`alerts.yml`):**
+  - `InstanceDown` (`critical`): `up == 0` for `1m`
+  - `HighCPUUsage` (`warning`): Host CPU usage `> 80%` for `2m`
+  - `HighMemoryUsage` (`warning`): Host memory usage `> 85%` for `2m`
 
-| Variable | Description |
+### Grafana (`grafana/`)
+- Served behind Nginx at **`https://localhost/grafana/`** (`GF_SERVER_SERVE_FROM_SUB_PATH=true`, sign-ups and anonymous access disabled).
+- **Auto-provisioned datasource (`datasource.yml`):** `Prometheus` (`http://prometheus:9090`, default, non-editable).
+- **Auto-provisioned dashboard (`dashboards/campus-hub.json`):** *Campus Hub Infrastructure* (`15s` auto-refresh), containing 6 panels:
+  1. **Targets Status** (`up`)
+  2. **Host CPU Usage (%)** (`node_cpu_seconds_total`)
+  3. **Host Memory Usage (%)** (`node_memory_MemAvailable_bytes` / `node_memory_MemTotal_bytes`)
+  4. **Root Disk Usage (%)** (`node_filesystem_avail_bytes` / `node_filesystem_size_bytes`)
+  5. **Container CPU Usage (cores/s)** (`container_cpu_usage_seconds_total`)
+  6. **Container Memory Usage** (`container_memory_working_set_bytes`)
+
+---
+
+## Environment Configuration (`.env.example`)
+
+- **Django & HTTPS:** `DJANGO_SECRET_KEY`, `DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `DJANGO_HTTPS_ENABLED`, `DJANGO_PUBLIC_MEDIA_BASE_URL`
+- **Database & Cache:** `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `REDIS_URL`, `WS_AUTH_BACKEND`
+- **Frontend & Auth:** `BACKEND_INTERNAL_KEY`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_42_SCHOOL_ID`, `AUTH_42_SCHOOL_SECRET`, `AUTH_DEV_LOGIN`, `BACKEND_URL`
+- **Email (verification):** `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`
+- **Grafana:** `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`
+
+---
+
+## Operations (`Makefile`)
+
+| Command | Action |
 |---|---|
-| `POSTGRES_DB` | Database name |
-| `POSTGRES_USER` | Database user |
-| `POSTGRES_PASSWORD` | Database password |
-| `SECRET_KEY` | Django secret key (use a long random string) |
-| `DEBUG` | `true` for development, `false` for production |
-
-`.env` is git-ignored. **Never commit it.** Each team member creates their own. Generate a strong secret key with:
-
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(50))"
-```
-
-### 3. Generate the local HTTPS certificate
-
-Nginx expects `cert.pem` and `key.pem` in `infrastructure/nginx/certs/`.
-
-```bash
-cd infrastructure/nginx
-sh gen-certs.sh
-cd ../..
-```
-
-This creates a self-signed certificate for `localhost` / `127.0.0.1`, valid for 365 days. Your browser will show a security warning the first time: that's expected, accept it for local dev.
-
-### 4. Build and start everything
-
-```bash
-docker compose up --build
-```
-
-Add `-d` to run in the background. The first build takes a few minutes. When you see Daphne listening on `0.0.0.0:8000`, the stack is ready.
-
-### 5. Check that it works
-
-| What | URL |
-|---|---|
-| Health check (REST) | https://localhost/api/health/ |
-| Swagger UI (API docs) | https://localhost/api/docs/ |
-| OpenAPI schema | https://localhost/api/schema/ |
-| Django admin | https://localhost/admin/ |
-| WebSocket health | `wss://localhost/ws/health/` |
-
-Quick tests from the terminal (`-k` skips the self-signed cert check):
-
-```bash
-curl -k https://localhost/api/health/
-# {"status":"ok","message":"API is running"}
-
-curl -k https://localhost/api/check-ip/
-# {"real_ip":"..."}   -> confirms Nginx forwards X-Real-IP
-```
-
-WebSocket test (needs [`websocat`](https://github.com/vi/websocat) or similar):
-
-```bash
-websocat -k wss://localhost/ws/health/
-# {"status": "ok", "message": "WebSocket connected"}
-```
-
-Or in the browser console (after accepting the cert warning on https://localhost):
-
-```js
-const ws = new WebSocket("wss://localhost/ws/health/");
-ws.onmessage = (e) => console.log(e.data);
-```
-
-### 6. Create an admin user (optional)
-
-```bash
-docker compose exec web python manage.py createsuperuser
-```
-
-## API endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health/` | Health check (rate-limited to 60 req/min per IP by Nginx) |
-| GET | `/api/check-ip/` | Returns the client IP seen via `X-Real-IP` |
-| GET | `/api/schema/` | OpenAPI schema |
-| GET | `/api/docs/` | Swagger UI |
-| — | `/admin/` | Django admin |
-| WS | `/ws/health/` | WebSocket health consumer |
-
-## Daily commands
-
-```bash
-docker compose up -d                 # start in background
-docker compose down                  # stop (data is kept)
-docker compose logs -f web           # follow Django/Daphne logs
-docker compose logs -f nginx         # follow Nginx logs
-docker compose ps                    # container status
-docker compose restart web           # restart only the backend
-
-# Django management commands
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py makemigrations
-docker compose exec web python manage.py shell
-
-# Database shell
-docker compose exec db psql -U campus_user -d campus_plus
-
-# Full reset (DELETES the database, static and media volumes)
-docker compose down -v
-```
-
-## Developing
-
-- The code is **copied into the image at build time**, not mounted. After changing Python code, rebuild:
-  ```bash
-  docker compose up -d --build web
-  ```
-- After changing `nginx.conf`:
-  ```bash
-  docker compose restart nginx
-  ```
-- Add a new Python dependency: put it in `requirements.txt`, then rebuild `web`.
-- Adding a new Django app: create it inside `infrastructure/app/`, add it to `INSTALLED_APPS` in `config/settings.py`, then rebuild.
-- Adding a new WebSocket route: create the consumer in `config/consumers.py` and register it in `config/routing.py`. Nginx already proxies everything under `/ws/`.
-
-## Persistent data (Docker volumes)
-
-| Volume | Content |
-|---|---|
-| `postgres_data` | PostgreSQL data |
-| `static_data` | Collected static files (shared `web` → `nginx`) |
-| `media_data` | User uploads (shared `web` → `nginx`) |
-
-## Troubleshooting
-
-**Port 80/443 already in use**: stop the other service (Apache, another Nginx, IIS...) or change the host ports in `docker-compose.yml` (e.g. `"8080:80"`, `"8443:443"`).
-
-**Nginx exits with `cannot load certificate`**: you skipped step 3, or the certs are not in `infrastructure/nginx/certs/`. Run `gen-certs.sh` from inside `infrastructure/nginx`.
-
-**`CSRF verification failed` on the admin login**: the origin must be listed in `CSRF_TRUSTED_ORIGINS` in `settings.py`. Currently only `https://localhost` and `https://127.0.0.1` are trusted. Add your domain (e.g. `https://campusplus.ma`) when deploying.
-
-**`DisallowedHost` / 400 error**: the hostname is not in `ALLOWED_HOSTS` (`localhost`, `127.0.0.1`, `campusplus.ma`).
-
-**Database password changed in `.env` but login fails**: Postgres only reads `POSTGRES_PASSWORD` on first initialization. Either change it inside Postgres or reset the volume with `docker compose down -v` (this deletes data).
-
-**WebSocket fails to connect**: use `wss://` (not `ws://`) since HTTP redirects to HTTPS, and make sure you accepted the certificate in the browser.
-
-## Notes before going to production
-
-- Set `DEBUG=false`.
-- Use a strong, unique `SECRET_KEY` and database password. Don't reuse the dev values.
-- Replace the self-signed certificate with a real one (e.g. Let's Encrypt) for `campusplus.ma`.
-- Add the production origin to `CSRF_TRUSTED_ORIGINS`.
-- Pin dependency versions in `requirements.txt` for reproducible builds.
-- Don't expose Redis or Postgres ports publicly.
-- Serve media files only for trusted content.# Campus Plus API (Transcendence)
-
-Backend for **Campus Plus**: a Django REST + WebSocket API running behind Nginx (HTTPS), with PostgreSQL and Redis. Everything runs with Docker Compose, so nobody needs to install Python, Postgres or Redis locally.
-
-## Tech stack
-
-| Layer | Tech |
-|---|---|
-| Language / framework | Python 3.11, Django, Django REST Framework |
-| API docs | drf-spectacular (OpenAPI + Swagger UI) |
-| Real-time | Django Channels + `channels-redis` (WebSockets) |
-| App server | Daphne (ASGI) |
-| Database | PostgreSQL 16 |
-| Cache / channel layer | Redis 7 |
-| Reverse proxy | Nginx (alpine): HTTPS, static/media files, WebSocket proxy, rate limiting |
-| Orchestration | Docker Compose |
-
-## Architecture
-
-```
-Browser / Client
-      │  :80 (redirects to 443)   :443 (HTTPS / WSS)
-      ▼
-┌───────────┐   /static/  /media/  → served directly from shared volumes
-│   nginx   │
-└─────┬─────┘
-      │ proxy_pass web:8000  (HTTP + WebSocket upgrade on /ws/)
-      ▼
-┌───────────┐        ┌──────────┐
-│    web    │───────▶│    db    │  PostgreSQL 16
-│  (daphne) │        └──────────┘
-│           │        ┌──────────┐
-│           │───────▶│  redis   │  Channels layer (pub/sub)
-└───────────┘        └──────────┘
-```
-
-- Only **nginx** is exposed to the host (ports `80` and `443`). `web`, `db` and `redis` are reachable only inside the Docker network.
-- On container start, `entrypoint.sh` runs `migrate` and `collectstatic`, then starts Daphne.
-- `web` waits for `db` to be healthy and for `redis` to start.
-
-## Project structure
-
-```
-.
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-├── .env                      # local secrets (NOT committed)
-├── .gitignore
-├── README.md
-└── infrastructure/
-    ├── entrypoint.sh         # migrate + collectstatic, then exec CMD
-    ├── app/                  # Django project (copied to /app in the image)
-    │   ├── manage.py
-    │   └── config/
-    │       ├── settings.py
-    │       ├── urls.py
-    │       ├── views.py
-    │       ├── asgi.py
-    │       ├── routing.py    # WebSocket routes
-    │       └── consumers.py  # WebSocket consumers
-    └── nginx/
-        ├── nginx.conf
-        ├── gen-certs.sh      # generates a self-signed cert for local dev
-        └── certs/            # cert.pem + key.pem (git-ignored)
-```
-
-> The `Dockerfile` copies `infrastructure/app` to `/app` and `infrastructure/entrypoint.sh` to `/entrypoint.sh`, and `docker-compose.yml` mounts `./infrastructure/nginx/...`. Keep the repo laid out exactly like this.
-
-## Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) 24+ with the Compose plugin (`docker compose version` must work)
-- `openssl` (to generate the local HTTPS certificate). Already installed on Linux/macOS; on Windows use Git Bash or WSL.
-- Free ports **80** and **443** on your machine
-
-## Getting started
-
-### 1. Clone the repo
-
-```bash
-git clone <repo-url>
-cd <repo-folder>
-```
-
-### 2. Create the `.env` file
-
-At the repo root, create a file named `.env`:
-
-```env
-POSTGRES_DB=campus_plus
-POSTGRES_USER=campus_user
-POSTGRES_PASSWORD=change_me
-SECRET_KEY=change_me_to_a_long_random_string
-DEBUG=true
-```
-
-| Variable | Description |
-|---|---|
-| `POSTGRES_DB` | Database name |
-| `POSTGRES_USER` | Database user |
-| `POSTGRES_PASSWORD` | Database password |
-| `SECRET_KEY` | Django secret key (use a long random string) |
-| `DEBUG` | `true` for development, `false` for production |
-
-`.env` is git-ignored. **Never commit it.** Each team member creates their own. Generate a strong secret key with:
-
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(50))"
-```
-
-### 3. Generate the local HTTPS certificate
-
-Nginx expects `cert.pem` and `key.pem` in `infrastructure/nginx/certs/`.
-
-```bash
-cd infrastructure/nginx
-sh gen-certs.sh
-cd ../..
-```
-
-This creates a self-signed certificate for `localhost` / `127.0.0.1`, valid for 365 days. Your browser will show a security warning the first time: that's expected, accept it for local dev.
-
-### 4. Build and start everything
-
-```bash
-docker compose up --build
-```
-
-Add `-d` to run in the background. The first build takes a few minutes. When you see Daphne listening on `0.0.0.0:8000`, the stack is ready.
-
-### 5. Check that it works
-
-| What | URL |
-|---|---|
-| Health check (REST) | https://localhost/api/health/ |
-| Swagger UI (API docs) | https://localhost/api/docs/ |
-| OpenAPI schema | https://localhost/api/schema/ |
-| Django admin | https://localhost/admin/ |
-| WebSocket health | `wss://localhost/ws/health/` |
-
-Quick tests from the terminal (`-k` skips the self-signed cert check):
-
-```bash
-curl -k https://localhost/api/health/
-# {"status":"ok","message":"API is running"}
-
-curl -k https://localhost/api/check-ip/
-# {"real_ip":"..."}   -> confirms Nginx forwards X-Real-IP
-```
-
-WebSocket test (needs [`websocat`](https://github.com/vi/websocat) or similar):
-
-```bash
-websocat -k wss://localhost/ws/health/
-# {"status": "ok", "message": "WebSocket connected"}
-```
-
-Or in the browser console (after accepting the cert warning on https://localhost):
-
-```js
-const ws = new WebSocket("wss://localhost/ws/health/");
-ws.onmessage = (e) => console.log(e.data);
-```
-
-### 6. Create an admin user (optional)
-
-```bash
-docker compose exec web python manage.py createsuperuser
-```
-
-## API endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health/` | Health check (rate-limited to 60 req/min per IP by Nginx) |
-| GET | `/api/check-ip/` | Returns the client IP seen via `X-Real-IP` |
-| GET | `/api/schema/` | OpenAPI schema |
-| GET | `/api/docs/` | Swagger UI |
-| — | `/admin/` | Django admin |
-| WS | `/ws/health/` | WebSocket health consumer |
-
-## Daily commands
-
-```bash
-docker compose up -d                 # start in background
-docker compose down                  # stop (data is kept)
-docker compose logs -f web           # follow Django/Daphne logs
-docker compose logs -f nginx         # follow Nginx logs
-docker compose ps                    # container status
-docker compose restart web           # restart only the backend
-
-# Django management commands
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py makemigrations
-docker compose exec web python manage.py shell
-
-# Database shell
-docker compose exec db psql -U campus_user -d campus_plus
-
-# Full reset (DELETES the database, static and media volumes)
-docker compose down -v
-```
-
-## Developing
-
-- The code is **copied into the image at build time**, not mounted. After changing Python code, rebuild:
-  ```bash
-  docker compose up -d --build web
-  ```
-- After changing `nginx.conf`:
-  ```bash
-  docker compose restart nginx
-  ```
-- Add a new Python dependency: put it in `requirements.txt`, then rebuild `web`.
-- Adding a new Django app: create it inside `infrastructure/app/`, add it to `INSTALLED_APPS` in `config/settings.py`, then rebuild.
-- Adding a new WebSocket route: create the consumer in `config/consumers.py` and register it in `config/routing.py`. Nginx already proxies everything under `/ws/`.
-
-## Persistent data (Docker volumes)
-
-| Volume | Content |
-|---|---|
-| `postgres_data` | PostgreSQL data |
-| `static_data` | Collected static files (shared `web` → `nginx`) |
-| `media_data` | User uploads (shared `web` → `nginx`) |
-
-## Troubleshooting
-
-**Port 80/443 already in use**: stop the other service (Apache, another Nginx, IIS...) or change the host ports in `docker-compose.yml` (e.g. `"8080:80"`, `"8443:443"`).
-
-**Nginx exits with `cannot load certificate`**: you skipped step 3, or the certs are not in `infrastructure/nginx/certs/`. Run `gen-certs.sh` from inside `infrastructure/nginx`.
-
-**`CSRF verification failed` on the admin login**: the origin must be listed in `CSRF_TRUSTED_ORIGINS` in `settings.py`. Currently only `https://localhost` and `https://127.0.0.1` are trusted. Add your domain (e.g. `https://campusplus.ma`) when deploying.
-
-**`DisallowedHost` / 400 error**: the hostname is not in `ALLOWED_HOSTS` (`localhost`, `127.0.0.1`, `campusplus.ma`).
-
-**Database password changed in `.env` but login fails**: Postgres only reads `POSTGRES_PASSWORD` on first initialization. Either change it inside Postgres or reset the volume with `docker compose down -v` (this deletes data).
-
-**WebSocket fails to connect**: use `wss://` (not `ws://`) since HTTP redirects to HTTPS, and make sure you accepted the certificate in the browser.
-
-## Notes before going to production
-
-- Set `DEBUG=false`.
-- Use a strong, unique `SECRET_KEY` and database password. Don't reuse the dev values.
-- Replace the self-signed certificate with a real one (e.g. Let's Encrypt) for `campusplus.ma`.
-- Add the production origin to `CSRF_TRUSTED_ORIGINS`.
-- Pin dependency versions in `requirements.txt` for reproducible builds.
-- Don't expose Redis or Postgres ports publicly.
-- Serve media files only for trusted content.
+| `make certs` | Generate self-signed SSL certificates in `infrastructure/nginx/certs/` if missing |
+| `make up` / `make` | Generate certs and start the full stack in production mode (`docker compose up -d --build`) |
+| `make dev` | Start with `docker-compose.dev.yml` for frontend live reload (`--renew-anon-volumes`) |
+| `make down` | Stop and remove containers |
+| `make lint` | Run ESLint inside a throwaway frontend dev container |
+| `make typecheck` | Run `tsc --noEmit` inside a throwaway frontend dev container |
+| `make build-check` | Build the production `frontend` image without starting the stack |
+| `make clear-images` | Clear Next.js resized-image cache inside `frontend` |
+| `make logs` | Stream logs from all services |
+| `make clean` | Stop containers and remove volumes and orphans (`-v --remove-orphans`) |
+| `make fclean` | `clean` + remove built/pulled images and prune Docker build cache |
+| `make re` | Full reset and rebuild (`fclean` followed by `up`) |
+
+---
+
+## CI Pipeline (`.github/workflows/ci.yml`)
+
+Triggered on `push` and `pull_request` to `Developer`:
+1. **`backend_tests`:** Sets up Python `3.14`, installs `requirements.txt`, and runs `python manage.py test`.
+2. **`frontend_build`:** Runs `docker build ./frontend` to verify the multi-stage production image compiles cleanly.

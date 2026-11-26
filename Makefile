@@ -1,15 +1,25 @@
-# Production: the frontend's last Dockerfile stage (next build + standalone server).
-up:
-	docker compose up -d --build
+.PHONY: all certs up dev down logs lint typecheck build-check clear-images clean fclean re
 
-down:
-	docker compose down
+all: up
+
+certs:
+	@if [ ! -f infrastructure/nginx/certs/cert.pem ] || [ ! -f infrastructure/nginx/certs/key.pem ]; then \
+		echo "Generating self-signed SSL certificates..."; \
+		sh infrastructure/nginx/gen-certs.sh; \
+	fi
+
+# Production: the frontend's last Dockerfile stage (next build + standalone server).
+up: certs
+	docker compose up -d --build
 
 # Frontend with live reload: mounts ./frontend into the container (docker-compose.dev.yml).
 # --renew-anon-volumes: node_modules lives in an anonymous volume; without it a rebuilt image (new dependency)
 # would keep the old volume and fail with "Module not found" (frontend DOCS.md §12.1).
-dev:
+dev: certs
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --renew-anon-volumes
+
+down:
+	docker compose down
 
 # Checks run in a throwaway container of the `dev` stage, with the source mounted: they work whether the
 # production image (`make up`, no dev tools inside) or the dev server (`make dev`) is running (DOCS.md §19).
@@ -37,8 +47,5 @@ clean:
 
 fclean: clean
 	docker compose down --rmi all -v --remove-orphans
-	docker builder prune -f
 
 re: fclean up
-
-.PHONY: up dev down logs lint typecheck build-check clear-images clean fclean re
