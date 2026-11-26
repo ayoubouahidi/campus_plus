@@ -58,7 +58,7 @@ def save_user_with_email_conflict_check(user, email):
 
 
 def get_campus_allow_list():
-    raw = os.getenv("ALLOWED_42_CAMPUSES", "")
+    raw = os.getenv("ALLOWED_42_CAMPUSES", "Benguerir,Khouribga,Tetouan,Rabat")
     return {value.strip().lower() for value in raw.split(",") if value.strip()}
 
 
@@ -98,11 +98,7 @@ def email_password_login(request):
         )
 
     token, _ = Token.objects.get_or_create(user=user)
-    AuditLog.objects.create(
-        actor=user,
-        action="login",
-        target=user.username,
-    )
+    AuditLog.objects.create(actor=user, action="login", target=user.username)
     return Response({"token": token.key, "user": UserSerializer(user).data})
 
 
@@ -146,7 +142,7 @@ def auth_sync(request):
     }
 
     with transaction.atomic():
-        user = User.objects.filter(forty_two_id=forty_two_id).first()
+        user = User.objects.select_for_update().filter(forty_two_id=forty_two_id).first()
         if user is not None and not user.is_active:
             return Response(
                 {"detail": "This account is inactive."},
@@ -167,13 +163,10 @@ def auth_sync(request):
                 last_name=identity.get("lastName", ""),
                 email=email,
                 forty_two_id=forty_two_id,
-                role=(
-                    "SUPERADMIN"
-                    if login in superadmin_logins
-                    else "STUDENT"
-                ),
+                role=("SUPERADMIN" if login in superadmin_logins else "STUDENT"),
                 campus=campus,
                 avatar_url=identity.get("imageUrl") or "",
+                avatar_is_custom=False,
             )
             user.set_unusable_password()
             if not save_user_with_email_conflict_check(user, email):
@@ -187,7 +180,9 @@ def auth_sync(request):
             user.last_name = identity.get("lastName", "")
             user.email = email
             user.campus = campus
-            user.avatar_url = identity.get("imageUrl") or ""
+            # Only use the 42 profile image until the user uploads a custom one.
+            if not user.avatar_is_custom:
+                user.avatar_url = identity.get("imageUrl") or ""
             if not save_user_with_email_conflict_check(user, email):
                 return Response(
                     {"email": "This email is already linked to another account."},
@@ -203,11 +198,7 @@ def auth_sync(request):
         member.last_name = user.last_name
         member.save()
 
-        AuditLog.objects.create(
-            actor=user,
-            action="login",
-            target=user.username,
-        )
+        AuditLog.objects.create(actor=user, action="login", target=user.username)
         token, _ = Token.objects.get_or_create(user=user)
 
     return Response(
@@ -256,23 +247,14 @@ def me(request):
                 PhonePairState.ACCOUNT_WITHOUT_MEMBER,
             }:
                 return Response(
-                    {
-                        "phone": (
-                            "Existing phone data must be reconciled before it "
-                            "can be updated."
-                        )
-                    },
+                    {"phone": ("Existing phone data must be reconciled before it "
+                               "can be updated.")},
                     status=status.HTTP_409_CONFLICT,
                 )
             if member is None:
-                member = UserMember.objects.create(
-                    user=user,
-                    username=user.username,
-                )
+                member = UserMember.objects.create(user=user, username=user.username)
             member.phone = requested_phone
             member.save(update_fields=["phone"])
-            # Keep the temporary accounts field synchronized for clients that
-            # still read it, while UserMember remains the canonical owner.
             user.phone = requested_phone
             user.save(update_fields=["phone"])
             request.user = user
@@ -287,11 +269,7 @@ def me(request):
         400: OpenApiResponse(description="The uploaded image is invalid."),
     },
 )
-@extend_schema(
-    methods=["DELETE"],
-    request=None,
-    responses={200: UserSerializer},
-)
+@extend_schema(methods=["DELETE"], request=None, responses={200: UserSerializer})
 @api_view(["POST", "DELETE"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -304,7 +282,8 @@ def me_avatar(request):
             member.image_path = ""
             member.save(update_fields=["image_path"])
             request.user.avatar_url = ""
-            request.user.save(update_fields=["avatar_url"])
+            request.user.avatar_is_custom = False
+            request.user.save(update_fields=["avatar_url", "avatar_is_custom"])
         return Response(UserSerializer(request.user).data)
 
     image = request.FILES.get("file")
@@ -344,10 +323,9 @@ def me_avatar(request):
     )
 
     if member is None:
-        member = UserMember.objects.create(
-            user=request.user,
-            username=request.user.get_username(),
-        )
+        member = UserMember.objects.create(user=request.user, username=request.user.get_username())
+    old_image = member.image_path
+    old_image_name = old_image.name if old_image else ""
     member.image_path = normalized_image
     member.save(update_fields=["image_path"])
     public_media_base_url = settings.DJANGO_PUBLIC_MEDIA_BASE_URL
@@ -356,7 +334,12 @@ def me_avatar(request):
         if public_media_base_url
         else request.build_absolute_uri(member.image_path.url)
     )
-    request.user.save(update_fields=["avatar_url"])
+    request.user.avatar_is_custom = True
+    request.user.save(update_fields=["avatar_url", "avatar_is_custom"])
+
+    if old_image_name and old_image_name != member.image_path.name:
+        storage = old_image.storage
+        transaction.on_commit(lambda: storage.delete(old_image_name))
     return Response(UserSerializer(request.user).data)
 
 

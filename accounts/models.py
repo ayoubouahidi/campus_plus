@@ -18,6 +18,7 @@ class User(AbstractUser):
     )
     campus = models.CharField(max_length=100, blank=True)
     avatar_url = models.URLField(blank=True)
+    avatar_is_custom = models.BooleanField(default=False)
     phone = models.CharField(max_length=30, blank=True)
 
     class Meta:
