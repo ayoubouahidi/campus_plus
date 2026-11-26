@@ -5825,8 +5825,8 @@ Meanwhile our two layers apply the two cheapest rules:
 
 | Step | Scope | Status |
 | --- | --- | --- |
-| 24.1 | `@student.1337.ma` rule on the sign-up form (browser + server action), hint and placeholder; sign-up page offers "Continue with 42" + "or sign up with email"; new intro; backend requests BE21–BE27 | 🧪 checks run, waiting for Mouad's check |
-| 24.2 | 6-digit code field after sign-up ("We sent a code to …", "Send a new code"), the same field on login for an unverified account, privacy policy line about the codes | ⏸ waits for Ayoub's BE22–BE24 (not built before the endpoints exist) |
+| 24.1 | `@student.1337.ma` rule on the sign-up form (browser + server action), hint and placeholder; sign-up page offers "Continue with 42" + "or sign up with email"; new intro; backend requests BE21–BE27 | ↩️ the email rule was **removed** on 2026-11-26 (§28: any email, confirmed by a code); the 42 button and divider stay |
+| 24.2 | 6-digit code field after sign-up ("We sent a code to …", "Send a new code"), the same field on login for an unverified account, privacy policy line about the codes | ➡️ built as §28 (no login field needed: Django only creates the account after the code) |
 
 ### 24.1 The student-email rule (2026-11-24)
 
@@ -6025,3 +6025,86 @@ type PhotoResult = { ok: true; avatarUrl: string | null } | { ok: false; error: 
 1. Why does a public page fail when the visitor's token is invalid, even though the page doesn't need a token?
 2. Why retry only GET requests, and not an RSVP?
 3. Why can't a Server Component sign the student out by itself?
+
+---
+
+## 28. Sign-up with any email, confirmed by a 6-digit code (2026-11-26)
+
+**Decision (Mouad, 2026-11-26):** sign-up accepts **any email address** (gmail included). The 1337 mailboxes (`@student.1337.ma`) don't receive mail today, so a code sent there would never arrive, and the evaluation needs a working sign-up. The **6-digit code** proves the student owns the address. "1337 only" is still enforced for 42 logins (`ALLOWED_42_CAMPUSES`). This replaces the `@student.1337.ma` rule of §24.1 (removed) and is step 24.2 (the code field), built now that Ayoub's endpoints exist (`Ayoub-backend` `cd2504e`).
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 28.1 | Remove the `@student.1337.ma` rule (browser + server action), new hint "We'll send a 6-digit code to this address" | 🧪 on `/test`, waiting for Mouad's check |
+| 28.2 | Code step after sign-up: code field, "Send a new code" with a 60 s countdown, "Use another email", login right after the right code | 🧪 on `/test`, waiting for Mouad's check |
+
+### 1. Feature & files
+- `src/lib/register.ts`: `STUDENT_EMAIL_DOMAIN` / `isStudentEmail` removed. New: `SIGNUP_CODE_LENGTH` (6), `SIGNUP_CODE_MINUTES` (10), `RESEND_COOLDOWN_SECONDS` (60), `normalizeSignupCode`, `validateSignupCode`, types `SignupCodeState`, `SignupCodeError`, `ResendResult`; `RegisterState.verifyEmail`.
+- `src/lib/login.ts`: `ValidationKey` loses `emailNotStudent`, gains `codeRequired`, `codeInvalid`.
+- `src/app/auth/register/actions.ts`: `registerWithEmail` (Django **202** → `verifyEmail`; an older Django's **201** still logs in at once), new `verifySignupCode` and `resendSignupCode`.
+- `src/auth.ts`: new Auth.js Credentials provider **`signup-code`** (`email`, `code`) → `confirmSignupWithBackend`: `POST /api/signup/verify/` → token → `GET /api/me/` → the same user shape as the email login.
+- `src/components/auth/SignupCodeForm.tsx` (new organism): the code step.
+- `src/components/auth/RegisterForm.tsx`: new props `verifyAction`, `resendAction`; shows `SignupCodeForm` when `state.verifyEmail` is set; no placeholder, new hint `Auth.emailCodeHelp`.
+- `src/lib/devAccounts.ts`: dev fallback without Django: `addPendingDevAccount`, `confirmDevAccount`, `DEV_SIGNUP_CODE = '123456'` (printed in the frontend logs).
+- Messages (en/fr/ar): `Auth.signupCode.*`, `Auth.emailCodeHelp`, new `Auth.registerIntro`, `Validation.codeRequired` / `codeInvalid`.
+- `/test`: Step 28 section with fake actions (`src/app/test/signupCodeActions.ts`).
+
+### 2. Business & product purpose
+A student signs up with their email, receives a 6-digit code, types it on the same page, and is logged in. Nobody can create an account with someone else's address, because they never see the code. The 1337 mail problem doesn't block sign-up at the evaluation.
+
+### 3. Core concepts & engineering decisions
+- **The account is created only by the right code** (Ayoub's design, better than BE22's): `POST /api/signup/` keeps the details as a pending sign-up (password already hashed) and answers 202; `POST /api/signup/verify/` creates the user and returns a token. No half-made accounts, nothing to clean up, and the login form never meets an "unverified" account.
+- **Logging in after the code without the password:** the password isn't kept between the two steps (it would have to travel back to the browser or sit in a cookie). Instead the code itself is the credential: a second Credentials provider, `signup-code`, whose `authorize()` is Django's verify call. `signIn('signup-code', { email, code })` sets the same session cookie as a password login.
+- **One message for wrong / expired / 5 tries:** Django answers the same 400 on purpose (doesn't help guessing); we say "It may be mistyped or expired… send a new code".
+- **One input, not 6 boxes:** one label, one tab stop, paste works, `autocomplete="one-time-code"` lets phones offer the code, `inputMode="numeric"` shows the digit keypad, `dir="ltr"` keeps digits and the address left to right in Arabic. `123 456` and `123-456` are accepted (spaces and dashes dropped).
+- **Countdown:** "Send a new code in 60 s" (Django sends at most one per minute and answers the same for every address). The timer is a `setTimeout` in an effect, one tick per second, stopped at 0: nothing reads the clock during render.
+- **Going back:** "Use another email" remembers the state object it left; a new submit returns a new object, so the code step returns by itself without an effect. The fields keep their values (passwords excepted).
+- **Accessibility:** the code step is a form labelled by its heading; the field gets the focus when it appears; errors are `role="alert"`; the result of "Send a new code" is in a polite live region.
+
+### 4. Architectural tradeoffs
+| Option | Why not |
+|---|---|
+| Keep `@student.1337.ma` only | Those mailboxes get no mail today: nobody could finish signing up at the evaluation |
+| Ask for the password again after the code | Works, but the student types it twice in one minute; the code is already a proof |
+| Keep the password in an encrypted cookie between the steps | A secret stored in the browser for 10 minutes for no gain |
+| 6 separate boxes | Six tab stops and labels, paste needs custom code, screen readers read six fields |
+| A link in the email instead of a code | Opens a new tab, often on the phone instead of the computer (§24 table) |
+
+### 5. Contract
+```ts
+// lib/register.ts
+normalizeSignupCode(raw: string): string | null;        // '123 456' → '123456'; 'abc' → null
+validateSignupCode(raw: string): FieldError | undefined; // codeRequired | codeInvalid {length}
+interface SignupCodeState { error: 'wrong-code' | 'unavailable' | null; fieldError?: FieldError }
+type ResendResult = 'sent' | 'throttled' | 'unavailable';
+
+// components/auth/SignupCodeForm.tsx (forwardRef<HTMLFormElement>)
+interface SignupCodeFormProps {
+  email: string; next: string;
+  action: (previous: SignupCodeState, formData: FormData) => Promise<SignupCodeState>;
+  resendAction: (email: string) => Promise<ResendResult>;
+  onChangeEmail: () => void;
+}
+// Django: POST /api/signup/ → 202 | 400 | 503 · POST /api/signup/verify/ {email, code} → 201 {token, member} | 400
+//         POST /api/signup/resend/ {email} → 200 (same answer for every address)
+```
+
+### 6. Usage
+```tsx
+<RegisterForm
+  action={registerWithEmail}
+  verifyAction={verifySignupCode}
+  resendAction={resendSignupCode}
+  next={next}
+  departments={departments}
+/>
+```
+
+**Verified (2026-11-26):** `tsc` and ESLint clean. Against Ayoub's backend (`cd2504e` merged with `Developer`, console email backend), through nginx and Auth.js: `/auth/register` and `/test` 200; sign-up with a gmail address → 202 and the code in Django's log; letters → refused before Django; wrong code → refused; the right code pasted as `123 456` → logged in as the new student, `/profile` works; the same code again → refused; resend for an unknown address → 200; password login afterwards → 200. **7/7.** The code step's UI (countdown, going back, languages) is checked by hand on `/test`.
+
+**Study questions**
+1. Why is it safer that Django creates the account only after the code, rather than creating it "unverified"?
+2. How does the student get logged in after the code without the password, and why is that safe?
+3. Why does Django give the same answer for a wrong code, an expired code and too many tries?
+4. Why does "Send a new code" answer the same whether or not the address is signing up?
+5. Why one input with `autocomplete="one-time-code"` instead of six boxes?
+6. The countdown changes every second. Why doesn't it break the "no `Date.now()` in render" rule?

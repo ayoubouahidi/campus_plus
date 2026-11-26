@@ -8,7 +8,7 @@ import { RegisterPanel } from '@/components/auth/RegisterPanel';
 import { safeNextPath } from '@/lib/login';
 import { listDepartments } from '@/lib/data';
 import { signInWith42 } from '../login/actions';
-import { registerWithEmail } from './actions';
+import { registerWithEmail, resendSignupCode, verifySignupCode } from './actions';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('Meta');
@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // `/auth/register` (Step 11.3): email sign-up, full screen like /auth/login (FULL_SCREEN_ROUTES covers /auth).
-// ?next= where to go once the account exists (the student is logged in right away).
+// ?next= where to go once the account exists (the student is logged in when the emailed code is confirmed, §28).
 export default async function RegisterPage({
   searchParams,
 }: {
@@ -38,7 +38,13 @@ export default async function RegisterPage({
   return (
     <LoginLayout>
       <RegisterPanel next={next} fortyTwoAction={signInWith42}>
-        <RegisterForm action={registerWithEmail} next={next} departments={departments} />
+        <RegisterForm
+          action={registerWithEmail}
+          verifyAction={verifySignupCode}
+          resendAction={resendSignupCode}
+          next={next}
+          departments={departments}
+        />
       </RegisterPanel>
     </LoginLayout>
   );

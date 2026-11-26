@@ -62,7 +62,6 @@ export const getLoginErrorKind = (code: string | string[] | undefined | null): L
 export type ValidationKey =
   | 'emailRequired'
   | 'emailInvalid'
-  | 'emailNotStudent'
   | 'emailTaken'
   | 'passwordRequired'
   | 'passwordChoose'
@@ -77,9 +76,11 @@ export type ValidationKey =
   | 'nameTooLong'
   | 'yearRequired'
   | 'schoolRequired'
-  | 'phoneInvalid';
+  | 'phoneInvalid'
+  | 'codeRequired'
+  | 'codeInvalid';
 
-export type FieldError = { key: ValidationKey; values?: { min?: number; max?: number } } | { text: string };
+export type FieldError = { key: ValidationKey; values?: { min?: number; max?: number; length?: number } } | { text: string };
 
 // The form's fields, checked the same way in the browser (before posting) and in the server action
 // (the browser check can be skipped). Messages say what to do, not what went wrong.

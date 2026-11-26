@@ -30,6 +30,9 @@ export interface RegisterState {
   error: RegisterError | null;
   fieldErrors: RegisterFieldErrors;
   values: RegisterPublicValues;
+  // Set when Django accepted the sign-up and emailed a code (Step 28, DOCS.md §28): the form shows the code step
+  // for this address. The account only exists once the code is confirmed.
+  verifyEmail?: string;
 }
 
 export const EMPTY_REGISTER_VALUES: RegisterPublicValues = {
@@ -87,16 +90,6 @@ const isTooSimilar = ({ password, first_name, last_name, email }: RegisterValues
   return parts.some((part) => lowered.includes(part));
 };
 
-// Only 1337 students can sign up (Mouad's decision, 2026-11-24, TEAM_NEEDS §1i): the address must be at
-// exactly `student.1337.ma`. "Exactly", not "ends with": `x@evil-student.1337.ma` is refused. Django must apply
-// the same rule (BE21) and verify the address by email (BE22) since anyone can type someone else's address.
-// Login is not restricted here: board members and staff accounts may use other addresses; Django decides.
-export const STUDENT_EMAIL_DOMAIN = 'student.1337.ma';
-export const isStudentEmail = (email: string): boolean => {
-  const parts = email.trim().toLowerCase().split('@');
-  return parts.length === 2 && parts[0] !== '' && parts[1] === STUDENT_EMAIL_DOMAIN;
-};
-
 // Messages say what to do. Order = form order, so the first error is the first field to fix.
 export const validateRegistration = (values: RegisterValues): RegisterFieldErrors => {
   const errors: RegisterFieldErrors = {};
@@ -108,7 +101,6 @@ export const validateRegistration = (values: RegisterValues): RegisterFieldError
 
   if (!values.email.trim()) errors.email = { key: 'emailRequired' };
   else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = { key: 'emailInvalid' };
-  else if (!isStudentEmail(values.email)) errors.email = { key: 'emailNotStudent' };
 
   if (!values.password) errors.password = { key: 'passwordChoose' };
   else if (values.password.length < PASSWORD_MIN_LENGTH) errors.password = { key: 'passwordTooShort', values: { min: PASSWORD_MIN_LENGTH } };
@@ -157,3 +149,39 @@ export const fromDjangoErrors = (body: unknown): { error: RegisterError; fieldEr
   }
   return { error: 'rejected', fieldErrors };
 };
+
+// ---------------------------------------------------------------------------------------------------------------
+// Step 28 (DOCS.md §28): the 6-digit code Django emails at sign-up (Ayoub's POST /api/signup/ → 202, then
+// POST /api/signup/verify/ { email, code } → 201 { token, member }, POST /api/signup/resend/ { email }).
+// Any email address can sign up (Mouad, 2026-11-26: 1337 mailboxes don't receive mail today); the code proves the
+// student owns it. Django's numbers: the code lives 10 minutes, 5 wrong tries end it, 1 new code per minute.
+
+export const SIGNUP_CODE_LENGTH = 6;
+export const SIGNUP_CODE_MINUTES = 10;
+export const RESEND_COOLDOWN_SECONDS = 60;
+
+// What the student typed → the 6 digits, or null. Spaces and dashes are dropped ("123 456" pasted from the email).
+export const normalizeSignupCode = (raw: string): string | null => {
+  const digits = raw.replace(/[\s-]/g, '');
+  return /^\d{6}$/.test(digits) ? digits : null; // SIGNUP_CODE_LENGTH digits
+};
+
+export const validateSignupCode = (raw: string): FieldError | undefined => {
+  if (!raw.trim()) return { key: 'codeRequired' };
+  if (!normalizeSignupCode(raw)) return { key: 'codeInvalid', values: { length: SIGNUP_CODE_LENGTH } };
+  return undefined;
+};
+
+//  - wrong-code: Django said "invalid or expired" (it doesn't say which, on purpose), or 5 wrong tries;
+//  - unavailable: Django didn't answer properly.
+export type SignupCodeError = 'wrong-code' | 'unavailable';
+
+export interface SignupCodeState {
+  error: SignupCodeError | null;
+  fieldError?: FieldError;
+}
+
+export const SIGNUP_CODE_INITIAL_STATE: SignupCodeState = { error: null };
+
+// "Send a new code": sent, too soon (Django's 1 per minute), or Django down.
+export type ResendResult = 'sent' | 'throttled' | 'unavailable';

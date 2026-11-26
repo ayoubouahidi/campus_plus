@@ -4,9 +4,10 @@ import NextAuth, { CredentialsSignin, type User as AuthUser } from 'next-auth';
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
 import FortyTwoSchool from 'next-auth/providers/42-school';
-import { findDevAccount } from '@/lib/devAccounts';
+import { confirmDevAccount, findDevAccount } from '@/lib/devAccounts';
 import { mockCurrentUser } from '@/lib/mockData';
-import { BACKEND_UNAVAILABLE_CODE, hasFieldErrors, validateEmailLogin } from '@/lib/login';
+import { BACKEND_UNAVAILABLE_CODE, EMAIL_PATTERN, hasFieldErrors, validateEmailLogin } from '@/lib/login';
+import { normalizeSignupCode } from '@/lib/register';
 import { toSessionState } from '@/lib/session';
 import type { SessionState } from '@/types/session';
 import type { UserRole } from '@/types/api';
@@ -14,7 +15,7 @@ import type { UserRole } from '@/types/api';
 // Auth.js config (Step 5.2), adapted from Ayoub's dashboard (branch Ayoub, dashboard_campus/auth.ts) so both
 // apps log in the same way: 42 Intra → Django POST /auth/sync → our session. Server only: never import this
 // from a 'use client' file. Env: AUTH_SECRET, AUTH_42_SCHOOL_ID/SECRET, BACKEND_URL, BACKEND_INTERNAL_KEY,
-// AUTH_DEV_LOGIN (DOCS.md §7.5). Providers: 42, email + password (§11.1), dev login.
+// AUTH_DEV_LOGIN (DOCS.md §7.5). Providers: 42, email + password (§11.1), sign-up code (§28), dev login.
 
 // The 42 /v2/me fields we send to Django (the full type is huge; we only need these).
 type FortyTwoProfile = {
@@ -144,6 +145,73 @@ async function loginWithBackend(email: string, password: string): Promise<AuthUs
   };
 }
 
+// Sign-up code (Step 28, DOCS.md §28): Django keeps the sign-up pending until the emailed code is confirmed.
+// POST /api/signup/verify/ { email, code } → 201 { token, member } (the account now exists), or 400 (wrong code,
+// expired, 5 wrong tries, or no pending sign-up: one answer for all, on purpose). The token then reads /api/me/,
+// the same user shape as the email login. null = wrong code (→ CredentialsSignin).
+async function confirmSignupWithBackend(email: string, code: string): Promise<AuthUser | null> {
+  if (!process.env.BACKEND_URL) {
+    if (process.env.NODE_ENV === 'production') throw new BackendUnavailable();
+    const account = confirmDevAccount(email, code); // dev fallback: the code is DEV_SIGNUP_CODE
+    if (!account) return null;
+    return {
+      id: account.id,
+      name: account.full_name,
+      email: account.email,
+      image: null,
+      role: 'STUDENT',
+      login: null,
+      campus: null,
+      backendToken: 'dev-token',
+      backendUserId: account.id,
+    };
+  }
+
+  const base = process.env.BACKEND_URL;
+  let token: string | undefined;
+  try {
+    const res = await fetch(`${base}/api/signup/verify/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email, code }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (res.status === 400) return null;
+    if (!res.ok) throw new BackendUnavailable();
+    token = ((await res.json().catch(() => null)) as { token?: unknown } | null)?.token as string | undefined;
+  } catch (error) {
+    if (error instanceof BackendUnavailable) throw error;
+    throw new BackendUnavailable(); // network error, timeout
+  }
+  if (typeof token !== 'string' || !token) throw new BackendUnavailable();
+
+  let me: BackendLoginResponse['user'] | null = null;
+  try {
+    const res = await fetch(`${base}/api/me/`, {
+      headers: { Accept: 'application/json', Authorization: `Token ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (res.ok) me = (await res.json().catch(() => null)) as BackendLoginResponse['user'] | null;
+  } catch {
+    me = null;
+  }
+  // The account exists now; only reading it failed. The sign-up action then sends the student to the login page.
+  if (!me || me.id === undefined || !isRole(me.role)) throw new BackendUnavailable();
+  return {
+    id: String(me.id),
+    name: me.full_name,
+    email: me.email,
+    image: me.avatar_url,
+    role: me.role,
+    login: null,
+    campus: me.campus,
+    backendToken: token,
+    backendUserId: String(me.id),
+  };
+}
+
 const providers: Provider[] = [
   FortyTwoSchool,
   Credentials({
@@ -156,6 +224,19 @@ const providers: Provider[] = [
       const password = typeof credentials.password === 'string' ? credentials.password : '';
       if (hasFieldErrors(validateEmailLogin(email, password))) return null;
       return loginWithBackend(email, password);
+    },
+  }),
+  Credentials({
+    id: 'signup-code',
+    name: 'Sign-up code',
+    credentials: { email: {}, code: {} },
+    // Posted by the sign-up page's code step (app/auth/register/actions.ts); checked again here because this
+    // endpoint can be posted to directly. Django limits the tries (5 per code).
+    authorize: async (credentials) => {
+      const email = typeof credentials.email === 'string' ? credentials.email.trim() : '';
+      const code = normalizeSignupCode(typeof credentials.code === 'string' ? credentials.code : '');
+      if (!EMAIL_PATTERN.test(email) || !code) return null;
+      return confirmSignupWithBackend(email, code);
     },
   }),
 ];
@@ -213,7 +294,8 @@ export const { handlers, auth, signIn, signOut, unstable_update: updateSession }
     // Runs once, right after 42 (or the dev login) approves the user. false → /auth/login?error=AccessDenied
     async signIn({ user, account, profile }) {
       if (account?.provider === 'dev') return DEV_LOGIN_ENABLED;
-      if (account?.provider === 'email') return true; // authorize() already asked Django and filled `user`
+      // authorize() already asked Django and filled `user`
+      if (account?.provider === 'email' || account?.provider === 'signup-code') return true;
       if (account?.provider !== '42-school' || !profile) return false;
 
       const fortyTwo = profile as unknown as FortyTwoProfile;
