@@ -34,3 +34,27 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Production Docker image
+
+Build and run the standalone production image from this directory:
+
+```bash
+docker build -t dashboard-campus .
+docker run --env-file .env.local -p 3000:3000 dashboard-campus
+```
+
+The container listens on port `3000`. Configure `.env.local` using
+`.env.example`; `AUTH_URL` must be the externally reachable HTTPS origin and
+`BACKEND_URL` must resolve to the backend from the container's Docker network.
+
+## 42 Intra OAuth
+
+Set `AUTH_URL=https://dashboard.localhost` for this deployment and register
+this exact redirect URI in the 42 OAuth application:
+
+```text
+https://dashboard.localhost/api/auth/callback/42-school
+```
+
+The callback must match the public origin used to serve the dashboard.

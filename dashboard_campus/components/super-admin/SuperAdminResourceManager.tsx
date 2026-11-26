@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 type ResourceRow = { id: string | number; [key: string]: unknown };
 type ResourceResponse = ResourceRow[] | { results: ResourceRow[] };
+type SelectOption = { label: string; value: string };
 type Field = {
   name: string;
   label: string;
@@ -14,7 +15,10 @@ type Field = {
   required?: boolean;
   createOnly?: boolean;
   defaultChecked?: boolean;
+  nullable?: boolean;
   options?: { label: string; value: string }[];
+  optionsEndpoint?: string;
+  optionLabelKey?: string;
 };
 type Column = {
   key: string;
@@ -63,6 +67,7 @@ export default function SuperAdminResourceManager({
   createLabel = "Add record",
 }: Props) {
   const [rows, setRows] = useState<ResourceRow[]>([]);
+  const [loadedOptions, setLoadedOptions] = useState<Record<string, SelectOption[]>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -88,6 +93,41 @@ export default function SuperAdminResourceManager({
     }).finally(() => setLoading(false));
   }, [endpoint]);
 
+  useEffect(() => {
+    let active = true;
+    const optionFields = fields.filter((field) => field.optionsEndpoint);
+    if (!optionFields.length) return;
+
+    Promise.all(
+      optionFields.map(async (field) => {
+        const values = extractRows(
+          await dashboardApi<ResourceResponse>(field.optionsEndpoint!)
+        );
+        return [
+          field.name,
+          values.map((value) => ({
+            label: String(
+              value[field.optionLabelKey ?? "name"] ??
+                value.title ??
+                value.id
+            ),
+            value: String(value.id),
+          })),
+        ] as const;
+      })
+    ).then((entries) => {
+      if (active) setLoadedOptions(Object.fromEntries(entries));
+    }).catch((requestError: unknown) => {
+      if (active) {
+        setError(requestError instanceof Error ? requestError.message : "Unable to load form options.");
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [fields]);
+
   const filteredRows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     if (!query) return rows;
@@ -107,13 +147,15 @@ export default function SuperAdminResourceManager({
     setBusy(true);
     setError("");
     const formData = new FormData(event.currentTarget);
-    const payload: Record<string, string | boolean> = {};
+    const payload: Record<string, string | boolean | null> = {};
     for (const field of fields) {
       if (field.createOnly && editing) continue;
-      payload[field.name] =
-        field.type === "checkbox"
-          ? formData.has(field.name)
-          : String(formData.get(field.name) ?? "");
+      const value = String(formData.get(field.name) ?? "");
+      payload[field.name] = field.type === "checkbox"
+        ? formData.has(field.name)
+        : field.nullable && value === ""
+          ? null
+          : value;
     }
 
     try {
@@ -178,8 +220,10 @@ export default function SuperAdminResourceManager({
                     </span>
                   ) : field.type === "select" ? (
                     <select name={field.name} required={field.required} defaultValue={String(editing?.[field.name] ?? "")} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
-                      <option value="" disabled>Select {field.label.toLowerCase()}</option>
-                      {field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      <option value="" disabled={!field.nullable}>
+                        {field.nullable ? "No organization" : `Select ${field.label.toLowerCase()}`}
+                      </option>
+                      {[...(field.options ?? []), ...(loadedOptions[field.name] ?? [])].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   ) : field.type === "textarea" ? (
                     <textarea name={field.name} required={field.required} rows={3} defaultValue={String(editing?.[field.name] ?? "")} className="w-full rounded-lg border border-slate-300 px-3 py-2" />

@@ -15,6 +15,8 @@ export default function UsersAndRolesPage() {
           { name: "username", label: "Username", required: true },
           { name: "email", label: "Email", type: "email", required: true },
           { name: "password", label: "Password", type: "password", required: true, createOnly: true },
+          { name: "first_name", label: "First name" },
+          { name: "last_name", label: "Last name" },
           {
             name: "role",
             label: "Role",
@@ -26,13 +28,22 @@ export default function UsersAndRolesPage() {
               { label: "Super admin", value: "SUPERADMIN" },
             ],
           },
-          { name: "club_name", label: "Organization / club" },
+          {
+            name: "club_id",
+            label: "Organization / club",
+            type: "select",
+            nullable: true,
+            optionsEndpoint: "api/superadmin/organizations/?page_size=200",
+            optionLabelKey: "name",
+          },
+          { name: "is_active", label: "Active account", type: "checkbox", defaultChecked: true },
         ]}
         columns={[
           { key: "username", label: "Username" },
           { key: "email", label: "Email" },
           { key: "role", label: "Role", format: "role" },
           { key: "club_name", label: "Organization" },
+          { key: "is_active", label: "Account status", format: "status" },
         ]}
       />
     </>

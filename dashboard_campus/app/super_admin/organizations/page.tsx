@@ -13,7 +13,14 @@ export default function OrganizationsPage() {
         description="Create, update, activate, suspend, or remove organizations."
         fields={[
           { name: "name", label: "Organization name", required: true },
-          { name: "department_name", label: "Department" },
+          {
+            name: "department",
+            label: "Department",
+            type: "select",
+            required: true,
+            optionsEndpoint: "api/departments/",
+            optionLabelKey: "name",
+          },
           { name: "is_active", label: "Status", type: "checkbox", defaultChecked: true },
         ]}
         columns={[
