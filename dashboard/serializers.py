@@ -87,10 +87,6 @@ class OrganizationAdminSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "department", "department_name", "is_active"]
 
 
-class OrganizationStatusSerializer(serializers.Serializer):
-    is_active = serializers.BooleanField()
-
-
 class SuperadminUserSerializer(serializers.ModelSerializer):
     club_id = serializers.SerializerMethodField()
     club_name = serializers.SerializerMethodField()
@@ -125,6 +121,11 @@ class SuperadminUserSerializer(serializers.ModelSerializer):
 
 
 class SuperadminUserUpdateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150, required=False)
+    email = serializers.EmailField(required=False)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    is_active = serializers.BooleanField(required=False)
     role = serializers.ChoiceField(
         choices=User.Role.choices,
         required=False,
@@ -135,6 +136,95 @@ class SuperadminUserUpdateSerializer(serializers.Serializer):
         allow_null=True,
     )
 
+    def validate_username(self, value):
+        matches = User.objects.filter(username__iexact=value)
+        if self.instance is not None:
+            matches = matches.exclude(pk=self.instance.pk)
+        if matches.exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value
+
+    def validate_email(self, value):
+        normalized_email = value.strip().lower()
+        matches = User.objects.filter(email__iexact=normalized_email)
+        if self.instance is not None:
+            matches = matches.exclude(pk=self.instance.pk)
+        if matches.exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return normalized_email
+
+    def validate(self, attrs):
+        role = attrs.get("role", getattr(self.instance, "role", User.Role.STUDENT))
+        assignment = None
+        if self.instance is not None:
+            assignment = (
+                ClubBoardAssignment.objects.filter(user=self.instance)
+                .select_related("club")
+                .first()
+            )
+        current_club = assignment.club if assignment else None
+        club = attrs.get("club_id", current_club)
+        if role == User.Role.BOARD_MEMBER and club is None:
+            raise serializers.ValidationError(
+                {"club_id": "A board member must be assigned to an organization."}
+            )
+        if (
+            role != User.Role.BOARD_MEMBER
+            and attrs.get("club_id") is not None
+        ):
+            raise serializers.ValidationError(
+                {"club_id": "Only board members may be assigned to an organization."}
+            )
+        return attrs
+
+
+class SuperadminUserCreateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    role = serializers.ChoiceField(
+        choices=User.Role.choices,
+        default=User.Role.STUDENT,
+    )
+    is_active = serializers.BooleanField(default=True)
+    club_id = serializers.PrimaryKeyRelatedField(
+        queryset=Club.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value
+
+    def validate_email(self, value):
+        normalized_email = value.strip().lower()
+        if User.objects.filter(email__iexact=normalized_email).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return normalized_email
+
+    def validate(self, attrs):
+        role = attrs.get("role", User.Role.STUDENT)
+        club = attrs.get("club_id")
+        if role == User.Role.BOARD_MEMBER and club is None:
+            raise serializers.ValidationError(
+                {"club_id": "A board member must be assigned to an organization."}
+            )
+        if role != User.Role.BOARD_MEMBER and club is not None:
+            raise serializers.ValidationError(
+                {"club_id": "Only board members may be assigned to an organization."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        club = validated_data.pop("club_id", None)
+        user = User.objects.create_user(**validated_data)
+        if club is not None:
+            ClubBoardAssignment.objects.create(user=user, club=club)
+        return user
 
 class AuditLogSerializer(serializers.ModelSerializer):
     actor_username = serializers.CharField(

@@ -340,7 +340,7 @@ All endpoints: `IsClubBoard`, and **always filtered to the caller's own club** (
 | `GET/POST/PATCH/DELETE /api/board/announcements/` | Announcements page | `Announcement` CRUD for own club |
 | Events | Events page, Registrations page | **Use Ahmed's endpoints**: `GET /api/club-events/?club=<slug>` (has `rsvps_count` + `capacity`), `POST/PATCH/DELETE /api/club-events/` (already permission-checked and broadcast live), `GET /api/club-events/{id}/attendees/` |
 
-Students also need a way to create a join request: `POST /api/clubs/{slug}/join/` (signed-in) → creates a `MembershipRequest(kind='join')`. Yours.
+Club join requests are not exposed through a public API endpoint in the current scope.
 
 ### B5. Super-admin API (`/api/superadmin/…`, for `/super_admin` pages)
 
@@ -349,8 +349,8 @@ All endpoints: `IsSuperAdmin`. (Use `/api/superadmin/`, not `/api/admin/`: `/adm
 | Endpoint | Dashboard card |
 | --- | --- |
 | `GET /api/superadmin/stats/` | total users, clubs, events this month, pending requests |
-| `GET /api/superadmin/organizations/` · `PATCH /api/superadmin/organizations/{id}/` (`is_active`) | Organizations table, suspend / reactivate a club |
-| `GET /api/superadmin/users/?role=&search=` · `PATCH /api/superadmin/users/{id}/` (`role`, `club_id`) | Role assignments (promote a student to board member of a club) |
+| `GET/POST /api/superadmin/organizations/` · `PATCH/DELETE /api/superadmin/organizations/{id}/` | Organizations table and management |
+| `GET/POST /api/superadmin/users/?role=&search=` · `PATCH/DELETE /api/superadmin/users/{id}/` | User and role management, including board assignments |
 | `GET /api/superadmin/roles/distribution/` | Role distribution bars (real counts) |
 | `GET /api/superadmin/events/weekly/` | Activity chart (events per week) |
 | `GET /api/superadmin/audit-log/` | Audit log (paginated, newest first) |
@@ -416,7 +416,6 @@ Mouad   login page UI ─────────────┴── student l
 | `GET /api/club-events/{id}/attendees/` | Ahmed | Token | event page, dashboard registrations |
 | `GET /api/clubs/`, `GET /api/clubs/{slug}/` | Ahmed | public (contact fields signed-in only) | website, dashboard |
 | `PATCH /api/clubs/{slug}/` | Ahmed | board / superadmin | dashboard |
-| `POST /api/clubs/{slug}/join/` | Ayoub | Token | website (club page) |
 | `GET /api/departments/` | Ahmed | public | campus filters |
 | `/api/board/*` | Ayoub | board (own club only) | dashboard `/admin` |
 | `/api/superadmin/*` | Ayoub | superadmin | dashboard `/super_admin` |

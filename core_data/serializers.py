@@ -489,3 +489,23 @@ class SignupSerializer(serializers.Serializer):
             club_id=club,
         )
         return member
+
+
+class SignupVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.RegexField(
+        regex=r"^\d{6}$",
+        min_length=6,
+        max_length=6,
+        trim_whitespace=False,
+    )
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+
+class SignupResendSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return value.strip().lower()

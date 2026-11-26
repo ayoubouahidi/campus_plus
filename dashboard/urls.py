@@ -9,7 +9,6 @@ from .views import (
     board_requests,
     board_stats,
     decide_request,
-    join_club,
     superadmin_audit_log,
     superadmin_events_weekly,
     superadmin_organization_detail,
@@ -35,7 +34,6 @@ urlpatterns = [
         decide_request,
     ),
     path("api/board/", include(router.urls)),
-    path("api/clubs/<slug:slug>/join/", join_club),
     path("api/superadmin/stats/", superadmin_stats),
     path("api/superadmin/organizations/", superadmin_organizations),
     path(

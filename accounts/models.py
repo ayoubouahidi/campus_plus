@@ -18,6 +18,7 @@ class User(AbstractUser):
     )
     campus = models.CharField(max_length=100, blank=True)
     avatar_url = models.URLField(blank=True)
+    avatar_is_custom = models.BooleanField(default=False)
     phone = models.CharField(max_length=30, blank=True)
 
     class Meta:
@@ -47,3 +48,13 @@ class ClubBoardAssignment(models.Model):
         on_delete=models.CASCADE,
         related_name="board_assignments",
     )
+
+
+class EmailVerification(models.Model):
+    email = models.EmailField(unique=True)
+    code_hash = models.CharField(max_length=128)
+    registration_data = models.JSONField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
