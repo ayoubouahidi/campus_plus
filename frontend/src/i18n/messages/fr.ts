@@ -349,13 +349,13 @@ const fr = {
       },
     },
     registerTitle: 'Créer votre compte',
-    registerIntro: 'Continuez avec votre compte 42, ou inscrivez-vous avec votre e-mail étudiant 1337 : nous vous enverrons un code de vérification.',
+    registerIntro: 'Continuez avec votre compte 42, ou inscrivez-vous avec votre e-mail : nous vous enverrons un code à 6 chiffres pour le confirmer.',
     orSignUpEmail: 'ou inscrivez-vous par e-mail',
     firstName: 'Prénom',
     lastName: 'Nom',
     confirmPassword: 'Confirmer le mot de passe',
     passwordHelp: 'Au moins {min} caractères.',
-    emailStudentHelp: 'Uniquement les e-mails étudiants 1337 (@student.1337.ma).',
+    emailCodeHelp: 'Nous enverrons un code à 6 chiffres à cette adresse pour la confirmer.',
     year: 'Année d’études',
     yearOption: '{year, selectordinal, one {#re} other {#e}} année',
     choose: 'Choisir…',
@@ -366,6 +366,32 @@ const fr = {
     haveAccount: 'Vous avez déjà un compte ?',
     accept:
       'En créant un compte, vous acceptez les <terms>Conditions d’utilisation</terms> et la <privacy>Politique de confidentialité</privacy>.',
+    signupCode: {
+      title: 'Vérifiez vos e-mails',
+      sentTo: 'Nous avons envoyé un code à 6 chiffres à <email></email>. Il expire dans {minutes} minutes. Introuvable ? Regardez dans vos spams.',
+      label: 'Code de vérification',
+      help: '{length} chiffres, reçus par e-mail.',
+      verify: 'Confirmer et créer mon compte',
+      verifying: 'Vérification du code…',
+      resend: 'Envoyer un nouveau code',
+      resendIn: 'Nouveau code dans {seconds} s',
+      changeEmail: 'Utiliser un autre e-mail',
+      resendStatus: {
+        sent: 'Un nouveau code est en route. L’ancien ne fonctionne plus.',
+        throttled: 'Patientez une minute avant de demander un autre code.',
+        unavailable: 'Impossible d’envoyer un nouveau code. Réessayez dans quelques minutes.',
+      },
+      errors: {
+        'wrong-code': {
+          title: 'Ce code ne fonctionne pas',
+          description: 'Il est peut-être mal saisi ou expiré (après 10 minutes ou 5 essais). Vérifiez l’e-mail, ou demandez un nouveau code.',
+        },
+        unavailable: {
+          title: 'Impossible de vérifier le code',
+          description: 'Un problème est survenu de notre côté. Réessayez dans quelques minutes, ou connectez-vous si votre compte a été créé.',
+        },
+      },
+    },
     registerErrors: {
       'email-taken': {
         title: 'Un compte existe déjà avec cet e-mail',
@@ -383,7 +409,6 @@ const fr = {
   Validation: {
     emailRequired: 'Saisissez votre e-mail.',
     emailInvalid: 'Saisissez un e-mail valide, comme nom@exemple.com.',
-    emailNotStudent: 'Utilisez votre e-mail étudiant 1337, qui se termine par @student.1337.ma.',
     emailTaken: 'Cet e-mail a déjà un compte.',
     passwordRequired: 'Saisissez votre mot de passe.',
     passwordChoose: 'Choisissez un mot de passe.',
@@ -399,6 +424,8 @@ const fr = {
     yearRequired: 'Choisissez votre année d’études.',
     schoolRequired: 'Choisissez votre école.',
     phoneInvalid: 'Entrez un numéro de mobile marocain, comme 06 12 34 56 78.',
+    codeRequired: 'Saisissez le code reçu par e-mail.',
+    codeInvalid: 'Le code comporte {length} chiffres.',
   },
   Legal: {
     lastUpdated: 'Mise à jour le <date>{label}</date>',

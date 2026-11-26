@@ -362,13 +362,13 @@ const en = {
       },
     },
     registerTitle: 'Create your account',
-    registerIntro: 'Continue with your 42 account, or sign up with your 1337 student email: we’ll send you a verification code.',
+    registerIntro: 'Continue with your 42 account, or sign up with your email: we’ll send you a 6-digit code to confirm it.',
     orSignUpEmail: 'or sign up with email',
     firstName: 'First name',
     lastName: 'Last name',
     confirmPassword: 'Confirm password',
     passwordHelp: 'At least {min} characters.',
-    emailStudentHelp: 'Only 1337 student emails (@student.1337.ma).',
+    emailCodeHelp: 'We’ll send a 6-digit code to this address to confirm it.',
     year: 'Year of study',
     yearOption: '{year, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} year',
     choose: 'Choose…',
@@ -378,6 +378,32 @@ const en = {
     loginInstead: 'Log in instead',
     haveAccount: 'Already have an account?',
     accept: 'By creating an account you accept the <terms>Terms of Service</terms> and the <privacy>Privacy Policy</privacy>.',
+    signupCode: {
+      title: 'Check your email',
+      sentTo: 'We sent a 6-digit code to <email></email>. It expires in {minutes} minutes. Can’t find it? Look in your spam folder.',
+      label: 'Verification code',
+      help: '{length} digits, from the email.',
+      verify: 'Confirm and create my account',
+      verifying: 'Checking the code…',
+      resend: 'Send a new code',
+      resendIn: 'Send a new code in {seconds} s',
+      changeEmail: 'Use another email',
+      resendStatus: {
+        sent: 'A new code is on its way. The previous one no longer works.',
+        throttled: 'Please wait a minute before asking for another code.',
+        unavailable: 'We couldn’t send a new code. Please try again in a few minutes.',
+      },
+      errors: {
+        'wrong-code': {
+          title: 'This code doesn’t work',
+          description: 'It may be mistyped or expired (after 10 minutes or 5 tries). Check the email, or send a new code.',
+        },
+        unavailable: {
+          title: 'We couldn’t check the code',
+          description: 'Something is wrong on our side. Please try again in a few minutes, or log in if your account was created.',
+        },
+      },
+    },
     registerErrors: {
       'email-taken': {
         title: 'An account with this email already exists',
@@ -396,7 +422,6 @@ const en = {
   Validation: {
     emailRequired: 'Enter your email.',
     emailInvalid: 'Enter a valid email, like name@example.com.',
-    emailNotStudent: 'Use your 1337 student email, ending in @student.1337.ma.',
     emailTaken: 'This email already has an account.',
     passwordRequired: 'Enter your password.',
     passwordChoose: 'Choose a password.',
@@ -412,6 +437,8 @@ const en = {
     yearRequired: 'Choose your year of study.',
     schoolRequired: 'Choose your school.',
     phoneInvalid: 'Enter a Moroccan mobile number, like 06 12 34 56 78.',
+    codeRequired: 'Enter the code from the email.',
+    codeInvalid: 'The code is {length} digits.',
   },
   // Step 12.7: legal page frame, error and 404 pages, browser tab titles.
   Legal: {

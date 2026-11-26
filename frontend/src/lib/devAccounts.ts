@@ -35,3 +35,32 @@ export const addDevAccount = (account: Omit<DevAccount, 'id'>): boolean => {
   accounts().set(key, { ...account, email: key, id: `usr_dev_${accounts().size + 1}` });
   return true;
 };
+
+// Step 28 (DOCS.md §28): the sign-up code, dev version. Django keeps the pending sign-up until the emailed code is
+// typed; here the code is always DEV_SIGNUP_CODE (printed in `docker compose logs frontend`, like Django's console
+// email backend) and the account is only created when it's confirmed.
+export const DEV_SIGNUP_CODE = '123456';
+
+const pendingStore = globalThis as unknown as { __campusHubDevPending?: Map<string, Omit<DevAccount, 'id'>> };
+const pending = (): Map<string, Omit<DevAccount, 'id'>> => (pendingStore.__campusHubDevPending ??= new Map());
+
+// false = the email already has an account.
+export const addPendingDevAccount = (account: Omit<DevAccount, 'id'>): boolean => {
+  const key = account.email.trim().toLowerCase();
+  if (accounts().has(key)) return false;
+  pending().set(key, { ...account, email: key });
+  console.info(`[dev] sign-up code for ${key}: ${DEV_SIGNUP_CODE}`);
+  return true;
+};
+
+// The right code for a pending sign-up → the new account (and the pending one is gone). Anything else → null.
+export const confirmDevAccount = (email: string, code: string): DevAccount | null => {
+  const key = email.trim().toLowerCase();
+  const waiting = pending().get(key);
+  if (!waiting || code !== DEV_SIGNUP_CODE) return null;
+  pending().delete(key);
+  if (!addDevAccount(waiting)) return null;
+  return findDevAccount(key) ?? null;
+};
+
+export const hasPendingDevAccount = (email: string): boolean => pending().has(email.trim().toLowerCase());

@@ -6,11 +6,11 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SignupCodeForm } from '@/components/auth/SignupCodeForm';
 import { useFieldError } from '@/hooks/useFieldError';
 import { loginHref } from '@/lib/login';
 import {
   PASSWORD_MIN_LENGTH,
-  STUDENT_EMAIL_DOMAIN,
   REGISTER_INITIAL_STATE,
   YEARS,
   firstErrorField,
@@ -19,6 +19,8 @@ import {
   type RegisterField,
   type RegisterFieldErrors,
   type RegisterState,
+  type ResendResult,
+  type SignupCodeState,
 } from '@/lib/register';
 
 /* --------------------------------- Types ---------------------------------- */
@@ -27,6 +29,10 @@ export interface RegisterFormProps extends Omit<React.FormHTMLAttributes<HTMLFor
   // Server action for useActionState: creates the account, logs in and redirects, or returns the errors.
   // The register page passes registerWithEmail; /test passes a wrapper with extra fake cases.
   action: (previous: RegisterState, formData: FormData) => Promise<RegisterState>;
+  // The code step (Step 28): confirm the emailed code, and "Send a new code". Same pattern: real actions on the
+  // register page, fakes on /test.
+  verifyAction: (previous: SignupCodeState, formData: FormData) => Promise<SignupCodeState>;
+  resendAction: (email: string) => Promise<ResendResult>;
   next: string; // already cleaned with safeNextPath()
   // From the server (GET /api/departments/). Plain data, so this stays serializable.
   departments: { id: string; name: string }[];
@@ -40,9 +46,14 @@ const linkStyles =
 // Email sign-up (Step 11.2). Same pattern as EmailLoginForm: checked in the browser on submit (messages under
 // the fields, focus on the first wrong one, nothing posted), then again on the server. After a failed attempt
 // every field keeps its value except the two passwords. No club field (DOCS.md §23).
+// Step 28: when Django has emailed a code (state.verifyEmail), the code step replaces the fields; "Use another
+// email" brings the fields back with their values.
 export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>(
-  ({ action, next, departments, className = '', onSubmit, ...props }, ref) => {
+  ({ action, verifyAction, resendAction, next, departments, className = '', onSubmit, ...props }, ref) => {
     const [state, formAction, isPending] = useActionState(action, REGISTER_INITIAL_STATE);
+    // The answer the student stepped back from with "Use another email". A new submit gives a new state object,
+    // so the code step comes back by itself for the next answer (no effect needed).
+    const [leftState, setLeftState] = useState<RegisterState | null>(null);
     const [clientErrors, setClientErrors] = useState<RegisterFieldErrors>({});
     // One school today (1337 only, DOCS.md §13): it is chosen for the student.
     const onlyDepartment = departments.length === 1 ? departments[0].id : '';
@@ -76,6 +87,19 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
     // Changing a field clears its browser message (the server's go away on the next submit).
     const clearError = (field: RegisterField) => () =>
       setClientErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
+
+    if (state.verifyEmail && leftState !== state) {
+      return (
+        <SignupCodeForm
+          email={state.verifyEmail}
+          next={next}
+          action={verifyAction}
+          resendAction={resendAction}
+          onChangeEmail={() => setLeftState(state)}
+          className={className}
+        />
+      );
+    }
 
     return (
       <form
@@ -132,8 +156,7 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
           autoComplete="email"
           inputMode="email"
           spellCheck={false}
-          placeholder={`login@${STUDENT_EMAIL_DOMAIN}`}
-          helperText={t('emailStudentHelp')}
+          helperText={t('emailCodeHelp')}
           defaultValue={values.email}
           error={errorText(fieldErrors.email)}
           onChange={clearError('email')}
