@@ -6037,6 +6037,8 @@ type PhotoResult = { ok: true; avatarUrl: string | null } | { ok: false; error: 
 | 28.1 | Remove the `@student.1337.ma` rule (browser + server action), new hint "We'll send a 6-digit code to this address" | 🧪 on `/test`, waiting for Mouad's check |
 | 28.2 | Code step after sign-up: code field, "Send a new code" with a 60 s countdown, "Use another email", login right after the right code | 🧪 on `/test`, waiting for Mouad's check |
 
+**Status (2026-11-26 evening):** committed (`af15bcd`), Developer merged into `Mouad` (`eff3ce5`), pushed, **PR #12 into `Developer` open**, no conflicts. Its red checks are not the code: GitHub Actions doesn't start (the repo owner's account is locked for billing) and GitGuardian flagged a value that isn't one of our real secrets (history checked). Details and next steps: `TEAM_NEEDS.md` §1l.
+
 ### 1. Feature & files
 - `src/lib/register.ts`: `STUDENT_EMAIL_DOMAIN` / `isStudentEmail` removed. New: `SIGNUP_CODE_LENGTH` (6), `SIGNUP_CODE_MINUTES` (10), `RESEND_COOLDOWN_SECONDS` (60), `normalizeSignupCode`, `validateSignupCode`, types `SignupCodeState`, `SignupCodeError`, `ResendResult`; `RegisterState.verifyEmail`.
 - `src/lib/login.ts`: `ValidationKey` loses `emailNotStudent`, gains `codeRequired`, `codeInvalid`.

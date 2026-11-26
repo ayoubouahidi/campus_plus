@@ -217,6 +217,31 @@ The frontend builds each part as soon as its endpoint exists (Edit profile start
 - When BE22–BE24 are merged: after sign-up, the same page shows a 6-digit code field ("We sent a code to …", "Send a new code"); the right code logs the student in. The login form shows the code field too for an unverified account.
 - The privacy policy will say we send verification codes to that address.
 
+## 1l. Status on 2026-11-26 evening (Mouad): PR #12, CI, H7, and where things are
+
+**PR #12 `Mouad` → `Developer`** "Sign-up with any email, confirmed by a 6-digit code (frontend)", opened by Mouad. 2 commits: `af15bcd` (the work, DOCS §28) and `eff3ce5` (Developer merged into Mouad first). Only `frontend/` changes (15 files, +800 −90). GitHub: **no conflicts**. Re-checked after Hamza's 18:14 push: still no conflicts, Developer's new commits don't touch `frontend/`. **Merge it before Ayoub's backend PR** (§1k).
+
+**Why the PR's checks are red (not our code):**
+1. **CI (backend_tests, frontend_build, dashboard_build) fail in 2 s:** GitHub's annotation says *"The job was not started because your account is locked due to a billing issue."* The repository owner's account (Ayoub, `ayoubouahidi`) is locked for billing, so **no job runs at all**. Developer's own push at 18:15 fails the same way. **Ayoub:** fix GitHub → Settings → Billing (payment method or spending limit), then "Re-run jobs" on #12.
+2. **GitGuardian "1 secret uncovered":** Mouad checked the **whole git history**: no value from the real `.env` (42 ID/secret, `AUTH_SECRET`, `BACKEND_INTERNAL_KEY`, database password) is in any commit, and the 15 PR files contain no key, token or password. GitGuardian also scans the merge commit `eff3ce5`, which carries Developer's whole backend; Developer contains fake test values (the CI key `ci-test-only-key-not-for-production-…` in `.github/workflows/ci.yml`, test passwords in the backend tests). **To do (Mouad):** open "Detected hardcoded secret" in the GitGuardian comment, read the file and line; if it's the CI key or a test password, mark it as a test credential / false positive.
+   **Read (2026-11-26, via `gh pr view 12 --comments`):** incident `41159138`, type "SMTP credentials", file `.env.example`, line 15, commit `eff3ce5`. Line 15 is `POSTGRES_PASSWORD=CHANGE_ME_GENERATE_A_UNIQUE_RANDOM_VALUE` (a placeholder). GitGuardian's SMTP detector paired it with `EMAIL_HOST=smtp.gmail.com` and `EMAIL_HOST_USER=campushub.1337.team@gmail.com` from the same file; `EMAIL_HOST_PASSWORD=` is empty. **False positive, nothing to rotate.** The file came from Developer (Hamza `2607e5f`, Ahmed `7d70c5b`), not from #12's own work. To do: in the GitGuardian dashboard, resolve the incident as "False positive" (needs access to the workspace that installed GitGuardian, likely Ayoub's).
+
+**Developer moved (Hamza, 2026-11-26):** `a4e4468` merged `origin/Ayoub` (the dashboard) and `3920930` **wired the `dashboard_campus` service into `docker-compose.yml`, with subdomain routing, SAN certificates and a CI job: H7 is done** (item 6 of Ayoub's list below).
+
+**Mouad's local machine right now (to undo when done):**
+- Mouad's nginx (`transcendence-nginx-1`) serves `https://localhost`.
+- Mouad's dev frontend points at **Ayoub's new backend** (`BACKEND_URL=http://backend:8000`): it's the `devcheck` test stack's backend container (Developer + `cd2504e` copied in), attached to `transcendence_default` with the alias `backend`. Sign-up codes appear in `docker logs devcheck-backend-1`.
+- The `devcheck` stack (`docker compose -p devcheck`, a copy of Developer `5342c1f` in the scratchpad) still runs, its nginx stopped. Test accounts: `devcheck1/2/3@student.1337.ma`, password `campus-test-2026`.
+- Back to normal: `docker compose -p devcheck down -v` (from the devcheck copy, or `docker rm -f` its containers) then, in the repo, `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --no-deps frontend` (takes `BACKEND_URL` from `.env` again).
+- Git: on macOS, the remote branch `ayoub/remaining-task-work` clashes with `Ayoub` (same name except case), so `git fetch` prints an error for it. It's the same commit as `Ayoub-backend` (`cd2504e`). Harmless; to silence it: `git config --add remote.origin.fetch '^refs/heads/ayoub/*'`.
+
+**Next steps, in order:**
+1. Mouad: read the GitGuardian finding (above).
+2. Ayoub: fix the GitHub billing lock, re-run the checks of #12.
+3. Hamza: review and merge #12.
+4. Ayoub: merge Developer into `cd2504e`, PR his backend (§1j list), after #12.
+5. Mouad: test sign-up with the code on the merged Developer (real SMTP, a gmail inbox), then the README.
+
 ## 1k. Decision: sign-up with any email, confirmed by a 6-digit code (Mouad, 2026-11-26)
 
 **The 1337 mailboxes (`@student.1337.ma`) don't receive mail today**, so a code sent there never arrives and nobody could finish signing up at the evaluation. **Decision: sign-up accepts any email (gmail included); the 6-digit code proves the student owns it.** "1337 only" stays enforced for 42 logins (`ALLOWED_42_CAMPUSES`).
@@ -270,7 +295,7 @@ Each item: a small branch from `Developer` (after the merge below), its tests, a
 3. **BE20:** remove `club_id` from `SignupSerializer` and from the pending sign-up data (still accepted and saved).
 4. **BE17:** a 42 login must not replace an uploaded photo (`accounts/views.py:190`).
 5. **BE28:** delete the old photo file when a new one is uploaded (`accounts/views.py:351`).
-6. **H7 with Hamza:** the dashboard (`dashboard_campus`, Dockerfile ready on `Ayoub`) in `docker-compose.yml`, on its own port or host; bring it in on a branch from `Developer`, not by merging the old `Ayoub` branch.
+6. ~~**H7 with Hamza:** the dashboard in `docker-compose.yml`~~ ✅ **Done by Hamza on 2026-11-26** (`3920930`: `dashboard_campus` service, subdomain routing, SAN certificates, CI job; §1l). Ayoub: check his dashboard logs in on the merged stack.
 7. **Before the evaluation, with Hamza:** real Gmail SMTP in `.env` (app password) and one real test that the code arrives in a gmail inbox.
 
 **For Ahmed (found in the same test):** `POST /api/club-events/<id>/rsvp/` on an event that **already happened** → **201** (it should be refused, e.g. 400 `{"detail": "event-ended"}`; the student site already hides the button).
