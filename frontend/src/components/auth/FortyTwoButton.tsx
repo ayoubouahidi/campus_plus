@@ -1,18 +1,15 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useFormStatus } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { Button, type ButtonProps } from '@/components/ui/Button';
 
-// The 42 mark, drawn as a small dark tile (same look as the organizer dashboard's button).
+// The official 42 logo (black, transparent background; inverted to white in dark mode). Decorative: the
+// button's text already says "42". Same file and size as the organizer dashboard's button.
 const FortyTwoMark = () => (
-  <span
-    aria-hidden="true"
-    className="grid h-[22px] w-[22px] place-items-center rounded-md bg-slate-900 text-[10px] font-bold text-white dark:bg-white dark:text-slate-900"
-  >
-    42
-  </span>
+  <Image src="/42-logo.png" alt="" width={24} height={17} className="h-[17px] w-6 dark:invert" />
 );
 
 export type FortyTwoButtonProps = Omit<ButtonProps, 'type' | 'isLoading' | 'leftIcon' | 'children'>;

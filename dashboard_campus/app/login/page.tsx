@@ -56,8 +56,8 @@ const NOTICE_STYLES: Record<Notice["tone"], { box: string; title: string; text: 
   },
 };
 
-// Same split layout as the student site's login (frontend LoginLayout + LoginPanel): the campus
-// photo on the left from lg, a plain white / slate-950 column with the logo, the title, 42 first,
+// Same split layout as the student site's login (frontend LoginLayout + LoginPanel): the 1337
+// building on the left from lg, a plain white / slate-950 column with the logo, the title, 42 first,
 // then email. The logo sits directly on the page background, the colors it's drawn for.
 export default async function LoginPage({
   searchParams,
@@ -73,7 +73,7 @@ export default async function LoginPage({
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
       {/* Decorative: the form column carries all the meaning. */}
       <div className="relative hidden lg:block">
-        <Image src="/campus.webp" alt="" fill priority sizes="50vw" className="object-cover" />
+        <Image src="/campus-1337.webp" alt="" fill priority sizes="50vw" className="object-cover object-right" />
       </div>
 
       <div className="flex flex-col bg-white px-6 py-6 dark:bg-slate-950">
