@@ -269,6 +269,12 @@ class PhoneReconciliationMigrationTests(TransactionTestCase):
     migrate_from = ('core_data', '0010_rsvp')
     migrate_to = ('core_data', '0011_reconcile_account_phones')
 
+    def tearDown(self):
+        # Later tests need the latest schema, including migrations reversed by this fixture.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
     def migrate(self, target):
         executor = MigrationExecutor(connection)
         executor.migrate([target])

@@ -160,6 +160,7 @@ const fr = {
     spotsLeft: '{count, plural, =0 {Plus aucune place} one {# place restante} other {# places restantes}}',
     errors: {
       full: { title: 'Cet événement est complet', description: 'Quelqu’un a pris la dernière place juste avant vous.' },
+      ended: { title: 'Cet événement est terminé', description: 'Les inscriptions sont closes.' },
       'signed-out': { title: 'Reconnectez-vous', description: 'Votre session a expiré. Connectez-vous, puis réessayez.' },
       'not-found': { title: 'Cet événement n’existe plus', description: 'L’organisateur l’a peut-être supprimé.' },
       unavailable: { title: 'Votre participation n’a pas été enregistrée', description: 'Un problème est survenu de notre côté. Réessayez dans un instant.' },

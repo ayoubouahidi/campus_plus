@@ -544,7 +544,9 @@ class ClubEventViewSet(viewsets.ModelViewSet):
             201: RsvpStatusSerializer,
             401: OpenApiResponse(description='Authentication required.'),
             404: OpenApiResponse(description='Event not found.'),
-            409: OpenApiResponse(description='Event capacity has been reached.'),
+            409: OpenApiResponse(
+                description='Event capacity has been reached or registration has ended (code: event_ended).',
+            ),
         },
     )
     @action(
@@ -556,7 +558,11 @@ class ClubEventViewSet(viewsets.ModelViewSet):
     def rsvp(self, request, pk=None):
         with transaction.atomic():
             try:
-                event = ClubEvent.objects.select_for_update().get(pk=pk)
+                event = (
+                    ClubEvent.objects.select_related('parent_id', 'club')
+                    .select_for_update(of=('self',))
+                    .get(pk=pk)
+                )
             except ClubEvent.DoesNotExist:
                 return Response(
                     {'detail': 'Event not found.'},
@@ -564,20 +570,32 @@ class ClubEventViewSet(viewsets.ModelViewSet):
                 )
 
             existing = Rsvp.objects.filter(event=event, user=request.user)
+            rsvp_changed = False
             if request.method == 'POST':
                 if existing.exists():
                     response_status = status.HTTP_200_OK
                 else:
-                    current_count = Rsvp.objects.filter(event=event).count()
-                    if event.capacity is not None and current_count >= event.capacity:
+                    if event.ends_at is not None and event.ends_at <= timezone.now():
                         return Response(
                             {
-                                'detail': 'Event capacity has been reached.',
-                                'rsvps_count': current_count,
+                                'code': 'event_ended',
+                                'detail': 'Registration is closed because this event has ended.',
+                                'rsvps_count': Rsvp.objects.filter(event=event).count(),
                                 'has_user_rsvpd': False,
                             },
                             status=status.HTTP_409_CONFLICT,
                         )
+                    if event.capacity is not None:
+                        current_count = Rsvp.objects.filter(event=event).count()
+                        if current_count >= event.capacity:
+                            return Response(
+                                {
+                                    'detail': 'Event capacity has been reached.',
+                                    'rsvps_count': current_count,
+                                    'has_user_rsvpd': False,
+                                },
+                                status=status.HTTP_409_CONFLICT,
+                            )
                     rsvp = Rsvp.objects.create(event=event, user=request.user)
                     NotificationService.create(
                         recipient=request.user,
@@ -587,6 +605,7 @@ class ClubEventViewSet(viewsets.ModelViewSet):
                         event=event,
                         deduplication_key=f"rsvp-confirmed:{rsvp.pk}",
                     )
+                    rsvp_changed = True
                     response_status = status.HTTP_201_CREATED
                 has_user_rsvpd = True
             else:
@@ -601,10 +620,19 @@ class ClubEventViewSet(viewsets.ModelViewSet):
                         deduplication_key=f"rsvp-cancelled:{existing_rsvp.pk}",
                     )
                     existing_rsvp.delete()
+                    rsvp_changed = True
                 response_status = status.HTTP_200_OK
                 has_user_rsvpd = False
 
             rsvps_count = Rsvp.objects.filter(event=event).count()
+            if rsvp_changed:
+                # [ahmed] Publish the public count after commit. Clients refetch their own RSVP state.
+                event.rsvps_count = rsvps_count
+                event_data = public_event_broadcast_data(ClubEventSerializer(event).data)
+                transaction.on_commit(
+                    lambda: broadcast_calendar_event('event_updated', event_data),
+                    robust=True,
+                )
 
         return Response(
             {
