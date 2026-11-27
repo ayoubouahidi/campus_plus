@@ -39,7 +39,10 @@ class AvatarLifecycleTests(TestCase):
             old_path = member.image_path.path
             self.assertTrue(__import__("os").path.exists(old_path))
 
-            second = self.client.post("/api/me/avatar/", {"file": image_upload("blue")}, format="multipart")
+            # The old file is deleted in transaction.on_commit; TestCase never
+            # commits, so run the captured callbacks explicitly.
+            with self.captureOnCommitCallbacks(execute=True):
+                second = self.client.post("/api/me/avatar/", {"file": image_upload("blue")}, format="multipart")
             self.assertEqual(second.status_code, 200, second.data)
             member.refresh_from_db()
             self.assertNotEqual(member.image_path.path, old_path)

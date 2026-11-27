@@ -1421,7 +1421,7 @@ class DepartmentAndMemberApiTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    def test_signup_assigns_department_and_club_after_email_verification(self):
+    def test_signup_assigns_department_and_ignores_club_after_email_verification(self):
         club = Club.objects.create(name='Programming', department=self.department)
 
         response = self.client.post(
@@ -1452,7 +1452,8 @@ class DepartmentAndMemberApiTests(TestCase):
         self.assertTrue(member.username.startswith('user_'))
         self.assertEqual(member.year_of_study, 2)
         self.assertEqual(member.user.email, 'new-user@example.com')
-        self.assertEqual(member.club_id, club)
+        # BE20: sign-up never assigns a club, even when club_id is sent.
+        self.assertIsNone(member.club_id)
         self.assertTrue(member.user.check_password('safe-password-123'))
         self.assertIn('token', verified.data)
 
