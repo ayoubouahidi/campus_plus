@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -6,6 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from core_data.models import ClubEvent, Department, Rsvp
+from notifications.models import Notification
 
 
 User = get_user_model()
@@ -74,12 +76,77 @@ class RsvpApiTests(TestCase):
         Rsvp.objects.create(event=self.event, user=other)
         self.authenticate()
 
-        response = self.client.post(f"/api/club-events/{self.event.pk}/rsvp/")
+        with self.captureOnCommitCallbacks() as callbacks:
+            response = self.client.post(f"/api/club-events/{self.event.pk}/rsvp/")
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data["rsvps_count"], 1)
         self.assertFalse(response.data["has_user_rsvpd"])
         self.assertFalse(Rsvp.objects.filter(event=self.event, user=self.user).exists())
+        self.assertFalse(Notification.objects.exists())
+        self.assertEqual(callbacks, [])
+
+    def test_new_rsvp_is_rejected_at_and_after_end_time(self):
+        end = self.event.ends_at
+        self.authenticate()
+        url = f"/api/club-events/{self.event.pk}/rsvp/"
+
+        for now in (end, end + timedelta(seconds=1)):
+            with self.subTest(now=now), patch("core_data.views.timezone.now", return_value=now):
+                with self.captureOnCommitCallbacks() as callbacks:
+                    response = self.client.post(url)
+
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.data, {
+                    "code": "event_ended",
+                    "detail": "Registration is closed because this event has ended.",
+                    "rsvps_count": 0,
+                    "has_user_rsvpd": False,
+                })
+                self.assertFalse(Rsvp.objects.exists())
+                self.assertFalse(Notification.objects.exists())
+                self.assertEqual(callbacks, [])
+
+    def test_rsvp_retry_and_cancellation_still_work_after_event_ends(self):
+        self.authenticate()
+        url = f"/api/club-events/{self.event.pk}/rsvp/"
+        Rsvp.objects.create(event=self.event, user=self.user)
+
+        with patch("core_data.views.timezone.now", return_value=self.event.ends_at):
+            with self.captureOnCommitCallbacks() as retry_callbacks:
+                retried = self.client.post(url)
+            cancelled = self.client.delete(url)
+
+        self.assertEqual(retried.status_code, 200)
+        self.assertEqual(retried.data, {"rsvps_count": 1, "has_user_rsvpd": True})
+        self.assertEqual(retry_callbacks, [])
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(cancelled.data, {"rsvps_count": 0, "has_user_rsvpd": False})
+        self.assertFalse(Rsvp.objects.exists())
+        self.assertEqual(Notification.objects.get().notification_type, Notification.Type.RSVP_CANCELLED)
+
+    def test_ongoing_legacy_and_future_cancelled_events_accept_rsvps(self):
+        now = timezone.now()
+        self.authenticate()
+        events = (
+            {"starts_at": now - timedelta(hours=1), "ends_at": now + timedelta(hours=1)},
+            {"starts_at": now - timedelta(days=1), "ends_at": None},
+            {
+                "starts_at": now + timedelta(hours=1),
+                "ends_at": now + timedelta(hours=2),
+                "status": "cancelled",
+            },
+        )
+        for event_details in events:
+            with self.subTest(event_details=event_details):
+                event = ClubEvent.objects.create(
+                    name="Registration allowed",
+                    parent_id=self.department,
+                    **event_details,
+                )
+                response = self.client.post(f"/api/club-events/{event.pk}/rsvp/")
+                self.assertEqual(response.status_code, 201)
+                self.assertTrue(Rsvp.objects.filter(event=event, user=self.user).exists())
 
     def test_event_responses_include_public_count_and_user_specific_state(self):
         Rsvp.objects.create(event=self.event, user=self.user)

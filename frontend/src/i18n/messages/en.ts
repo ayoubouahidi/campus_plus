@@ -170,6 +170,7 @@ const en = {
     spotsLeft: '{count, plural, =0 {No places left} one {# place left} other {# places left}}',
     errors: {
       full: { title: 'This event is full', description: 'Someone took the last place just before you.' },
+      ended: { title: 'This event has ended', description: 'Registration is closed.' },
       'signed-out': { title: 'Please log in again', description: 'Your session ended. Log in, then RSVP again.' },
       'not-found': { title: 'This event no longer exists', description: 'The organizer may have removed it.' },
       unavailable: { title: 'Your RSVP wasn’t saved', description: 'Something went wrong on our side. Try again in a moment.' },

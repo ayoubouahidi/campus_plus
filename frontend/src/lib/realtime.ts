@@ -11,9 +11,8 @@ export const WS_PATH = '/ws/calendar/';
 // Close code Django uses for "no valid credential" (missing, invalid or expired JWT): get a new cookie first.
 export const CLOSE_AUTH = 4401;
 
-// What subscribers receive. Broadcasts carry the public event only: no rsvps_count, has_user_rsvpd or
-// attendees_preview (the handoff says so explicitly). The mapper fills them with 0 / false / [], so consumers
-// must keep their own RSVP fields when they update an event they already have (`rsvpUnknown: true`).
+// Broadcasts can include the public RSVP total. The viewer's RSVP state and attendee preview are
+// neutral placeholders. Event pages refresh from the API for the latest count and their own state.
 export type LiveMessage =
   | { type: 'created' | 'updated'; event: EventItem; rsvpUnknown: true }
   | { type: 'deleted'; id: string };

@@ -28,9 +28,10 @@ export async function rsvpAction(eventId: string, going: boolean): Promise<RsvpR
   } catch (error) {
     if (error instanceof ApiError) {
       const kinds: Partial<Record<number, RsvpError>> = { 401: 'signed-out', 403: 'signed-out', 404: 'not-found', 409: 'full' };
-      const body = error.body as { rsvps_count?: unknown } | null;
+      const body = error.body as { code?: unknown; rsvps_count?: unknown } | null;
       const count = typeof body?.rsvps_count === 'number' ? body.rsvps_count : undefined;
-      return { ok: false, error: kinds[error.status] ?? 'unavailable', rsvps_count: count };
+      const kind = error.status === 409 && body?.code === 'event_ended' ? 'ended' : kinds[error.status];
+      return { ok: false, error: kind ?? 'unavailable', rsvps_count: count };
     }
     if (error instanceof ApiUnavailable) {
       console.error(error);

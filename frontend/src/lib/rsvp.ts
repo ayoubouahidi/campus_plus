@@ -2,7 +2,7 @@ import type { EventItem } from '@/types/api';
 
 // RSVP rules shared by the cards, the event page and the server action (Step 14.3, DOCS.md §14.3). Pure.
 
-export type RsvpError = 'full' | 'signed-out' | 'not-found' | 'unavailable';
+export type RsvpError = 'full' | 'ended' | 'signed-out' | 'not-found' | 'unavailable';
 
 // What rsvpAction answers. `state: null` = nothing to correct (dev mocks): the screen keeps its own guess.
 export type RsvpResult =

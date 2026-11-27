@@ -127,9 +127,23 @@ returns 200 without creating a duplicate. DELETE removes only the requesting
 user's registration and is idempotent when no registration exists. Successful
 responses contain `rsvps_count` and `has_user_rsvpd`.
 
-Capacity is enforced transactionally. A full event returns 409 and creates no
-RSVP. Unknown events return 404. Event-status restrictions remain a product
-decision; this API does not currently invent a cancelled/completed-event rule.
+New registrations check the event's end time and capacity under the event lock.
+An event has ended when `ends_at` is at or before the current time. A new POST
+for an ended event returns 409 with `code: "event_ended"`, a `detail` message,
+`rsvps_count` and `has_user_rsvpd: false`. A full event returns 409 with
+`detail`, `rsvps_count` and `has_user_rsvpd: false`. Both rejections leave the
+RSVP and notification tables unchanged. Unknown events return 404.
+
+Existing registrations can still be retried or cancelled after the end time.
+Legacy events with a null `ends_at` are checked for capacity only. The
+`status` field does not impose an additional registration restriction.
+
+After a successful RSVP insertion or deletion commits, the shared calendar
+WebSocket sends the existing `event_updated` message with the event ID and
+public `rsvps_count`. Viewer-specific fields are neutral placeholders.
+Clients refetch through the API for their own RSVP status and the latest count.
+Duplicate POSTs, no-op DELETEs, rejected requests and rollbacks emit no RSVP
+update. Confirmation and cancellation notifications remain private.
 
 ### List attendees
 
