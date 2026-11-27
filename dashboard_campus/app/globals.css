@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* Dark mode follows the `dark` class on <html> (set by THEME_SCRIPT / ThemeToggle). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Same typography as the student site: Geist from next/font, set on <html> by the root layout. */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  transition: background-color 150ms ease, color 150ms ease;
+}

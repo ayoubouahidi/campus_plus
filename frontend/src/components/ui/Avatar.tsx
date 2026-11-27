@@ -1,0 +1,170 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
+
+export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+export type AvatarStatus = 'online' | 'offline' | 'busy' | 'away';
+
+export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
+  src?: string | null;
+  alt?: string;
+  name?: string;
+  size?: AvatarSize;
+  status?: AvatarStatus;
+}
+
+const sizeStyles: Record<AvatarSize, string> = {
+  xs: 'h-6 w-6 text-[10px]',
+  sm: 'h-8 w-8 text-xs',
+  md: 'h-10 w-10 text-sm',
+  lg: 'h-12 w-12 text-base',
+  xl: 'h-16 w-16 text-lg',
+  '2xl': 'h-[104px] w-[104px] text-[2.125rem]', // profile hero (Step 5.4, Figma)
+};
+
+const statusStyles: Record<AvatarStatus, string> = {
+  online: 'bg-emerald-500',
+  offline: 'bg-slate-400',
+  busy: 'bg-rose-500',
+  away: 'bg-amber-500',
+};
+
+const statusSizeStyles: Record<AvatarSize, string> = {
+  xs: 'h-1.5 w-1.5 ring-1',
+  sm: 'h-2 w-2 ring-1.5',
+  md: 'h-2.5 w-2.5 ring-2',
+  lg: 'h-3 w-3 ring-2',
+  xl: 'h-3.5 w-3.5 ring-2',
+  '2xl': 'h-5 w-5 ring-4',
+};
+
+function getInitials(name?: string): string {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+
+export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
+  (
+    {
+      src,
+      alt,
+      name,
+      size = 'md',
+      status,
+      className = '',
+      ...props
+    },
+    ref
+  ) => {
+    // The src that failed to load, not a boolean: a new src (another user, a new photo) gets its own try without
+    // resetting state in an effect.
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+    const t = useTranslations('Common');
+
+    // Derived states
+    const initials = getInitials(name);
+    const accessibleAlt = alt || name || t('avatar'); // last resort, in the visitor's language (Step 12.8)
+    const showImage = Boolean(src) && failedSrc !== src;
+
+    // The <img> comes in the server HTML, so the browser may finish (or fail) loading it before React hydrates;
+    // that early error event is lost and onError never runs, leaving a broken image that shows its alt text (the
+    // full name) inside the circle (DOCS.md §25). When React attaches the element, check whether it already failed.
+    const checkAlreadyFailed = (img: HTMLImageElement | null) => {
+      if (img && img.complete && img.naturalWidth === 0 && src) setFailedSrc(src);
+    };
+
+    return (
+      <div
+        ref={ref}
+        className={`relative inline-flex shrink-0 select-none ${className}`}
+        {...props}
+      >
+        {/* Avatar Surface */}
+        <div
+          className={`flex items-center justify-center overflow-hidden rounded-full font-semibold border border-slate-200/80 dark:border-slate-800 ${sizeStyles[size]} ${
+            showImage
+              ? 'bg-slate-100 dark:bg-slate-800'
+              : 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300'
+          }`}
+        >
+          {showImage ? (
+            // A plain <img> on purpose (DOCS.md §20): avatars are tiny (16–96 px) and come from other hosts (42's
+            // CDN, Django's /media/) that Next's optimizer can't fetch from inside the container; onError swaps
+            // in the initials. next/image would add a server round trip for no visible gain.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              ref={checkAlreadyFailed}
+              decoding="async"
+              src={src!}
+              alt={accessibleAlt}
+              // No Referer: 42's CDN (Cloudflare) refuses hotlinked images, and other hosts don't need our URLs.
+              referrerPolicy="no-referrer"
+              onError={() => setFailedSrc(src ?? null)}
+              className="h-full w-full object-cover"
+            />
+          ) : initials ? (
+            <span>{initials}</span>
+          ) : (
+            /* Fallback generic user icon when neither image nor name exists */
+            <svg
+              className="h-3/5 w-3/5 text-slate-400 dark:text-slate-500"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+            </svg>
+          )}
+        </div>
+
+        {/* Status Indicator Dot */}
+        {status && (
+          <span
+            className={`absolute bottom-0 end-0 rounded-full ring-white dark:ring-slate-900 ${statusStyles[status]} ${statusSizeStyles[size]}`}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+    );
+  }
+);
+
+Avatar.displayName = 'Avatar';
+
+/* ------------------------------- AvatarGroup ------------------------------ */
+
+export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
+  max?: number;
+  total?: number;
+}
+
+export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
+  ({ children, max = 4, total, className = '', ...props }, ref) => {
+    const childrenArray = React.Children.toArray(children);
+    const visibleChildren = childrenArray.slice(0, max);
+    const hiddenCount = total !== undefined ? total - max : childrenArray.length - max;
+
+    // Rings match the card surface (white / slate-900), where avatar stacks usually sit.
+    return (
+      <div ref={ref} className={`flex items-center -space-x-2 overflow-hidden ${className}`} {...props}>
+        {visibleChildren.map((child, index) => (
+          <div key={index} className="inline-block rounded-full ring-2 ring-white dark:ring-slate-900">
+            {child}
+          </div>
+        ))}
+
+        {hiddenCount > 0 && (
+          <div className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900">
+            +{hiddenCount}
+          </div>
+        )}
+      </div>
+    );
+  }
+);
+
+AvatarGroup.displayName = 'AvatarGroup';

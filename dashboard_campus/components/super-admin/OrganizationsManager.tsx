@@ -1,0 +1,336 @@
+"use client";
+
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { dashboardApi, errorMessage, fieldErrorsOf, listRows, type FieldErrors } from "@/lib/dashboard-api";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Modal, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
+import { useToast } from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import FormAlert from "@/components/shared/FormAlert";
+import Switch from "@/components/shared/Switch";
+import ImagePicker, { imageFileError } from "@/components/shared/ImagePicker";
+import { searchInputClass, tableStyles as t } from "@/components/shared/table";
+import PageHeader from "@/components/layout/PageHeader";
+import { CATEGORY_OPTIONS, categoryLabel, type EventCategory } from "@/lib/events";
+
+type Organization = {
+  id: number;
+  name: string;
+  department: number;
+  department_name: string | null;
+  category: EventCategory | null;
+  is_active: boolean;
+  logo_url: string | null;
+  banner_url: string | null;
+  president: { id: number; name: string; email: string } | null;
+};
+type BoardUser = { id: number; username: string; first_name: string; last_name: string; email: string; is_active: boolean; club_id: number | null };
+
+const LIST_ENDPOINT = "api/superadmin/organizations/?page_size=200";
+
+export default function OrganizationsManager() {
+  const { showToast } = useToast();
+  const formTitleId = useId();
+
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [boardUsers, setBoardUsers] = useState<BoardUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [search, setSearch] = useState("");
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Organization | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  const [deleting, setDeleting] = useState<Organization | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const [orgResponse, boardResponse] = await Promise.all([
+        dashboardApi<Organization[] | { results: Organization[] }>(LIST_ENDPOINT),
+        dashboardApi<BoardUser[] | { results: BoardUser[] }>("api/superadmin/users/?role=BOARD_MEMBER&page_size=200"),
+      ]);
+      setOrganizations(listRows(orgResponse));
+      setBoardUsers(listRows(boardResponse));
+      setLoadError("");
+    } catch (error) {
+      setLoadError(errorMessage(error, "Unable to load organizations."));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Initial load; setState happens after the request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return organizations;
+    return organizations.filter((organization) =>
+      organization.name.toLocaleLowerCase().includes(query)
+    );
+  }, [organizations, search]);
+
+  function openForm(organization: Organization | null) {
+    setEditing(organization);
+    setFormError("");
+    setFieldErrors({});
+    setFormOpen(true);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+
+    const errors: FieldErrors = {};
+    if (!name) errors.name = "Enter the organization's name.";
+    const category = String(form.get("category") ?? "");
+    if (!category) errors.category = "Choose the organization's category.";
+    for (const field of ["logo", "banner"]) {
+      const problem = imageFileError(form.get(field));
+      if (problem) errors[field] = problem;
+    }
+    setFieldErrors(errors);
+    setFormError("");
+    if (Object.keys(errors).length) return;
+
+    // Multipart, so the logo and banner files travel with the other fields.
+    const body = new FormData();
+    body.append("name", name);
+    // No department field: 1337 only, Django gives every organization the 1337 department.
+    body.append("category", category);
+    body.append("is_active", form.has("is_active") ? "true" : "false");
+    if (editing) body.append("president", String(form.get("president") ?? ""));
+    for (const field of ["logo", "banner"]) {
+      const file = form.get(field);
+      if (file instanceof File && file.size > 0) body.append(field, file);
+      if (form.get(`remove_${field}`) === "true") body.append(`remove_${field}`, "true");
+    }
+
+    setSaving(true);
+    try {
+      await dashboardApi(editing ? `api/superadmin/organizations/${editing.id}/` : "api/superadmin/organizations/", {
+        method: editing ? "PATCH" : "POST",
+        body,
+      });
+      setFormOpen(false);
+      showToast({
+        variant: "success",
+        title: editing ? "Organization updated" : "Organization created",
+        description: name,
+      });
+      await load();
+    } catch (error) {
+      const errorsFromServer = fieldErrorsOf(error);
+      setFieldErrors(errorsFromServer);
+      setFormError(Object.keys(errorsFromServer).length ? "" : errorMessage(error, "Unable to save the organization."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      await dashboardApi(`api/superadmin/organizations/${deleting.id}/`, { method: "DELETE" });
+      showToast({ variant: "success", title: "Organization deleted", description: deleting.name });
+      setDeleting(null);
+      await load();
+    } catch (error) {
+      setDeleteError(errorMessage(error, "Unable to delete the organization."));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Organizations"
+        description="Clubs on Campus Hub. Inactive organizations are hidden from students."
+        actions={<Button onClick={() => openForm(null)}>New organization</Button>}
+      />
+
+      <FormAlert message={loadError} />
+
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
+          <p className="text-sm text-slate-500 dark:text-slate-400" aria-live="polite">
+            {loading ? "Loading…" : `${filtered.length} of ${organizations.length} organizations`}
+          </p>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by name"
+            aria-label="Search organizations"
+            className={searchInputClass}
+          />
+        </div>
+        <div className={t.wrapper}>
+          <table className={t.table}>
+            <thead>
+              <tr className={t.headRow}>
+                <th scope="col" className={t.th}>Organization</th>
+                <th scope="col" className={t.th}>Category</th>
+                <th scope="col" className={t.th}>President</th>
+                <th scope="col" className={t.th}>Status</th>
+                <th scope="col" className={t.thRight}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((organization) => (
+                <tr key={organization.id} className={t.row}>
+                  <td className={t.tdStrong}>
+                    <div className="flex items-center gap-3">
+                      <Avatar src={organization.logo_url} name={organization.name} size="sm" />
+                      {organization.name}
+                    </div>
+                  </td>
+                  <td className={t.td}>{organization.category ? categoryLabel(organization.category) : <span className="text-amber-600 dark:text-amber-400">Not set</span>}</td>
+                  <td className={t.td}>{organization.president?.name ?? "—"}</td>
+                  <td className={t.td}>
+                    <Badge variant={organization.is_active ? "success" : "neutral"} hasDot>
+                      {organization.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className={t.tdActions}>
+                    <div className="inline-flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => openForm(organization)} aria-label={`Edit ${organization.name}`}>
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleting(organization);
+                        }}
+                        aria-label={`Delete ${organization.name}`}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loading && filtered.length === 0 && (
+            <p className={t.empty}>
+              {search ? "No organization matches your search." : "No organizations yet. Create the first one."}
+            </p>
+          )}
+        </div>
+      </Card>
+
+      <Modal isOpen={formOpen} onClose={() => !saving && setFormOpen(false)} size="lg" labelledBy={formTitleId}>
+        <form key={editing?.id ?? "new"} onSubmit={submit} noValidate>
+          <ModalHeader onClose={() => !saving && setFormOpen(false)}>
+            <ModalTitle id={formTitleId}>{editing ? "Edit organization" : "New organization"}</ModalTitle>
+            <ModalDescription className="pt-1">Fields marked * are required.</ModalDescription>
+          </ModalHeader>
+          <div className="space-y-4">
+            <FormAlert message={formError} />
+            <Input
+              name="name"
+              label="Name *"
+              defaultValue={editing?.name ?? ""}
+              maxLength={255}
+              error={fieldErrors.name}
+            />
+            <Select
+              name="category"
+              label="Category *"
+              defaultValue={editing?.category ?? ""}
+              placeholder="Choose a category"
+              options={CATEGORY_OPTIONS}
+              helperText={fieldErrors.category ? undefined : "Every event of this organization gets this category (students filter events by it)."}
+              error={fieldErrors.category}
+              onChange={() => fieldErrors.category && setFieldErrors((current) => ({ ...current, category: "" }))}
+            />
+            {editing && (
+              <Select
+                name="president"
+                label="President (club contact)"
+                defaultValue={editing.president ? String(editing.president.id) : ""}
+                options={[
+                  { value: "", label: "No president" },
+                  ...boardUsers
+                    .filter((user) => user.club_id === editing.id && user.is_active)
+                    .map((user) => ({
+                      value: String(user.id),
+                      label: `${`${user.first_name} ${user.last_name}`.trim() || user.username} · ${user.email}`,
+                    })),
+                ]}
+                helperText={
+                  fieldErrors.president
+                    ? undefined
+                    : "Chosen from this organization's board members (Users & roles). Signed-in students see their contact."
+                }
+                error={fieldErrors.president}
+              />
+            )}
+            <ImagePicker
+              name="logo"
+              label="Logo"
+              currentUrl={editing?.logo_url}
+              removable
+              error={fieldErrors.logo}
+              onChange={() => fieldErrors.logo && setFieldErrors((current) => ({ ...current, logo: "" }))}
+            />
+            <ImagePicker
+              name="banner"
+              label="Banner"
+              aspect="banner"
+              currentUrl={editing?.banner_url}
+              removable
+              helperText="Wide image (about 3:1). JPEG, PNG or WebP under 2 MB."
+              error={fieldErrors.banner}
+              onChange={() => fieldErrors.banner && setFieldErrors((current) => ({ ...current, banner: "" }))}
+            />
+            <Switch
+              name="is_active"
+              label="Active"
+              description="Active organizations appear on the student site."
+              defaultChecked={editing ? editing.is_active : true}
+            />
+          </div>
+          <ModalFooter>
+            <Button type="button" variant="secondary" onClick={() => setFormOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={saving}>
+              {editing ? "Save changes" : "Create organization"}
+            </Button>
+          </ModalFooter>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={deleting !== null}
+        title="Delete this organization?"
+        description={`“${deleting?.name ?? ""}” and its events will be removed for good. An organization with board members can't be deleted: move or demote them first.`}
+        busy={deleteBusy}
+        error={deleteError}
+        onConfirm={() => void confirmDelete()}
+        onClose={() => setDeleting(null)}
+      />
+    </>
+  );
+}

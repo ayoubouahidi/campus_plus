@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+/.pnp
+
+# Next.js build output & Turbopack cache
+.next/
+out/
+build/
+
+# TypeScript incremental cache (rewritten by every `tsc --noEmit`)
+*.tsbuildinfo
+
+# Logs & Environment
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env*.local
+
+# System & OS
+.DS_Store
+*.pem
