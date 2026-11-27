@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { dashboardApi, errorMessage, fieldErrorsOf, type FieldErrors } from "@/lib/dashboard-api";
 import { formatDateTime } from "@/lib/format";
 import {
-  CATEGORY_OPTIONS,
   categoryLabel,
   eventPhase,
   type DashboardEvent,
+  type EventCategory,
   type EventPhase,
 } from "@/lib/events";
 import { Badge, type StatusVariant } from "@/components/ui/Badge";
@@ -30,6 +30,8 @@ type Props = {
   clubId: number;
   departmentId: number;
   clubName: string;
+  /** Set by a super admin on the organization; every event of the club gets it. */
+  clubCategory: EventCategory | null;
   /** Request time from the server, so "upcoming" and "ended" match the student site. */
   now: number;
 };
@@ -57,7 +59,7 @@ function toLocalInput(value: string | null) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-export default function EventsManager({ events, clubId, departmentId, clubName, now }: Props) {
+export default function EventsManager({ events, clubId, departmentId, clubName, clubCategory, now }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
   const formTitleId = useId();
@@ -107,7 +109,6 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
 
     const errors: FieldErrors = {};
     if (!value("name")) errors.name = "Give the event a name.";
-    if (!value("category")) errors.category = "Choose a category.";
     if (!startsAt) errors.starts_at = "Choose when the event starts.";
     else {
       // New events, and edits that move the start, must start in the future (the
@@ -130,7 +131,6 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
     const payload = new FormData();
     payload.append("name", value("name"));
     payload.append("description", value("description"));
-    payload.append("category", value("category"));
     payload.append("location", value("location"));
     payload.append("status", value("status") || "planned");
     payload.append("capacity", capacity);
@@ -156,7 +156,13 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
     } catch (error) {
       const errorsFromServer = fieldErrorsOf(error);
       setFieldErrors(errorsFromServer);
-      setFormError(Object.keys(errorsFromServer).length ? "" : errorMessage(error, "Unable to save the event."));
+      setFormError(
+        errorsFromServer.category
+          ? "This organization has no category yet. Ask a Campus Hub administrator to set it in Organizations."
+          : Object.keys(errorsFromServer).length
+            ? ""
+            : errorMessage(error, "Unable to save the event.")
+      );
     } finally {
       setSaving(false);
     }
@@ -191,8 +197,14 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
       <PageHeader
         title="Events"
         description={`Events of ${clubName}. Students see changes live on Campus Hub.`}
-        actions={<Button onClick={() => openForm(null)}>New event</Button>}
+        actions={<Button onClick={() => openForm(null)} disabled={!clubCategory}>New event</Button>}
       />
+
+      {!clubCategory && (
+        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          Your organization has no category yet, so events can&rsquo;t be published. Ask a Campus Hub administrator to set it in Organizations.
+        </p>
+      )}
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 p-4 dark:border-slate-800" role="group" aria-label="Show events">
@@ -299,15 +311,13 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
             <FormAlert message={formError} />
             <Input name="name" label="Name *" maxLength={255} defaultValue={editing?.name ?? ""} error={fieldErrors.name} onChange={() => clearFieldError("name")} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Select
-                name="category"
-                label="Category *"
-                defaultValue={editing?.category ?? ""}
-                placeholder="Choose a category"
-                options={CATEGORY_OPTIONS}
-                error={fieldErrors.category}
-                onChange={() => clearFieldError("category")}
-              />
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</p>
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  {categoryLabel(clubCategory)}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">The organization&rsquo;s category, set by a Campus Hub administrator.</p>
+              </div>
               <Input name="location" label="Location *" maxLength={255} placeholder="e.g. 1337 Benguerir, Cluster 2" defaultValue={editing?.location ?? ""} error={fieldErrors.location} onChange={() => clearFieldError("location")} />
               <Input name="starts_at" type="datetime-local" label="Starts *" min={minStart} defaultValue={toLocalInput(editing?.starts_at ?? null)} error={fieldErrors.starts_at} onChange={() => clearFieldError("starts_at")} />
               <Input name="ends_at" type="datetime-local" label="Ends *" min={minStart} defaultValue={toLocalInput(editing?.ends_at ?? null)} error={fieldErrors.ends_at} onChange={() => clearFieldError("ends_at")} />

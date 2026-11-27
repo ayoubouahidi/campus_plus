@@ -19,12 +19,12 @@ The management app of Campus Hub (1337), served at **https://dashboard.localhost
 | Area | Page | What it does | Backend |
 | --- | --- | --- | --- |
 | Super admin | Overview | Counts, organizations, recent admin activity | `/api/superadmin/stats/`, `organizations/`, `roles/distribution/`, `audit-log/` |
-| | Organizations | Create, edit (name, department, active), delete clubs. Inactive clubs are hidden from students. A club with board members can't be deleted (409). | `/api/superadmin/organizations/` |
+| | Organizations | Create, edit (name, **category** (required; all the club's events get it), department, president, logo, banner, active), delete clubs. Inactive clubs are hidden from students. A club with board members can't be deleted (409). | `/api/superadmin/organizations/` |
 | | Users & roles | Create, edit, deactivate, delete accounts; choose the role; a board member must belong to one organization. You can't delete or demote yourself. | `/api/superadmin/users/` |
 | | Analytics | Events created per week, accounts by role | `/api/superadmin/events/weekly/`, `roles/distribution/` |
 | | Audit log | Every dashboard change, 25 per page | `/api/superadmin/audit-log/` |
 | Club board | Overview | Upcoming events, RSVPs this month, board team size, RSVPs per day | `/api/board/stats/`, `/api/club-events/?club=<slug>`, `/api/board/registrations/weekly/` |
-| | Events | Publish, edit (category, places, flyer, cancel), delete the club's events. Students see changes live. | `/api/club-events/` |
+| | Events | Publish, edit (places, flyer, cancel; the category comes from the club), delete the club's events. Students see changes live. | `/api/club-events/` |
 | | Registrations | RSVPs per day and places left per upcoming event | same |
 | | Board team | The club's board members | `/api/board/members/` |
 | | Club settings | The club's public page, its **president** (chosen from the board team; signed-in students see their name, email and phone), its **logo and banner** (upload, preview, replace, remove), your photo and phone | `/api/board/club/` (multipart for images), `/api/me/`, `/api/me/avatar/` |

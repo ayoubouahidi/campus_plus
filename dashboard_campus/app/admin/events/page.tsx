@@ -15,7 +15,7 @@ export default async function EventsPage() {
   const { club, events, now } = await loadEvents();
   return (
     <PageBody>
-      <EventsManager events={events} clubId={club.id} departmentId={club.department_id} clubName={club.name} now={now} />
+      <EventsManager events={events} clubId={club.id} departmentId={club.department_id} clubName={club.name} clubCategory={club.category} now={now} />
     </PageBody>
   );
 }

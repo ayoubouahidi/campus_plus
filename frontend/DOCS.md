@@ -6110,3 +6110,18 @@ interface SignupCodeFormProps {
 4. Why does "Send a new code" answer the same whether or not the address is signing up?
 5. Why one input with `autocomplete="one-time-code"` instead of six boxes?
 6. The countdown changes every second. Why doesn't it break the "no `Date.now()` in render" rule?
+
+## 29. "Where" shows only the event's location; categories belong to clubs (2026-11-27)
+
+**Status:** done on `fix/dashboard-ux`, checked end to end (dashboard → Django → student site).
+
+**1. "Where" without the department.** `EventDetails.tsx` printed `event.department_name` ("1337 Coding School") under the location, and `EventCard.tsx` appended "· 1337 Coding School" after it. With one department for the whole platform, students read it as a second place (Mouad, 2026-11-27). Both now show only `event.location`. The club's department stays where it labels the club (club card, club header, organizer line, search), not a place.
+
+**2. Category is the club's, not the event's.**
+- `Club.category` (same 7 values as events, migration `core_data/0013_club_category`), chosen by a super admin in the dashboard (Organizations, required there).
+- `ClubEventSerializer.validate`: when the event's club has a category, the event gets it, whatever the request sends. Clubs without one (older data) still need a per-event category.
+- Changing a club's category in the dashboard updates its existing events (`sync_event_categories`). Board members can't change it (read-only in Club settings).
+- The dashboard event form has no category picker; "New event" is disabled with a notice while the club has no category.
+- The student site is unchanged: events still carry `category`, so the feed's category chips and search filters work as before.
+
+**Tests:** `dashboard/test_club_category.py` (5): event inherits the club category without sending one, a different one in the request is ignored, changing the club category updates its events, unknown categories are refused, the board can't change it. 381 backend tests OK.

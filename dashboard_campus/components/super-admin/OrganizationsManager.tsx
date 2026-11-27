@@ -16,12 +16,14 @@ import Switch from "@/components/shared/Switch";
 import ImagePicker, { imageFileError } from "@/components/shared/ImagePicker";
 import { searchInputClass, tableStyles as t } from "@/components/shared/table";
 import PageHeader from "@/components/layout/PageHeader";
+import { CATEGORY_OPTIONS, categoryLabel, type EventCategory } from "@/lib/events";
 
 type Organization = {
   id: number;
   name: string;
   department: number;
   department_name: string | null;
+  category: EventCategory | null;
   is_active: boolean;
   logo_url: string | null;
   banner_url: string | null;
@@ -106,6 +108,8 @@ export default function OrganizationsManager() {
     const errors: FieldErrors = {};
     if (!name) errors.name = "Enter the organization's name.";
     if (!department) errors.department = "Choose a department.";
+    const category = String(form.get("category") ?? "");
+    if (!category) errors.category = "Choose the organization's category.";
     for (const field of ["logo", "banner"]) {
       const problem = imageFileError(form.get(field));
       if (problem) errors[field] = problem;
@@ -118,6 +122,7 @@ export default function OrganizationsManager() {
     const body = new FormData();
     body.append("name", name);
     body.append("department", department);
+    body.append("category", category);
     body.append("is_active", form.has("is_active") ? "true" : "false");
     if (editing) body.append("president", String(form.get("president") ?? ""));
     for (const field of ["logo", "banner"]) {
@@ -193,6 +198,7 @@ export default function OrganizationsManager() {
             <thead>
               <tr className={t.headRow}>
                 <th scope="col" className={t.th}>Organization</th>
+                <th scope="col" className={t.th}>Category</th>
                 <th scope="col" className={t.th}>Department</th>
                 <th scope="col" className={t.th}>President</th>
                 <th scope="col" className={t.th}>Status</th>
@@ -208,6 +214,7 @@ export default function OrganizationsManager() {
                       {organization.name}
                     </div>
                   </td>
+                  <td className={t.td}>{organization.category ? categoryLabel(organization.category) : <span className="text-amber-600 dark:text-amber-400">Not set</span>}</td>
                   <td className={t.td}>{organization.department_name ?? "—"}</td>
                   <td className={t.td}>{organization.president?.name ?? "—"}</td>
                   <td className={t.td}>
@@ -259,6 +266,16 @@ export default function OrganizationsManager() {
               defaultValue={editing?.name ?? ""}
               maxLength={255}
               error={fieldErrors.name}
+            />
+            <Select
+              name="category"
+              label="Category *"
+              defaultValue={editing?.category ?? ""}
+              placeholder="Choose a category"
+              options={CATEGORY_OPTIONS}
+              helperText={fieldErrors.category ? undefined : "Every event of this organization gets this category (students filter events by it)."}
+              error={fieldErrors.category}
+              onChange={() => fieldErrors.category && setFieldErrors((current) => ({ ...current, category: "" }))}
             />
             <Select
               name="department"

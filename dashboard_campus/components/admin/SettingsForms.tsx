@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/Toast";
 import FormAlert from "@/components/shared/FormAlert";
 import ImagePicker, { imageFileError } from "@/components/shared/ImagePicker";
+import { categoryLabel } from "@/lib/events";
 
 export type DashboardProfile = {
   email: string;
@@ -187,7 +188,10 @@ export default function SettingsForms({
       <Card className="xl:col-span-3">
         <CardHeader>
           <CardTitle>Club page</CardTitle>
-          <CardDescription>What students see on the club&rsquo;s page on Campus Hub.</CardDescription>
+          <CardDescription>
+            What students see on the club&rsquo;s page on Campus Hub. Category:{" "}
+            <span className="font-medium text-slate-700 dark:text-slate-300">{categoryLabel(club.category)}</span> (set by an administrator).
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={saveClub} noValidate className="space-y-4">

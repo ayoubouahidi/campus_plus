@@ -29,7 +29,9 @@ export default async function LoginPage({
       >
         <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-violet-500/40 blur-3xl" />
         <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-amber-400/20 blur-3xl" />
-        <span className="relative inline-flex w-fit rounded-2xl bg-white px-5 py-3 shadow-lg">
+        {/* The logo's colors follow the theme ("campus" turns white and the cap's cut line dark
+            in dark mode), so its backdrop must follow too: slate-50 / slate-950, the colors it's drawn for. */}
+        <span className="relative inline-flex w-fit rounded-2xl bg-slate-50 px-5 py-3 shadow-lg ring-1 ring-white/20 dark:bg-slate-950">
           <Logo decorative className="h-10" />
         </span>
         <div className="relative max-w-md space-y-4 text-violet-50">

@@ -58,6 +58,7 @@ class BoardClubSettingsSerializer(ClubPresidentMixin, ClubImagesMixin, serialize
             "id",
             "department_id",
             "slug",
+            "category",
             "name",
             "description",
             "contact_email",
@@ -70,7 +71,8 @@ class BoardClubSettingsSerializer(ClubPresidentMixin, ClubImagesMixin, serialize
             "banner_url",
             "president",
         ]
-        read_only_fields = ["slug"]
+        # The category is chosen by a super admin (Organizations), not by the board.
+        read_only_fields = ["slug", "category"]
         extra_kwargs = CLUB_IMAGE_KWARGS
 
 
@@ -136,6 +138,7 @@ class OrganizationAdminSerializer(ClubPresidentMixin, ClubImagesMixin, serialize
             "name",
             "department",
             "department_name",
+            "category",
             "is_active",
             "logo",
             "banner",

@@ -147,6 +147,7 @@ class ClubSerializer(serializers.ModelSerializer):
             'event_count',
             'upcoming_event_count',
             'contact_email',
+            'category',
             'meeting_day',
             'meeting_time',
             'meeting_location',
@@ -308,6 +309,13 @@ class ClubEventSerializer(serializers.ModelSerializer):
                     'department.'
                 ),
             })
+
+        # Events take their club's category: whatever the request says, a club
+        # with a category decides it. Clubs without one (older data) keep the
+        # per-event category, still required below.
+        club_for_category = attrs.get('club', getattr(self.instance, 'club', None))
+        if club_for_category is not None and club_for_category.category:
+            attrs['category'] = club_for_category.category
 
         event_errors = {}
         if self.instance is None:

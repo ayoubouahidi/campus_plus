@@ -82,8 +82,8 @@ export const EventDetails = React.forwardRef<HTMLElement, EventDetailsProps>(
             <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
             <div className="min-w-0">
               <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">{t('where')}</dt>
+              {/* The event's location only (the department name read like a second place). */}
               <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">{event.location}</dd>
-              <dd className="text-sm text-slate-600 dark:text-slate-400">{event.department_name}</dd>
             </div>
           </div>
 

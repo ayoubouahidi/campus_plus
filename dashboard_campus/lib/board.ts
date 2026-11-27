@@ -1,9 +1,10 @@
 import { backendFetch } from "@/lib/api";
-import type { DashboardEvent } from "@/lib/events";
+import type { DashboardEvent, EventCategory } from "@/lib/events";
 
 export type BoardClub = {
   id: number;
   slug: string;
+  category: EventCategory | null;
   department_id: number;
   name: string;
   description: string;

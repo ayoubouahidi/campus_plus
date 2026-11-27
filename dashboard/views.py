@@ -100,6 +100,12 @@ def apply_president(club, president):
     club.save(update_fields=["head"])
 
 
+def sync_event_categories(club):
+    """Events take their club's category: apply a new club category to its events."""
+    if club.category:
+        ClubEvent.objects.filter(club=club).exclude(category=club.category).update(category=club.category)
+
+
 def clear_presidencies(user, except_club=None):
     """A user who leaves a club's board stops being its president."""
     clubs = Club.objects.filter(head__user=user)
@@ -136,6 +142,7 @@ def save_club_images(serializer, previous_files, removals):
 ORGANIZATION_FIELDS = {
     "name",
     "department",
+    "category",
     "is_active",
     "logo",
     "banner",
@@ -510,6 +517,7 @@ def superadmin_organization_detail(request, organization_id):
             club_image_removals(request),
         )
         apply_president(organization, president)
+        sync_event_categories(organization)
         if previous_status != organization.is_active:
             action = "club_reactivated" if organization.is_active else "club_suspended"
         else:

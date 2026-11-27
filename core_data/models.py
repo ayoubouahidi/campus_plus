@@ -126,6 +126,22 @@ class Club(models.Model):
         related_name='headed_clubs',
     )
     contact_email = models.EmailField(blank=True)
+    # The club's category (Tech, Music, ...). Its events take this category
+    # (set by a super admin in the dashboard; events no longer choose their own).
+    category = models.CharField(
+        max_length=30,
+        choices=[
+            ('Tech', 'Tech'),
+            ('Media', 'Media'),
+            ('Music', 'Music'),
+            ('Sports', 'Sports'),
+            ('Business', 'Business'),
+            ('EventsOrganization', 'Events Organization'),
+            ('Gaming', 'Gaming'),
+        ],
+        null=True,
+        blank=True,
+    )
     meeting_day = models.CharField(max_length=20, blank=True)
     meeting_time = models.TimeField(null=True, blank=True)
     meeting_location = models.CharField(max_length=255, blank=True)

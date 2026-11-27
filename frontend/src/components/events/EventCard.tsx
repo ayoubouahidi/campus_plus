@@ -98,9 +98,8 @@ export const EventCard = React.forwardRef<HTMLDivElement, EventCardProps>(
 
           <p className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
             <MapPinIcon className="h-4 w-4 shrink-0" />
-            <span className="truncate">
-              {event.location} · {event.department_name}
-            </span>
+            {/* Only the event's own location: the department ("1337 Coding School") read like a place. */}
+            <span className="truncate">{event.location}</span>
           </p>
         </div>
 
