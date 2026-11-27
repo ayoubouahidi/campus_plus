@@ -39,6 +39,55 @@ from .serializers import (
 User = get_user_model()
 
 
+CLUB_IMAGE_FIELDS = ("logo", "banner")
+TRUE_VALUES = {"true", "1", "on", "yes"}
+
+
+def club_payload(request):
+    """Request data without the remove_logo/remove_banner flags (multipart or JSON)."""
+    return {
+        key: request.data.get(key)
+        for key in request.data
+        if key not in {f"remove_{field}" for field in CLUB_IMAGE_FIELDS}
+    }
+
+
+def club_image_removals(request):
+    return {
+        field
+        for field in CLUB_IMAGE_FIELDS
+        if str(request.data.get(f"remove_{field}", "")).lower() in TRUE_VALUES
+    }
+
+
+def save_club_images(serializer, previous_files, removals):
+    """Save the club, apply removals, and delete replaced/removed files after commit."""
+    club = serializer.save()
+    cleared = [field for field in removals if field not in serializer.validated_data]
+    for field in cleared:
+        setattr(club, field, "")
+    if cleared:
+        club.save(update_fields=cleared)
+    for field in CLUB_IMAGE_FIELDS:
+        old_name = previous_files.get(field)
+        file_field = getattr(club, field)
+        if old_name and old_name != file_field.name:
+            storage = file_field.storage
+            transaction.on_commit(lambda name=old_name, storage=storage: storage.delete(name))
+    return club
+
+
+ORGANIZATION_FIELDS = {
+    "name",
+    "department",
+    "is_active",
+    "logo",
+    "banner",
+    "remove_logo",
+    "remove_banner",
+}
+
+
 class SuperadminPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
@@ -120,6 +169,10 @@ def board_club_settings(request):
             "meeting_day",
             "meeting_time",
             "meeting_location",
+            "logo",
+            "banner",
+            "remove_logo",
+            "remove_banner",
         }
         unknown_fields = set(request.data) - allowed_fields
         if unknown_fields:
@@ -127,19 +180,22 @@ def board_club_settings(request):
                 {"detail": "Unsupported club setting field."},
                 status=400,
             )
+        previous_files = {field: getattr(club, field).name for field in CLUB_IMAGE_FIELDS}
         serializer = BoardClubSettingsSerializer(
             club,
-            data=request.data,
+            data=club_payload(request),
             partial=True,
+            context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
-        club = serializer.save()
+        with transaction.atomic():
+            club = save_club_images(serializer, previous_files, club_image_removals(request))
         AuditLog.objects.create(
             actor=request.user,
             action="club_settings_updated",
             target=club.name,
         )
-    return Response(BoardClubSettingsSerializer(club).data)
+    return Response(BoardClubSettingsSerializer(club, context={"request": request}).data)
 
 
 @extend_schema(responses={200: RegistrationWeekSerializer(many=True)})
@@ -303,12 +359,15 @@ def superadmin_stats(request):
 @permission_classes([IsSuperAdmin])
 def superadmin_organizations(request):
     if request.method == "POST":
-        if set(request.data) - {"name", "department", "is_active"}:
+        if set(request.data) - ORGANIZATION_FIELDS:
             return Response(
                 {"detail": "Unsupported organization field."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = OrganizationAdminSerializer(data=request.data)
+        serializer = OrganizationAdminSerializer(
+            data=club_payload(request),
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             organization = serializer.save()
@@ -318,7 +377,7 @@ def superadmin_organizations(request):
                 target=organization.name,
             )
         return Response(
-            OrganizationAdminSerializer(organization).data,
+            OrganizationAdminSerializer(organization, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -326,7 +385,7 @@ def superadmin_organizations(request):
     paginator = SuperadminPagination()
     page = paginator.paginate_queryset(queryset, request)
     return paginator.get_paginated_response(
-        OrganizationAdminSerializer(page, many=True).data
+        OrganizationAdminSerializer(page, many=True, context={"request": request}).data
     )
 
 
@@ -369,20 +428,26 @@ def superadmin_organization_detail(request, organization_id):
             organization.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    if set(request.data) - {"name", "department", "is_active"}:
+    if set(request.data) - ORGANIZATION_FIELDS:
         return Response(
             {"detail": "Unsupported organization field."},
             status=status.HTTP_400_BAD_REQUEST,
         )
     previous_status = organization.is_active
+    previous_files = {field: getattr(organization, field).name for field in CLUB_IMAGE_FIELDS}
     serializer = OrganizationAdminSerializer(
         organization,
-        data=request.data,
+        data=club_payload(request),
         partial=True,
+        context={"request": request},
     )
     serializer.is_valid(raise_exception=True)
     with transaction.atomic():
-        organization = serializer.save()
+        organization = save_club_images(
+            serializer,
+            previous_files,
+            club_image_removals(request),
+        )
         if previous_status != organization.is_active:
             action = "club_reactivated" if organization.is_active else "club_suspended"
         else:
@@ -392,7 +457,7 @@ def superadmin_organization_detail(request, organization_id):
             action=action,
             target=organization.name,
         )
-    return Response(OrganizationAdminSerializer(organization).data)
+    return Response(OrganizationAdminSerializer(organization, context={"request": request}).data)
 
 
 @extend_schema(

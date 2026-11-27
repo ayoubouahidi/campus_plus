@@ -11,6 +11,8 @@ export type BoardClub = {
   meeting_day: string;
   meeting_time: string | null;
   meeting_location: string;
+  logo_url: string | null;
+  banner_url: string | null;
 };
 
 export function getBoardClub() {

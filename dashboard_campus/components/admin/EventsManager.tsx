@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import FormAlert from "@/components/shared/FormAlert";
 import { tableStyles as t } from "@/components/shared/table";
+import ImagePicker, { imageFileError } from "@/components/shared/ImagePicker";
 import PageHeader from "@/components/layout/PageHeader";
 
 type Props = {
@@ -47,8 +48,6 @@ const PHASE_BADGE: Record<EventPhase, { label: string; variant: StatusVariant }>
   cancelled: { label: "Cancelled", variant: "danger" },
 };
 
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 /** ISO date → value for <input type="datetime-local"> in the browser's time zone. */
 function toLocalInput(value: string | null) {
@@ -111,10 +110,8 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
     else if (startsAt && new Date(endsAt) <= new Date(startsAt)) errors.ends_at = "The end must be after the start.";
     if (!value("location")) errors.location = "Say where the event takes place.";
     if (capacity && (!/^\d+$/.test(capacity) || Number(capacity) < 1)) errors.capacity = "Enter a whole number of places (1 or more), or leave it empty.";
-    if (image instanceof File && image.size > 0) {
-      if (!IMAGE_TYPES.includes(image.type)) errors.image_path = "Choose a JPEG, PNG or WebP image.";
-      else if (image.size >= MAX_IMAGE_BYTES) errors.image_path = "The image must be smaller than 2 MB.";
-    }
+    const imageProblem = imageFileError(image);
+    if (imageProblem) errors.image_path = imageProblem;
     setFieldErrors(errors);
     setFormError("");
     if (Object.keys(errors).length) return;
@@ -221,10 +218,20 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
                 return (
                   <tr key={event.id} className={t.row}>
                     <td className={t.td}>
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {categoryLabel(event.category)} · {event.location || "No location"}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-14 shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
+                          {event.flyer_url && (
+                            // eslint-disable-next-line @next/next/no-img-element -- thumbnail of a media URL
+                            <img src={event.flyer_url} alt="" className="h-full w-full object-cover" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {categoryLabel(event.category)} · {event.location || "No location"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                     <td className={`${t.td} whitespace-nowrap`}>{formatDateTime(event.starts_at)}</td>
                     <td className={`${t.td} whitespace-nowrap`}>
@@ -315,15 +322,14 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
               />
             </div>
             <Textarea name="description" label="Description" rows={4} defaultValue={editing?.description ?? ""} error={fieldErrors.description} />
-            <Input
+            <ImagePicker
               name="image_path"
-              type="file"
-              accept={IMAGE_TYPES.join(",")}
               label="Flyer"
-              helperText={fieldErrors.image_path ? undefined : editing?.flyer_url ? "JPEG, PNG or WebP under 2 MB. Leave empty to keep the current flyer." : "JPEG, PNG or WebP under 2 MB."}
+              aspect="flyer"
+              currentUrl={editing?.flyer_url}
+              helperText={editing?.flyer_url ? "JPEG, PNG or WebP under 2 MB. Leave empty to keep the current flyer." : "JPEG, PNG or WebP under 2 MB."}
               error={fieldErrors.image_path}
               onChange={() => clearFieldError("image_path")}
-              className="file:mr-3 file:rounded-md file:border-0 file:bg-violet-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-violet-700 dark:file:bg-violet-500/15 dark:file:text-violet-300"
             />
           </div>
           <ModalFooter>

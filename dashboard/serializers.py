@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from core_data.serializers import absolute_file_url
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -10,7 +12,26 @@ from .models import Announcement, AuditLog, MembershipRequest
 User = get_user_model()
 
 
-class BoardClubSettingsSerializer(serializers.ModelSerializer):
+class ClubImagesMixin(serializers.Serializer):
+    """Logo and banner: upload with `logo`/`banner` (multipart), read `logo_url`/`banner_url`."""
+
+    logo_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+
+    def get_logo_url(self, club) -> str | None:
+        return absolute_file_url(club.logo, self.context, None)
+
+    def get_banner_url(self, club) -> str | None:
+        return absolute_file_url(club.banner, self.context, None)
+
+
+CLUB_IMAGE_KWARGS = {
+    "logo": {"write_only": True, "required": False},
+    "banner": {"write_only": True, "required": False},
+}
+
+
+class BoardClubSettingsSerializer(ClubImagesMixin, serializers.ModelSerializer):
     department_id = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -25,8 +46,13 @@ class BoardClubSettingsSerializer(serializers.ModelSerializer):
             "meeting_day",
             "meeting_time",
             "meeting_location",
+            "logo",
+            "banner",
+            "logo_url",
+            "banner_url",
         ]
         read_only_fields = ["slug"]
+        extra_kwargs = CLUB_IMAGE_KWARGS
 
 
 class BoardTeamMemberSerializer(serializers.ModelSerializer):
@@ -81,12 +107,23 @@ class MembershipRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class OrganizationAdminSerializer(serializers.ModelSerializer):
+class OrganizationAdminSerializer(ClubImagesMixin, serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.title", read_only=True)
 
     class Meta:
         model = Club
-        fields = ["id", "name", "department", "department_name", "is_active"]
+        fields = [
+            "id",
+            "name",
+            "department",
+            "department_name",
+            "is_active",
+            "logo",
+            "banner",
+            "logo_url",
+            "banner_url",
+        ]
+        extra_kwargs = CLUB_IMAGE_KWARGS
 
 
 class SuperadminUserSerializer(serializers.ModelSerializer):

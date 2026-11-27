@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { dashboardApi, errorMessage, fieldErrorsOf, listRows, type FieldErrors } from "@/lib/dashboard-api";
+import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -12,6 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import FormAlert from "@/components/shared/FormAlert";
 import Switch from "@/components/shared/Switch";
+import ImagePicker, { imageFileError } from "@/components/shared/ImagePicker";
 import { searchInputClass, tableStyles as t } from "@/components/shared/table";
 import PageHeader from "@/components/layout/PageHeader";
 
@@ -21,6 +23,8 @@ type Organization = {
   department: number;
   department_name: string | null;
   is_active: boolean;
+  logo_url: string | null;
+  banner_url: string | null;
 };
 type Department = { id: number; name?: string; title?: string };
 
@@ -97,15 +101,30 @@ export default function OrganizationsManager() {
     const errors: FieldErrors = {};
     if (!name) errors.name = "Enter the organization's name.";
     if (!department) errors.department = "Choose a department.";
+    for (const field of ["logo", "banner"]) {
+      const problem = imageFileError(form.get(field));
+      if (problem) errors[field] = problem;
+    }
     setFieldErrors(errors);
     setFormError("");
     if (Object.keys(errors).length) return;
+
+    // Multipart, so the logo and banner files travel with the other fields.
+    const body = new FormData();
+    body.append("name", name);
+    body.append("department", department);
+    body.append("is_active", form.has("is_active") ? "true" : "false");
+    for (const field of ["logo", "banner"]) {
+      const file = form.get(field);
+      if (file instanceof File && file.size > 0) body.append(field, file);
+      if (form.get(`remove_${field}`) === "true") body.append(`remove_${field}`, "true");
+    }
 
     setSaving(true);
     try {
       await dashboardApi(editing ? `api/superadmin/organizations/${editing.id}/` : "api/superadmin/organizations/", {
         method: editing ? "PATCH" : "POST",
-        body: JSON.stringify({ name, department: Number(department), is_active: form.has("is_active") }),
+        body,
       });
       setFormOpen(false);
       showToast({
@@ -176,7 +195,12 @@ export default function OrganizationsManager() {
             <tbody>
               {filtered.map((organization) => (
                 <tr key={organization.id} className={t.row}>
-                  <td className={t.tdStrong}>{organization.name}</td>
+                  <td className={t.tdStrong}>
+                    <div className="flex items-center gap-3">
+                      <Avatar src={organization.logo_url} name={organization.name} size="sm" />
+                      {organization.name}
+                    </div>
+                  </td>
                   <td className={t.td}>{organization.department_name ?? "—"}</td>
                   <td className={t.td}>
                     <Badge variant={organization.is_active ? "success" : "neutral"} hasDot>
@@ -213,7 +237,7 @@ export default function OrganizationsManager() {
         </div>
       </Card>
 
-      <Modal isOpen={formOpen} onClose={() => !saving && setFormOpen(false)} labelledBy={formTitleId}>
+      <Modal isOpen={formOpen} onClose={() => !saving && setFormOpen(false)} size="lg" labelledBy={formTitleId}>
         <form key={editing?.id ?? "new"} onSubmit={submit} noValidate>
           <ModalHeader onClose={() => !saving && setFormOpen(false)}>
             <ModalTitle id={formTitleId}>{editing ? "Edit organization" : "New organization"}</ModalTitle>
@@ -235,6 +259,24 @@ export default function OrganizationsManager() {
               placeholder={departmentOptions.length ? "Choose a department" : "No departments available"}
               options={departmentOptions}
               error={fieldErrors.department}
+            />
+            <ImagePicker
+              name="logo"
+              label="Logo"
+              currentUrl={editing?.logo_url}
+              removable
+              error={fieldErrors.logo}
+              onChange={() => fieldErrors.logo && setFieldErrors((current) => ({ ...current, logo: "" }))}
+            />
+            <ImagePicker
+              name="banner"
+              label="Banner"
+              aspect="banner"
+              currentUrl={editing?.banner_url}
+              removable
+              helperText="Wide image (about 3:1). JPEG, PNG or WebP under 2 MB."
+              error={fieldErrors.banner}
+              onChange={() => fieldErrors.banner && setFieldErrors((current) => ({ ...current, banner: "" }))}
             />
             <Switch
               name="is_active"

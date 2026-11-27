@@ -54,7 +54,9 @@ export default function LoginForm({ callbackUrl = "/" }: { callbackUrl?: string 
       // Full page load so the server reads the new session and sends each role to its area.
       window.location.assign(callbackUrl);
     } catch {
-      setError("Unable to sign in. Please try again.");
+      // signIn throws when the server answers with a non-JSON page, e.g. nginx's
+      // 429 after too many attempts (5 per minute per address).
+      setError("Unable to sign in right now. If you tried several times, wait a minute and try again.");
       setLoading(false);
     }
   }

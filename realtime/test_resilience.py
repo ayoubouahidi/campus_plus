@@ -196,7 +196,9 @@ class BestEffortEventBroadcastRegistrationTests(SimpleTestCase):
         )
 
     def test_projection_preserves_every_current_public_event_field(self):
-        current_fields = set(ClubEventSerializer.Meta.fields)
+        # image_path is the write-only flyer upload: never in a response
+        # (clients read flyer_url, which is broadcast), so not a public field.
+        current_fields = set(ClubEventSerializer.Meta.fields) - {'image_path'}
         self.assertEqual(
             PUBLIC_EVENT_BROADCAST_FIELDS,
             current_fields - {'has_user_rsvpd', 'attendees_preview'},

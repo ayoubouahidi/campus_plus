@@ -365,6 +365,7 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'department_name',
             'department_slug',
             'flyer_url',
+            'image_path',
             'starts_at',
             'ends_at',
             'start_time',
@@ -383,6 +384,10 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        # The flyer upload. Without this field DRF silently dropped the file, so
+        # events never had a flyer. Write-only: clients read `flyer_url`. Built
+        # from the model field, so validate_file_size/validate_image_content run.
+        extra_kwargs = {'image_path': {'write_only': True, 'required': False}}
 
 
 class AttendeeSerializer(serializers.Serializer):

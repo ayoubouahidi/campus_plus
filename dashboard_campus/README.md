@@ -27,7 +27,11 @@ The management app of Campus Hub (1337), served at **https://dashboard.localhost
 | | Events | Publish, edit (category, places, flyer, cancel), delete the club's events. Students see changes live. | `/api/club-events/` |
 | | Registrations | RSVPs per day and places left per upcoming event | same |
 | | Board team | The club's board members | `/api/board/members/` |
-| | Club settings | The club's public page, your photo and phone | `/api/board/club/`, `/api/me/`, `/api/me/avatar/` |
+| | Club settings | The club's public page, its **logo and banner** (upload, preview, replace, remove), your photo and phone | `/api/board/club/` (multipart for images), `/api/me/`, `/api/me/avatar/` |
+
+**Images (fixed 2026-11-27):** event **flyers** were silently dropped by the API (`image_path` wasn't a serializer field), so no event ever had one; now saved and shown on the student feed and event page. Club **logo and banner** had no upload anywhere; now the board (Club settings) and the super admin (Organizations form) can upload, replace and remove them (`logo`, `banner`, `remove_logo`, `remove_banner`, multipart). All images: JPEG/PNG/WebP, strictly under 2 MB, real image content (Django validators); a replaced or removed file is deleted after the save commits. Media URLs are `DJANGO_PUBLIC_MEDIA_BASE_URL/media/...` (https://localhost).
+
+**Sign-in rate limit:** nginx allows 5 sign-ins per minute per address (`auth_callback_limit`); the 6th gets 429 and the form says to wait a minute.
 
 **Removed on 2026-11-27 because the platform has no such feature** (students never join clubs; events are published directly): System Settings (no backend), Event Approvals (no backend), Announcements (students never see them), membership "Pending approvals" and the "System Health" card. `/api/board/members/` now returns the club's **board team** (`ClubBoardAssignment`), not student `UserMember` rows.
 

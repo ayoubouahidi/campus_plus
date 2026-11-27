@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/Toast";
 import FormAlert from "@/components/shared/FormAlert";
+import ImagePicker, { imageFileError } from "@/components/shared/ImagePicker";
 
 export type DashboardProfile = {
   email: string;
@@ -37,6 +38,45 @@ export default function SettingsForms({ profile, club }: { profile: DashboardPro
   const photo = useFormState();
   const phone = useFormState();
   const clubForm = useFormState();
+  const images = useFormState();
+  const [imagesKey, setImagesKey] = useState(0);
+
+  async function saveImages(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    images.setError("");
+    const errors: FieldErrors = {};
+    for (const field of ["logo", "banner"]) {
+      const problem = imageFileError(form.get(field));
+      if (problem) errors[field] = problem;
+    }
+    images.setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    const body = new FormData();
+    for (const field of ["logo", "banner"]) {
+      const file = form.get(field);
+      if (file instanceof File && file.size > 0) body.append(field, file);
+      if (form.get(`remove_${field}`) === "true") body.append(`remove_${field}`, "true");
+    }
+    if ([...body.keys()].length === 0) {
+      images.setError("Choose a new logo or banner first, or tick “Remove”.");
+      return;
+    }
+    images.setBusy(true);
+    try {
+      await dashboardApi("api/board/club/", { method: "PATCH", body });
+      showToast({ variant: "success", title: "Club images saved", description: "Students see them on the club page." });
+      setImagesKey((key) => key + 1);
+      router.refresh();
+    } catch (error) {
+      const errorsFromServer = fieldErrorsOf(error);
+      images.setFieldErrors(errorsFromServer);
+      if (!Object.keys(errorsFromServer).length) images.setError(errorMessage(error, "Unable to save the images."));
+    } finally {
+      images.setBusy(false);
+    }
+  }
 
   async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +208,41 @@ export default function SettingsForms({ profile, club }: { profile: DashboardPro
         </CardContent>
       </Card>
 
-      <Card className="xl:col-span-2">
+      <Card className="xl:col-span-3">
+        <CardHeader>
+          <CardTitle>Club images</CardTitle>
+          <CardDescription>The logo appears on the club list and events; the banner at the top of the club page.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form key={imagesKey} onSubmit={saveImages} noValidate className="space-y-5">
+            <FormAlert message={images.error} />
+            <ImagePicker
+              name="logo"
+              label="Logo"
+              currentUrl={club.logo_url}
+              removable
+              helperText="Square works best. JPEG, PNG or WebP under 2 MB."
+              error={images.fieldErrors.logo}
+              onChange={() => images.fieldErrors.logo && images.setFieldErrors((current) => ({ ...current, logo: "" }))}
+            />
+            <ImagePicker
+              name="banner"
+              label="Banner"
+              aspect="banner"
+              currentUrl={club.banner_url}
+              removable
+              helperText="Wide image (about 3:1). JPEG, PNG or WebP under 2 MB."
+              error={images.fieldErrors.banner}
+              onChange={() => images.fieldErrors.banner && images.setFieldErrors((current) => ({ ...current, banner: "" }))}
+            />
+            <Button type="submit" isLoading={images.busy}>
+              Save images
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="xl:col-span-2 xl:col-start-4 xl:row-span-2 xl:row-start-1">
         <CardHeader>
           <CardTitle>Your profile</CardTitle>
           <CardDescription>Shown in the dashboard and on Campus Hub.</CardDescription>
