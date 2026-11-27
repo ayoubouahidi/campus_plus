@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 
 from accounts.models import ClubBoardAssignment
-from core_data.models import Club
+from core_data.models import Club, Department, campus_department
 from .models import Announcement, AuditLog, MembershipRequest
 
 User = get_user_model()
@@ -129,6 +129,8 @@ class MembershipRequestSerializer(serializers.ModelSerializer):
 
 
 class OrganizationAdminSerializer(ClubPresidentMixin, ClubImagesMixin, serializers.ModelSerializer):
+    # 1337 only: the dashboard no longer asks; a new organization gets the 1337 department.
+    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all(), default=campus_department)
     department_name = serializers.CharField(source="department.title", read_only=True)
 
     class Meta:

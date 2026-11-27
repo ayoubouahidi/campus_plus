@@ -7,7 +7,7 @@ import { RegisterForm } from '@/components/auth/RegisterForm';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { LOCALE_INFO } from '@/i18n/config';
 import { hasBackend } from '@/lib/api/client';
-import { listClubs, listDepartments, listEvents } from '@/lib/data';
+import { listClubs, listEvents } from '@/lib/data';
 import { RealtimeMonitor } from './RealtimeMonitor';
 import { SessionSwitcher } from './SessionSwitcher';
 import { fakeRegister, fakeResend, fakeVerify } from './signupCodeActions';
@@ -43,7 +43,7 @@ export default async function TestPage({
   const t = await getTranslations('Events');
   const format = await getFormatter();
   const sampleDate = new Date('2026-11-13T17:00:00Z'); // hackathon opening, a fixed date (no hydration drift)
-  const [liveEvents, liveClubs, departments] = await Promise.all([listEvents(), listClubs(), listDepartments()]);
+  const [liveEvents, liveClubs] = await Promise.all([listEvents(), listClubs()]);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -152,7 +152,6 @@ export default async function TestPage({
               verifyAction={fakeVerify}
               resendAction={fakeResend}
               next="/test"
-              departments={departments.map(({ id, name }) => ({ id, name }))}
             />
           </div>
           <ul className="mt-3 list-disc space-y-1 ps-5 text-slate-600 dark:text-slate-300">

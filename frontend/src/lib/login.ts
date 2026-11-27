@@ -75,7 +75,6 @@ export type ValidationKey =
   | 'lastNameRequired'
   | 'nameTooLong'
   | 'yearRequired'
-  | 'schoolRequired'
   | 'phoneInvalid'
   | 'codeRequired'
   | 'codeInvalid';

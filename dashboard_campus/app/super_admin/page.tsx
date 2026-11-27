@@ -11,7 +11,7 @@ import StatCard from "@/components/shared/StatCard";
 export const metadata = { title: "Overview" };
 
 type SuperStats = { total_users: number; total_clubs: number; events_this_month: number };
-type Organization = { id: number; name: string; department_name: string | null; is_active: boolean };
+type Organization = { id: number; name: string; is_active: boolean };
 type RoleRow = { role: string; count: number };
 type AuditRow = { id: number; actor_username: string | null; action: string; target: string; created_at: string };
 type Paginated<T> = { count: number; results: T[] };
@@ -59,10 +59,7 @@ export default async function SuperAdminOverviewPage() {
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {organizations.results.slice(0, 6).map((organization) => (
                   <li key={organization.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{organization.name}</p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{organization.department_name ?? "No department"}</p>
-                    </div>
+                    <p className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{organization.name}</p>
                     <Badge variant={organization.is_active ? "success" : "neutral"} hasDot>
                       {organization.is_active ? "Active" : "Inactive"}
                     </Badge>

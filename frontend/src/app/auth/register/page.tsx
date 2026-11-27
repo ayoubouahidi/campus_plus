@@ -6,7 +6,6 @@ import { LoginLayout } from '@/components/auth/LoginLayout';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 import { RegisterPanel } from '@/components/auth/RegisterPanel';
 import { safeNextPath } from '@/lib/login';
-import { listDepartments } from '@/lib/data';
 import { signInWith42 } from '../login/actions';
 import { registerWithEmail, resendSignupCode, verifySignupCode } from './actions';
 
@@ -31,9 +30,6 @@ export default async function RegisterPage({
   // Already signed in: no second account.
   if (await auth()) redirect(next);
 
-  // Django's departments (or the mocks in dev, lib/data.ts). Only what the form needs is sent. No clubs: sign-up
-  // has no club field (DOCS.md §23).
-  const departments = (await listDepartments()).map(({ id, name }) => ({ id, name }));
 
   return (
     <LoginLayout>
@@ -43,7 +39,6 @@ export default async function RegisterPage({
           verifyAction={verifySignupCode}
           resendAction={resendSignupCode}
           next={next}
-          departments={departments}
         />
       </RegisterPanel>
     </LoginLayout>
