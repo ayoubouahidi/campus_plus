@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by monajjar, ahlahfid, AYOUB_LOGIN, heljary.*
+*This project has been created as part of the 42 curriculum by monajjar, ahlahfid, ayouahid, heljary.*
 
 # Campus Hub
 
@@ -112,7 +112,7 @@ Sign in at `https://dashboard.localhost`, create the clubs (with their category)
 | --- | --- | --- | --- |
 | Mouad Najjar | `monajjar` | **Tech Lead**, Developer | Architecture of the whole application and the data flow (dashboard → Django → student site), technology choices, code reviews and merges, the student site (frontend), the dashboard rework |
 | Ahmed Lahfid | `ahlahfid` | **Project Manager**, Developer | Planning and tracking, team coordination and blockers; backend core (events, clubs, departments, RSVP, search, uploads), real-time WebSockets and notifications |
-| Ayoub Ouahidi | `AYOUB_LOGIN` | **Product Owner**, Developer | Product vision and priorities, validation of finished work; identity (42 login sync, accounts, roles, permissions), dashboard API and first dashboard |
+| Ayoub Ouahidi | `ayouahid` | **Product Owner**, Developer | Product vision and priorities, validation of finished work; identity (42 login sync, accounts, roles, permissions), dashboard API and first dashboard |
 | Hamza Eljary | `heljary` | Developer | Docker, nginx (HTTPS, routing, rate limiting), monitoring (Prometheus, Grafana), CI, reviews and merges |
 
 ## Project Management
@@ -251,7 +251,7 @@ EmailVerification (pending sign-ups, by email)
 - **Real-time** (`realtime`): Channels, Daphne, Redis, WebSocket JWT tokens, calendar and notification consumers, broadcasts after commit; **notifications** app; health endpoints.
 - **Challenges:** race conditions on RSVP (two students taking the last place), solved with `select_for_update` inside a transaction; sending broadcasts only after the commit, so clients never see data that was rolled back.
 
-### Ayoub Ouahidi (`AYOUB_LOGIN`): Product Owner, Developer
+### Ayoub Ouahidi (`ayouahid`): Product Owner, Developer
 
 - Defined the product scope and priorities, validated finished features.
 - **Identity:** 42 login (Auth.js) and Django `/auth/sync`, custom `User` model with roles, `/api/me/`, permission classes, email sign-up with verification code.
