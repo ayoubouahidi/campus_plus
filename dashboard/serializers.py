@@ -1,16 +1,55 @@
 from rest_framework import serializers
 
+from core_data.serializers import absolute_file_url
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 
 from accounts.models import ClubBoardAssignment
-from core_data.models import Club, UserMember
+from core_data.models import Club
 from .models import Announcement, AuditLog, MembershipRequest
 
 User = get_user_model()
 
 
-class BoardClubSettingsSerializer(serializers.ModelSerializer):
+class ClubImagesMixin(serializers.Serializer):
+    """Logo and banner: upload with `logo`/`banner` (multipart), read `logo_url`/`banner_url`."""
+
+    logo_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+
+    def get_logo_url(self, club) -> str | None:
+        return absolute_file_url(club.logo, self.context, None)
+
+    def get_banner_url(self, club) -> str | None:
+        return absolute_file_url(club.banner, self.context, None)
+
+
+class ClubPresidentMixin(serializers.Serializer):
+    """The club's president (contact shown to signed-in students): a member of its board team."""
+
+    president = serializers.SerializerMethodField()
+
+    def get_president(self, club) -> dict | None:
+        head = club.head
+        if head is None or head.user is None:
+            return None
+        user = head.user
+        return {
+            "id": user.pk,
+            "name": user.get_full_name() or user.username,
+            "email": user.email,
+            "phone": head.phone or user.phone,
+        }
+
+
+CLUB_IMAGE_KWARGS = {
+    "logo": {"write_only": True, "required": False},
+    "banner": {"write_only": True, "required": False},
+}
+
+
+class BoardClubSettingsSerializer(ClubPresidentMixin, ClubImagesMixin, serializers.ModelSerializer):
     department_id = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -18,13 +57,42 @@ class BoardClubSettingsSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "department_id",
+            "slug",
+            "category",
             "name",
             "description",
             "contact_email",
             "meeting_day",
             "meeting_time",
             "meeting_location",
+            "logo",
+            "banner",
+            "logo_url",
+            "banner_url",
+            "president",
         ]
+        # The category is chosen by a super admin (Organizations), not by the board.
+        read_only_fields = ["slug", "category"]
+        extra_kwargs = CLUB_IMAGE_KWARGS
+
+
+class BoardTeamMemberSerializer(serializers.ModelSerializer):
+    """A member of a club's board team (club membership exists only for board members)."""
+
+    name = serializers.SerializerMethodField()
+    joined_date = serializers.DateTimeField(source="date_joined", read_only=True)
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "name", "email", "role", "joined_date", "status"]
+        read_only_fields = fields
+
+    def get_name(self, obj) -> str:
+        return obj.get_full_name() or obj.username
+
+    def get_status(self, obj) -> str:
+        return "active" if obj.is_active else "inactive"
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -60,31 +128,25 @@ class MembershipRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class BoardMemberSerializer(serializers.ModelSerializer):
-    name = serializers.SerializerMethodField()
-    role = serializers.CharField(source="user.role", read_only=True)
-    joined_date = serializers.DateTimeField(source="user.date_joined", read_only=True)
-    status = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserMember
-        fields = ["id", "name", "role", "joined_date", "status"]
-
-    def get_name(self, obj) -> str:
-        if obj.user:
-            return obj.user.get_full_name() or obj.user.username
-        return obj.username
-
-    def get_status(self, obj) -> str:
-        return "active" if obj.user and obj.user.is_active else "inactive"
-
-
-class OrganizationAdminSerializer(serializers.ModelSerializer):
+class OrganizationAdminSerializer(ClubPresidentMixin, ClubImagesMixin, serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.title", read_only=True)
 
     class Meta:
         model = Club
-        fields = ["id", "name", "department", "department_name", "is_active"]
+        fields = [
+            "id",
+            "name",
+            "department",
+            "department_name",
+            "category",
+            "is_active",
+            "logo",
+            "banner",
+            "logo_url",
+            "banner_url",
+            "president",
+        ]
+        extra_kwargs = CLUB_IMAGE_KWARGS
 
 
 class SuperadminUserSerializer(serializers.ModelSerializer):

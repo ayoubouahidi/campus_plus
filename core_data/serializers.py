@@ -147,6 +147,7 @@ class ClubSerializer(serializers.ModelSerializer):
             'event_count',
             'upcoming_event_count',
             'contact_email',
+            'category',
             'meeting_day',
             'meeting_time',
             'meeting_location',
@@ -309,6 +310,13 @@ class ClubEventSerializer(serializers.ModelSerializer):
                 ),
             })
 
+        # Events take their club's category: whatever the request says, a club
+        # with a category decides it. Clubs without one (older data) keep the
+        # per-event category, still required below.
+        club_for_category = attrs.get('club', getattr(self.instance, 'club', None))
+        if club_for_category is not None and club_for_category.category:
+            attrs['category'] = club_for_category.category
+
         event_errors = {}
         if self.instance is None:
             for field_name in ('category', 'starts_at', 'ends_at'):
@@ -344,6 +352,22 @@ class ClubEventSerializer(serializers.ModelSerializer):
                     'The end datetime must be later than the start datetime.'
                 )
 
+            # A new start must be in the future (UTC comparison, so the client's
+            # time zone doesn't matter). Editing an event without moving its
+            # start (rename, cancel an ongoing event) stays allowed. Compared to
+            # the minute: forms send minute precision.
+            new_start = attrs.get('starts_at')
+            start_moved = self.instance is None or (
+                new_start is not None
+                and (
+                    self.instance.starts_at is None
+                    or new_start.replace(second=0, microsecond=0)
+                    != self.instance.starts_at.replace(second=0, microsecond=0)
+                )
+            )
+            if new_start is not None and start_moved and new_start <= timezone.now():
+                event_errors['starts_at'] = 'The event must start in the future.'
+
         if event_errors:
             raise serializers.ValidationError(event_errors)
 
@@ -365,6 +389,7 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'department_name',
             'department_slug',
             'flyer_url',
+            'image_path',
             'starts_at',
             'ends_at',
             'start_time',
@@ -383,6 +408,10 @@ class ClubEventSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        # The flyer upload. Without this field DRF silently dropped the file, so
+        # events never had a flyer. Write-only: clients read `flyer_url`. Built
+        # from the model field, so validate_file_size/validate_image_content run.
+        extra_kwargs = {'image_path': {'write_only': True, 'required': False}}
 
 
 class AttendeeSerializer(serializers.Serializer):

@@ -1,24 +1,21 @@
-import Topbar from "@/components/admin/Topbar";
-import SettingsForms, {
-  type BoardClubSettings,
-  type DashboardProfile,
-} from "@/components/admin/SettingsForms";
 import { backendFetch } from "@/lib/api";
+import { getBoardClub, type BoardTeamMember } from "@/lib/board";
+import PageBody from "@/components/layout/PageBody";
+import PageHeader from "@/components/layout/PageHeader";
+import SettingsForms, { type DashboardProfile } from "@/components/admin/SettingsForms";
 
-export const instant = false;
+export const metadata = { title: "Club settings" };
 
-export default async function SettingsPage() {
-  const [profile, club] = await Promise.all([
+export default async function ClubSettingsPage() {
+  const [profile, club, team] = await Promise.all([
     backendFetch<DashboardProfile>("/api/me/"),
-    backendFetch<BoardClubSettings>("/api/board/club/"),
+    getBoardClub(),
+    backendFetch<BoardTeamMember[]>("/api/board/members/"),
   ]);
-
   return (
-    <>
-      <Topbar title="Settings" subtitle={`Manage your profile and ${club.name}`} />
-      <main className="max-w-4xl space-y-6 p-6">
-        <SettingsForms profile={profile} club={club} />
-      </main>
-    </>
+    <PageBody>
+      <PageHeader title="Club settings" description="Your club's public page and your own profile." />
+      <SettingsForms profile={profile} club={club} team={team} />
+    </PageBody>
   );
 }

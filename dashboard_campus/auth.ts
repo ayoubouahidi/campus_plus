@@ -1,6 +1,13 @@
-import NextAuth from "next-auth";
-import FortyTwoSchool from "next-auth/providers/42-school";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import FortyTwoSchool from "next-auth/providers/42-school";
+
+// The dashboard is for club boards and super admins only. They sign in with email
+// + password, or with 42 (the 42 account is synced to Django like on the student
+// site). A student account is refused either way, with its own message.
+
+type BackendUser = { id: string | number; role: string; login?: string };
+type BackendLoginResponse = { token: string; user: BackendUser };
 
 type FortyTwoProfile = {
   id: number;
@@ -12,19 +19,11 @@ type FortyTwoProfile = {
   campus?: { name: string }[];
 };
 
-type BackendUser = { id: string | number; role: string; login?: string };
-type BackendSyncResponse = { token: string; user: BackendUser };
+const DASHBOARD_ROLES = new Set(["SUPERADMIN", "BOARD_MEMBER"]);
 
-/** Ask the backend to create/update the user and give us its own token. */
-async function syncWithBackend(p: FortyTwoProfile): Promise<BackendSyncResponse | null> {
-  // Dev fallback so you can build the UI before the backend exists
-  if (!process.env.BACKEND_URL) {
-    if (process.env.NODE_ENV !== "production") {
-      return { token: "dev-token", user: { id: String(p.id), role: "STUDENT" } };
-    }
-    return null;
-  }
-
+/** Create/update the Django account for this 42 user and get its token (same call as the student site). */
+async function syncFortyTwo(profile: FortyTwoProfile): Promise<BackendLoginResponse | null> {
+  if (!process.env.BACKEND_URL) return null;
   try {
     const res = await fetch(`${process.env.BACKEND_URL}/auth/sync`, {
       method: "POST",
@@ -33,21 +32,31 @@ async function syncWithBackend(p: FortyTwoProfile): Promise<BackendSyncResponse 
         "x-internal-key": process.env.BACKEND_INTERNAL_KEY ?? "",
       },
       body: JSON.stringify({
-        fortyTwoId: p.id,
-        login: p.login,
-        email: p.email,
-        firstName: p.first_name,
-        lastName: p.last_name,
-        imageUrl: p.image?.link ?? null,
-        campus: p.campus?.[0]?.name ?? null,
+        fortyTwoId: profile.id,
+        login: profile.login,
+        email: profile.email,
+        firstName: profile.first_name,
+        lastName: profile.last_name,
+        imageUrl: profile.image?.link ?? null,
+        campus: profile.campus?.[0]?.name ?? null,
       }),
       cache: "no-store",
     });
-    if (!res.ok) return null; // e.g. 403 = user not allowed
-    return (await res.json()) as BackendSyncResponse;
+    if (!res.ok) return null; // e.g. 403: campus not allowed, account disabled
+    return (await res.json()) as BackendLoginResponse;
   } catch {
     return null;
   }
+}
+
+/** Right password, but a student account: the dashboard is not for them. */
+class StudentAccount extends CredentialsSignin {
+  code = "student_account";
+}
+
+/** The backend could not be reached or answered with a server error. */
+class BackendUnavailable extends CredentialsSignin {
+  code = "backend_unavailable";
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -59,21 +68,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!process.env.BACKEND_URL) return null;
+        if (!process.env.BACKEND_URL) throw new BackendUnavailable();
 
-        const res = await fetch(`${process.env.BACKEND_URL}/api/auth/login/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: credentials?.email,
-            password: credentials?.password,
-          }),
-          cache: "no-store",
-        });
-        if (!res.ok) return null;
+        let res: Response;
+        try {
+          res = await fetch(`${process.env.BACKEND_URL}/api/auth/login/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: credentials?.email,
+              password: credentials?.password,
+            }),
+            cache: "no-store",
+          });
+        } catch {
+          throw new BackendUnavailable();
+        }
+        if (res.status >= 500) throw new BackendUnavailable();
+        if (!res.ok) return null; // wrong email or password
 
-        const data = (await res.json()) as BackendSyncResponse;
-        if (data.user.role === "STUDENT") return null;
+        const data = (await res.json()) as BackendLoginResponse;
+        if (!DASHBOARD_ROLES.has(data.user.role)) {
+          throw new StudentAccount();
+        }
         return {
           id: String(data.user.id),
           backendToken: data.token,
@@ -88,28 +105,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login", error: "/login" },
   callbacks: {
-    // Runs once, right after 42 approves the user
+    // 42 only: sync with Django, then let in super admins and board members.
     async signIn({ user, profile, account }) {
-      if (account?.provider === "credentials") {
-        return true;
-      }
-
-      const p = profile as FortyTwoProfile | undefined;
-      if (!p) return false;
-
-      // Optional: only allow your campus
-      // if (!p.campus?.some((c) => c.name === "Benguerir")) return false;
-
-      const data = await syncWithBackend(p);
-      if (!data) return false; // -> /login?error=AccessDenied
-      if (data.user.role === "STUDENT") return false;
-
-      // Pass the result to the jwt callback
+      if (account?.provider !== "42-school") return true;
+      const data = profile ? await syncFortyTwo(profile as unknown as FortyTwoProfile) : null;
+      if (!data) return "/login?error=FortyTwoUnavailable";
+      if (!DASHBOARD_ROLES.has(data.user.role)) return "/login?error=StudentAccount";
       Object.assign(user, {
         backendToken: data.token,
         role: data.user.role,
-        userId: data.user.id,
-        login: p.login,
+        userId: String(data.user.id),
+        login: (profile as unknown as FortyTwoProfile).login,
       });
       return true;
     },

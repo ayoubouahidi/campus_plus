@@ -7,7 +7,7 @@ from datetime import timedelta
 from rest_framework import status, viewsets
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
@@ -21,7 +21,7 @@ from .serializers import (
     AuditLogSerializer,
     BoardClubSettingsSerializer,
     BoardStatsSerializer,
-    BoardMemberSerializer,
+    BoardTeamMemberSerializer,
     MembershipRequestSerializer,
     EventWeekSerializer,
     OrganizationAdminSerializer,
@@ -37,6 +37,119 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+CLUB_IMAGE_FIELDS = ("logo", "banner")
+NOT_GIVEN = object()
+TRUE_VALUES = {"true", "1", "on", "yes"}
+
+
+def club_payload(request):
+    """Fields for the club serializer: without remove_logo/remove_banner and president."""
+    handled_here = {f"remove_{field}" for field in CLUB_IMAGE_FIELDS} | {"president"}
+    return {key: request.data.get(key) for key in request.data if key not in handled_here}
+
+
+def resolve_president(club, request):
+    """
+    The user chosen as president, None to clear, or NOT_GIVEN. Raises a field error
+    unless the user is an active member of this club's board team.
+    """
+    if "president" not in request.data:
+        return NOT_GIVEN
+    value = request.data.get("president")
+    if value in (None, "", "null"):
+        return None
+    try:
+        user_id = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({"president": "Choose a member of this club's board team."})
+    user = User.objects.filter(
+        pk=user_id,
+        is_active=True,
+        role=User.Role.BOARD_MEMBER,
+        board_assignment__club=club,
+    ).first()
+    if user is None:
+        raise ValidationError({"president": "Choose a member of this club's board team."})
+    return user
+
+
+def apply_president(club, president):
+    """Make `president` (a board member of `club`) its head, or clear it with None."""
+    if president is NOT_GIVEN:
+        return
+    if president is None:
+        club.head = None
+    else:
+        member = UserMember.objects.filter(user=president).first()
+        if member is None:
+            username = president.username
+            if UserMember.objects.filter(username=username).exists():
+                username = f"{president.username}-{president.pk}"
+            member = UserMember.objects.create(user=president, username=username)
+        # The student site shows the head's name and phone: keep them in sync.
+        member.first_name = president.first_name or president.username
+        member.last_name = president.last_name
+        if not member.phone and president.phone:
+            member.phone = president.phone
+        if member.department_id_id is None:
+            member.department_id = club.department
+        member.save()
+        club.head = member
+    club.save(update_fields=["head"])
+
+
+def sync_event_categories(club):
+    """Events take their club's category: apply a new club category to its events."""
+    if club.category:
+        ClubEvent.objects.filter(club=club).exclude(category=club.category).update(category=club.category)
+
+
+def clear_presidencies(user, except_club=None):
+    """A user who leaves a club's board stops being its president."""
+    clubs = Club.objects.filter(head__user=user)
+    if except_club is not None:
+        clubs = clubs.exclude(pk=except_club.pk)
+    clubs.update(head=None)
+
+
+def club_image_removals(request):
+    return {
+        field
+        for field in CLUB_IMAGE_FIELDS
+        if str(request.data.get(f"remove_{field}", "")).lower() in TRUE_VALUES
+    }
+
+
+def save_club_images(serializer, previous_files, removals):
+    """Save the club, apply removals, and delete replaced/removed files after commit."""
+    club = serializer.save()
+    cleared = [field for field in removals if field not in serializer.validated_data]
+    for field in cleared:
+        setattr(club, field, "")
+    if cleared:
+        club.save(update_fields=cleared)
+    for field in CLUB_IMAGE_FIELDS:
+        old_name = previous_files.get(field)
+        file_field = getattr(club, field)
+        if old_name and old_name != file_field.name:
+            storage = file_field.storage
+            transaction.on_commit(lambda name=old_name, storage=storage: storage.delete(name))
+    return club
+
+
+ORGANIZATION_FIELDS = {
+    "name",
+    "department",
+    "category",
+    "is_active",
+    "logo",
+    "banner",
+    "remove_logo",
+    "remove_banner",
+    "president",
+}
 
 
 class SuperadminPagination(PageNumberPagination):
@@ -81,7 +194,7 @@ def board_stats(request):
     return Response(
         {
             "total_events": ClubEvent.objects.filter(club=club).count(),
-            "active_members": UserMember.objects.filter(club_id=club).count(),
+            "active_members": User.objects.filter(board_assignment__club=club).count(),
             "pending_requests": MembershipRequest.objects.filter(
                 club=club,
                 status=MembershipRequest.Status.PENDING,
@@ -120,6 +233,11 @@ def board_club_settings(request):
             "meeting_day",
             "meeting_time",
             "meeting_location",
+            "logo",
+            "banner",
+            "remove_logo",
+            "remove_banner",
+            "president",
         }
         unknown_fields = set(request.data) - allowed_fields
         if unknown_fields:
@@ -127,19 +245,24 @@ def board_club_settings(request):
                 {"detail": "Unsupported club setting field."},
                 status=400,
             )
+        previous_files = {field: getattr(club, field).name for field in CLUB_IMAGE_FIELDS}
         serializer = BoardClubSettingsSerializer(
             club,
-            data=request.data,
+            data=club_payload(request),
             partial=True,
+            context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
-        club = serializer.save()
+        president = resolve_president(club, request)
+        with transaction.atomic():
+            club = save_club_images(serializer, previous_files, club_image_removals(request))
+            apply_president(club, president)
         AuditLog.objects.create(
             actor=request.user,
             action="club_settings_updated",
             target=club.name,
         )
-    return Response(BoardClubSettingsSerializer(club).data)
+    return Response(BoardClubSettingsSerializer(club, context={"request": request}).data)
 
 
 @extend_schema(responses={200: RegistrationWeekSerializer(many=True)})
@@ -174,16 +297,20 @@ def board_registrations_weekly(request):
     )
 
 
-@extend_schema(responses={200: BoardMemberSerializer(many=True)})
+@extend_schema(responses={200: BoardTeamMemberSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
 def board_members(request):
+    # Club membership exists only for board members (students never join
+    # clubs), so a club's members are its board team.
     club = board_club(request)
     if club is None:
         return Response([])
-    members = UserMember.objects.filter(club_id=club).select_related("user")
-    return Response(BoardMemberSerializer(members, many=True).data)
+    team = User.objects.filter(board_assignment__club=club).order_by(
+        "first_name", "last_name", "username"
+    )
+    return Response(BoardTeamMemberSerializer(team, many=True).data)
 
 
 @extend_schema(responses={200: MembershipRequestSerializer(many=True)})
@@ -299,12 +426,15 @@ def superadmin_stats(request):
 @permission_classes([IsSuperAdmin])
 def superadmin_organizations(request):
     if request.method == "POST":
-        if set(request.data) - {"name", "department", "is_active"}:
+        if set(request.data) - ORGANIZATION_FIELDS:
             return Response(
                 {"detail": "Unsupported organization field."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = OrganizationAdminSerializer(data=request.data)
+        serializer = OrganizationAdminSerializer(
+            data=club_payload(request),
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             organization = serializer.save()
@@ -314,15 +444,15 @@ def superadmin_organizations(request):
                 target=organization.name,
             )
         return Response(
-            OrganizationAdminSerializer(organization).data,
+            OrganizationAdminSerializer(organization, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
-    queryset = Club.objects.select_related("department").order_by("name")
+    queryset = Club.objects.select_related("department", "head__user").order_by("name")
     paginator = SuperadminPagination()
     page = paginator.paginate_queryset(queryset, request)
     return paginator.get_paginated_response(
-        OrganizationAdminSerializer(page, many=True).data
+        OrganizationAdminSerializer(page, many=True, context={"request": request}).data
     )
 
 
@@ -365,20 +495,29 @@ def superadmin_organization_detail(request, organization_id):
             organization.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    if set(request.data) - {"name", "department", "is_active"}:
+    if set(request.data) - ORGANIZATION_FIELDS:
         return Response(
             {"detail": "Unsupported organization field."},
             status=status.HTTP_400_BAD_REQUEST,
         )
     previous_status = organization.is_active
+    previous_files = {field: getattr(organization, field).name for field in CLUB_IMAGE_FIELDS}
     serializer = OrganizationAdminSerializer(
         organization,
-        data=request.data,
+        data=club_payload(request),
         partial=True,
+        context={"request": request},
     )
     serializer.is_valid(raise_exception=True)
+    president = resolve_president(organization, request)
     with transaction.atomic():
-        organization = serializer.save()
+        organization = save_club_images(
+            serializer,
+            previous_files,
+            club_image_removals(request),
+        )
+        apply_president(organization, president)
+        sync_event_categories(organization)
         if previous_status != organization.is_active:
             action = "club_reactivated" if organization.is_active else "club_suspended"
         else:
@@ -388,7 +527,7 @@ def superadmin_organization_detail(request, organization_id):
             action=action,
             target=organization.name,
         )
-    return Response(OrganizationAdminSerializer(organization).data)
+    return Response(OrganizationAdminSerializer(organization, context={"request": request}).data)
 
 
 @extend_schema(
@@ -607,6 +746,7 @@ def superadmin_user_detail(request, user_id):
 
         if new_role != User.Role.BOARD_MEMBER and assignment is not None:
             old_club_name = assignment.club.name
+            clear_presidencies(target)
             assignment.delete()
             AuditLog.objects.create(
                 actor=request.user,
@@ -626,6 +766,7 @@ def superadmin_user_detail(request, user_id):
                     target=f"{target.username}: {new_club.name}",
                 )
             elif assignment.club_id != new_club.pk:
+                clear_presidencies(target, except_club=new_club)
                 old_club_name = assignment.club.name
                 assignment.club = new_club
                 assignment.save(update_fields=["club"])

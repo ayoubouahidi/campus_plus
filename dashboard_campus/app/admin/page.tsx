@@ -1,108 +1,130 @@
-import Topbar from "@/components/admin/Topbar";
-import StatCard from "@/components/admin/StatCard";
-import EventsTable from "@/components/admin/EventsTable";
-import PendingApprovals from "@/components/admin/PendingApprovals";
-import QuickActions from "@/components/admin/QuickActions";
+import Link from "next/link";
 import { backendFetch } from "@/lib/api";
+import { getBoardClub, getClubEvents } from "@/lib/board";
+import { categoryLabel, eventPhase } from "@/lib/events";
+import { formatDateTime, formatShortDay } from "@/lib/format";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import PageBody from "@/components/layout/PageBody";
+import AutoRefresh from "@/components/shared/AutoRefresh";
+import PageHeader from "@/components/layout/PageHeader";
+import BarChart from "@/components/shared/BarChart";
+import StatCard from "@/components/shared/StatCard";
 
-export const instant = false;
+export const metadata = { title: "Overview" };
 
 type BoardStats = {
   total_events: number;
   active_members: number;
-  pending_requests: number;
   registrations_this_month: number | null;
   registrations_last_month: number | null;
 };
+type WeeklyRegistration = { date: string; registrations: number };
 
-type MembershipRequest = {
-  id: number;
-  member_name: string;
-  kind: string;
-  note: string;
-  status: string;
-};
+const linkClass =
+  "rounded text-sm font-semibold text-violet-600 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400";
 
-type ClubEvent = {
-  id: number;
-  name: string;
-  starts_at: string | null;
-  status: string;
-  club: number | null;
-};
-
-export default async function OverviewPage() {
-  const [statsData, requests, eventsResponse, club] = await Promise.all([
+async function loadOverview() {
+  const club = await getBoardClub();
+  const [stats, events, weekly] = await Promise.all([
     backendFetch<BoardStats>("/api/board/stats/"),
-    backendFetch<MembershipRequest[]>("/api/board/requests/"),
-    backendFetch<ClubEvent[] | { results: ClubEvent[] }>("/api/club-events/"),
-    backendFetch<{ id: number; name: string }>("/api/board/club/"),
+    getClubEvents(club),
+    backendFetch<WeeklyRegistration[]>("/api/board/registrations/weekly/"),
   ]);
-  const allEvents = Array.isArray(eventsResponse) ? eventsResponse : eventsResponse.results;
-  const events = allEvents.filter((event) => event.club === club.id);
+  return { club, stats, events, weekly, now: Date.now() };
+}
 
-  const registrationsThisMonth = statsData.registrations_this_month;
-  const registrationsLastMonth = statsData.registrations_last_month;
-  const trend =
-    registrationsThisMonth !== null && registrationsLastMonth !== null && registrationsLastMonth > 0
-      ? ((registrationsThisMonth - registrationsLastMonth) / registrationsLastMonth) * 100
-      : null;
+function trendNote(thisMonth: number | null, lastMonth: number | null) {
+  if (thisMonth === null || lastMonth === null) return "This month";
+  if (lastMonth === 0) return `${lastMonth} last month`;
+  const change = Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+  return `${change >= 0 ? "+" : ""}${change}% vs last month`;
+}
 
-  const stats = [
-    {
-      label: "Total Events",
-      value: String(statsData?.total_events ?? 0),
-      note: "Club events",
-      tone: "good" as const,
-    },
-    {
-      label: "Registrations",
-      value: registrationsThisMonth === null ? "—" : registrationsThisMonth.toLocaleString(),
-      note: registrationsThisMonth === null
-        ? "Registration data not available"
-        : trend === null ? "This month" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}% vs last month`,
-      tone: trend !== null && trend < 0 ? ("warn" as const) : ("good" as const),
-    },
-    {
-      label: "Active Members",
-      value: String(statsData?.active_members ?? 0),
-      note: "Club members",
-      tone: "good" as const,
-    },
-    {
-      label: "Pending Approvals",
-      value: String(statsData?.pending_requests ?? 0),
-      note: "Requests awaiting review",
-      tone: "warn" as const,
-    },
-  ];
+export default async function BoardOverviewPage() {
+  const { club, stats, events, weekly, now } = await loadOverview();
+  const upcoming = events
+    .filter((event) => eventPhase(event, now) === "upcoming")
+    .sort((a, b) => new Date(a.starts_at ?? 0).getTime() - new Date(b.starts_at ?? 0).getTime());
 
   return (
-    <>
-      <Topbar title="Club Overview" subtitle={`${club.name} • 1337`} />
+    <PageBody>
+      <AutoRefresh />
+      <PageHeader
+        title={club.name}
+        description="Your club at a glance."
+        actions={
+          <Link
+            href="/admin/events"
+            className="inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+          >
+            Manage events
+          </Link>
+        }
+      />
 
-      <main className="space-y-6 p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map((s) => (
-            <StatCard key={s.label} {...s} />
-          ))}
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Upcoming events" value={String(upcoming.length)} note={`${stats.total_events} in total`} />
+        <StatCard
+          label="RSVPs this month"
+          value={stats.registrations_this_month === null ? "—" : String(stats.registrations_this_month)}
+          note={trendNote(stats.registrations_this_month, stats.registrations_last_month)}
+        />
+        <StatCard
+          label="Going to upcoming events"
+          value={String(upcoming.reduce((sum, event) => sum + event.rsvps_count, 0))}
+          note="Students with an RSVP"
+        />
+        <StatCard label="Board team" value={String(stats.active_members)} note="Members managing this club" />
+      </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="space-y-6 xl:col-span-2">
-            <EventsTable events={events} />
-            {registrationsThisMonth === null && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Registration analytics are unavailable because the backend does not expose RSVP records yet.
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        <Card className="xl:col-span-3">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+            <CardTitle>Next events</CardTitle>
+            <Link href="/admin/events" className={linkClass}>
+              View all
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {upcoming.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                No upcoming events. <Link href="/admin/events" className={linkClass}>Publish one</Link>.
               </p>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {upcoming.slice(0, 5).map((event) => (
+                  <li key={event.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                        {formatDateTime(event.starts_at)} · {categoryLabel(event.category)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{event.rsvps_count}</span>
+                      {event.capacity ? ` / ${event.capacity}` : ""} going
+                    </p>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
-          <div className="space-y-6">
-            <PendingApprovals requests={requests} />
-            <QuickActions />
-          </div>
-        </div>
-      </main>
-    </>
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>RSVPs, last 7 days</CardTitle>
+            <CardDescription>New RSVPs to your club&rsquo;s events per day.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BarChart
+              caption="RSVPs per day, last 7 days"
+              valueLabel="RSVPs"
+              data={weekly.map((row) => ({ label: formatShortDay(row.date), value: row.registrations }))}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </PageBody>
   );
 }
