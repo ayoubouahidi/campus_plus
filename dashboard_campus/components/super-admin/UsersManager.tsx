@@ -201,7 +201,7 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
       <FormAlert message={loadError} />
 
       <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-slate-200/80 p-4 lg:flex-row lg:items-center lg:justify-between dark:border-slate-800">
+        <div className="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between dark:border-slate-800">
           <p className="text-sm text-slate-500 dark:text-slate-400" aria-live="polite">
             {loading ? "Loading…" : `${filtered.length} of ${users.length} users`}
           </p>

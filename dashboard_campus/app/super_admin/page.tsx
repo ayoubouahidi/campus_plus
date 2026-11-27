@@ -42,7 +42,7 @@ export default async function SuperAdminOverviewPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <Card className="xl:col-span-3">
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle>Organizations</CardTitle>
             <Link href="/super_admin/organizations" className={linkClass}>
               Manage
@@ -72,7 +72,7 @@ export default async function SuperAdminOverviewPage() {
         </Card>
 
         <Card className="xl:col-span-2">
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle>Recent activity</CardTitle>
             <Link href="/super_admin/audit-logs" className={linkClass}>
               View all

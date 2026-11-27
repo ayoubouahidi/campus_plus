@@ -121,7 +121,7 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
     if (!endsAt) errors.ends_at = "Choose when the event ends.";
     else if (startsAt && new Date(endsAt) <= new Date(startsAt)) errors.ends_at = "The end must be after the start.";
     if (!value("location")) errors.location = "Say where the event takes place.";
-    if (capacity && (!/^\d+$/.test(capacity) || Number(capacity) < 1)) errors.capacity = "Enter a whole number of places (1 or more), or leave it empty.";
+    if (capacity && (!/^\d+$/.test(capacity) || Number(capacity) < 1)) errors.capacity = "Enter a whole number (1 or more), or leave it empty for no limit.";
     const imageProblem = imageFileError(image);
     if (imageProblem) errors.image_path = imageProblem;
     setFieldErrors(errors);
@@ -207,7 +207,7 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
       )}
 
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 p-4 dark:border-slate-800" role="group" aria-label="Show events">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800" role="group" aria-label="Show events">
           {FILTERS.map((option) => (
             <button
               key={option.value}
@@ -318,7 +318,7 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">The organization&rsquo;s category, set by a Campus Hub administrator.</p>
               </div>
-              <Input name="location" label="Location *" maxLength={255} placeholder="e.g. 1337 Benguerir, Cluster 2" defaultValue={editing?.location ?? ""} error={fieldErrors.location} onChange={() => clearFieldError("location")} />
+              <Input name="location" label="Location *" maxLength={255} placeholder="e.g. Cluster 2, 1337 Benguerir" defaultValue={editing?.location ?? ""} error={fieldErrors.location} onChange={() => clearFieldError("location")} />
               <Input name="starts_at" type="datetime-local" label="Starts *" min={minStart} defaultValue={toLocalInput(editing?.starts_at ?? null)} error={fieldErrors.starts_at} onChange={() => clearFieldError("starts_at")} />
               <Input name="ends_at" type="datetime-local" label="Ends *" min={minStart} defaultValue={toLocalInput(editing?.ends_at ?? null)} error={fieldErrors.ends_at} onChange={() => clearFieldError("ends_at")} />
               <Input
@@ -327,8 +327,9 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
                 min={1}
                 step={1}
                 inputMode="numeric"
-                label="Places"
-                helperText={fieldErrors.capacity ? undefined : "Leave empty for no limit."}
+                label="Capacity"
+                placeholder="No limit"
+                helperText={fieldErrors.capacity ? undefined : "Maximum number of students who can RSVP. Leave empty for no limit."}
                 defaultValue={editing?.capacity ?? ""}
                 error={fieldErrors.capacity}
                 onChange={() => clearFieldError("capacity")}

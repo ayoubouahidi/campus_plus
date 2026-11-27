@@ -56,7 +56,7 @@ export default async function AuditLogsPage({ searchParams }: { searchParams: Pr
           {data.results.length === 0 && <p className={t.empty}>No admin activity yet.</p>}
         </div>
         {totalPages > 1 && (
-          <nav aria-label="Audit log pages" className="flex items-center justify-between gap-3 border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
+          <nav aria-label="Audit log pages" className="flex items-center justify-between gap-3 border-t border-slate-200/80 px-5 py-3 dark:border-slate-800">
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Page {current} of {totalPages} · {first.count.toLocaleString("en")} entries
             </p>

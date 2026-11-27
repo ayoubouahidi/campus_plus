@@ -152,9 +152,6 @@ export default function SettingsForms({
     clubForm.setError("");
     const errors: FieldErrors = {};
     if (!value("name")) errors.name = "The club needs a name.";
-    if (value("contact_email") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value("contact_email"))) {
-      errors.contact_email = "Enter a valid email address.";
-    }
     clubForm.setFieldErrors(errors);
     if (Object.keys(errors).length) return;
 
@@ -165,10 +162,8 @@ export default function SettingsForms({
         body: JSON.stringify({
           name: value("name"),
           description: value("description"),
-          contact_email: value("contact_email"),
           meeting_day: value("meeting_day"),
           meeting_time: value("meeting_time") || null,
-          meeting_location: value("meeting_location"),
           president: value("president") ? Number(value("president")) : null,
         }),
       });
@@ -196,9 +191,8 @@ export default function SettingsForms({
         <CardContent>
           <form onSubmit={saveClub} noValidate className="space-y-4">
             <FormAlert message={clubForm.error} />
+            <Input name="name" label="Club name *" maxLength={255} defaultValue={club.name} error={clubForm.fieldErrors.name} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="name" label="Club name *" maxLength={255} defaultValue={club.name} error={clubForm.fieldErrors.name} />
-              <Input name="contact_email" type="email" label="Contact email" defaultValue={club.contact_email} error={clubForm.fieldErrors.contact_email} />
               <Select
                 name="meeting_day"
                 label="Meeting day"
@@ -229,7 +223,6 @@ export default function SettingsForms({
               }
               error={clubForm.fieldErrors.president}
             />
-            <Input name="meeting_location" label="Meeting place" maxLength={255} defaultValue={club.meeting_location} error={clubForm.fieldErrors.meeting_location} />
             <Textarea name="description" label="About the club" rows={5} defaultValue={club.description} error={clubForm.fieldErrors.description} />
             <Button type="submit" isLoading={clubForm.busy}>
               Save club page

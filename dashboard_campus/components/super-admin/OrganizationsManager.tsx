@@ -180,7 +180,7 @@ export default function OrganizationsManager() {
       <FormAlert message={loadError} />
 
       <Card className="overflow-hidden p-0">
-        <div className="flex flex-col gap-3 border-b border-slate-200/80 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
+        <div className="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
           <p className="text-sm text-slate-500 dark:text-slate-400" aria-live="polite">
             {loading ? "Loading…" : `${filtered.length} of ${organizations.length} organizations`}
           </p>

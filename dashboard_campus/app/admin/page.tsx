@@ -77,7 +77,7 @@ export default async function BoardOverviewPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <Card className="xl:col-span-3">
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle>Next events</CardTitle>
             <Link href="/admin/events" className={linkClass}>
               View all

@@ -26,7 +26,10 @@ export default function BarChart({
           </div>
         ))}
       </div>
-      <table className="sr-only">
+      {/* The wrapper is what hides it: a <caption> renders outside the table box, so
+          sr-only on the <table> alone left the caption visible under the chart. */}
+      <div className="sr-only">
+      <table>
         <caption>{caption}</caption>
         <thead>
           <tr>
@@ -43,6 +46,7 @@ export default function BarChart({
           ))}
         </tbody>
       </table>
+      </div>
     </figure>
   );
 }

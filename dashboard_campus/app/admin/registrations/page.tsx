@@ -49,7 +49,7 @@ export default async function RegistrationsPage() {
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Upcoming events</CardTitle>
-          <CardDescription>Places taken per event.</CardDescription>
+          <CardDescription>RSVPs against each event&rsquo;s capacity.</CardDescription>
         </CardHeader>
         <div className={t.wrapper}>
           <table className={t.table}>
@@ -58,7 +58,7 @@ export default async function RegistrationsPage() {
                 <th scope="col" className={t.th}>Event</th>
                 <th scope="col" className={t.th}>Starts</th>
                 <th scope="col" className={t.th}>Going</th>
-                <th scope="col" className={t.th}>Places left</th>
+                <th scope="col" className={t.th}>Spots left</th>
               </tr>
             </thead>
             <tbody>
