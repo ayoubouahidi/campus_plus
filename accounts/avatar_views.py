@@ -1,15 +1,32 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from core_data.models import UserMember
+from .serializers import (
+    AuthResponseSerializer,
+    AuthSyncSerializer,
+    AvatarUploadSerializer,
+    DetailResponseSerializer,
+    UserSerializer,
+)
 from .views import auth_sync, me_avatar
 
 User = get_user_model()
 
 
+@extend_schema(
+    request=AuthSyncSerializer,
+    responses={
+        200: AuthResponseSerializer,
+        400: DetailResponseSerializer,
+        403: DetailResponseSerializer,
+        409: DetailResponseSerializer,
+    },
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -43,6 +60,15 @@ def auth_sync_preserving_avatar(request):
         return response
 
 
+@extend_schema(
+    methods=["POST"],
+    request=AvatarUploadSerializer,
+    responses={
+        200: UserSerializer,
+        400: OpenApiResponse(description="The uploaded image is invalid."),
+    },
+)
+@extend_schema(methods=["DELETE"], request=None, responses={200: UserSerializer})
 @api_view(["POST", "DELETE"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])

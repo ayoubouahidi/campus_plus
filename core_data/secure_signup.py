@@ -7,6 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core import mail
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
@@ -14,7 +15,12 @@ from rest_framework.response import Response
 
 from accounts.models import EmailVerification
 from core_data.models import Department
-from core_data.views import EmailDeliveryFailed, send_signup_verification
+from core_data.views import (
+    SIGNUP_CODE_LIFETIME,
+    VALIDATION_ERROR_RESPONSE,
+    EmailDeliveryFailed,
+    send_signup_verification,
+)
 
 User = get_user_model()
 
@@ -38,6 +44,27 @@ class SecureSignupSerializer(serializers.Serializer):
         return normalized
 
 
+@extend_schema(
+    summary="Email signup",
+    description=(
+        "Starts an email signup and sends a six-digit verification code. "
+        "The account is created only after POST /api/signup/verify/."
+    ),
+    request=SecureSignupSerializer,
+    responses={
+        202: inline_serializer(
+            name="SecureSignupPendingResponse",
+            fields={
+                "detail": serializers.CharField(read_only=True),
+                "email": serializers.EmailField(read_only=True),
+                "verification_required": serializers.BooleanField(read_only=True),
+            },
+        ),
+        400: VALIDATION_ERROR_RESPONSE,
+        503: OpenApiResponse(description="The verification email could not be sent."),
+    },
+    auth=[],
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -81,7 +108,7 @@ def secure_signup(request):
                     "code_hash": make_password(code),
                     "registration_data": registration_data,
                     "attempts": 0,
-                    "expires_at": now + timedelta(minutes=15),
+                    "expires_at": now + SIGNUP_CODE_LIFETIME,
                 },
             )
             send_signup_verification(email, code)

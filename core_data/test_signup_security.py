@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -59,14 +60,17 @@ class SignupSecurityApiTests(TestCase):
         member = UserMember.objects.get(user__email="student@1337.ma")
         self.assertIsNone(member.club_id)
 
-    def test_signup_uses_fifteen_minute_verification_expiry(self):
+    def test_signup_code_lives_ten_minutes(self):
+        # Measured around the request, not against created_at, so slow hashing or mail on CI can't make it flaky.
+        before = timezone.now()
         with patch("core_data.views.secrets.randbelow", return_value=0):
             response = self.client.post(
                 "/api/signup/",
                 self.signup_data(),
                 format="json",
             )
+        after = timezone.now()
         self.assertEqual(response.status_code, 202)
         pending = EmailVerification.objects.get(email="student@1337.ma")
-        self.assertGreaterEqual(pending.expires_at - pending.created_at, timedelta(minutes=14, seconds=59))
-        self.assertLessEqual(pending.expires_at - pending.created_at, timedelta(minutes=15, seconds=1))
+        self.assertGreaterEqual(pending.expires_at, before + timedelta(minutes=10))
+        self.assertLessEqual(pending.expires_at, after + timedelta(minutes=10))

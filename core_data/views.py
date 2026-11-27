@@ -55,6 +55,9 @@ from .serializers import (
 User = get_user_model()
 
 
+# How long a sign-up code works. The email (send_signup_verification) and the site's sign-up page say the same.
+SIGNUP_CODE_LIFETIME = timedelta(minutes=10)
+
 VALIDATION_ERROR_RESPONSE = OpenApiResponse(
     response={
         'type': 'object',
@@ -76,7 +79,7 @@ class EmailDeliveryFailed(Exception):
 def send_signup_verification(email, code):
     sent = send_mail(
         'Your Campus Hub verification code',
-        f'Your verification code is {code}. It expires in 10 minutes.',
+        f'Your verification code is {code}. It expires in {SIGNUP_CODE_LIFETIME.seconds // 60} minutes.',
         settings.DEFAULT_FROM_EMAIL,
         [email],
         fail_silently=False,
@@ -996,7 +999,7 @@ def signup(request):
                     'code_hash': make_password(code),
                     'registration_data': registration_data,
                     'attempts': 0,
-                    'expires_at': now + timedelta(minutes=10),
+                    'expires_at': now + SIGNUP_CODE_LIFETIME,
                 },
             )
             send_signup_verification(email, code)
@@ -1147,7 +1150,7 @@ def resend_signup_verification(request):
                 code = f'{secrets.randbelow(900_000) + 100_000:06d}'
                 pending.code_hash = make_password(code)
                 pending.attempts = 0
-                pending.expires_at = now + timedelta(minutes=10)
+                pending.expires_at = now + SIGNUP_CODE_LIFETIME
                 pending.save(update_fields=[
                     'code_hash',
                     'attempts',
