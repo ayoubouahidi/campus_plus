@@ -22,7 +22,6 @@ export type DashboardProfile = {
   phone: string | null;
 };
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const PHONE_PATTERN = /^(?:\+212[67]\d{8}|0[67]\d{8})$/;
 
@@ -162,8 +161,6 @@ export default function SettingsForms({
         body: JSON.stringify({
           name: value("name"),
           description: value("description"),
-          meeting_day: value("meeting_day"),
-          meeting_time: value("meeting_time") || null,
           president: value("president") ? Number(value("president")) : null,
         }),
       });
@@ -192,20 +189,6 @@ export default function SettingsForms({
           <form onSubmit={saveClub} noValidate className="space-y-4">
             <FormAlert message={clubForm.error} />
             <Input name="name" label="Club name *" maxLength={255} defaultValue={club.name} error={clubForm.fieldErrors.name} />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Select
-                name="meeting_day"
-                label="Meeting day"
-                defaultValue={club.meeting_day ?? ""}
-                options={[
-                  { value: "", label: "No regular meeting" },
-                  ...(club.meeting_day && !DAYS.includes(club.meeting_day) ? [{ value: club.meeting_day, label: club.meeting_day }] : []),
-                  ...DAYS.map((day) => ({ value: day, label: day })),
-                ]}
-                error={clubForm.fieldErrors.meeting_day}
-              />
-              <Input name="meeting_time" type="time" label="Meeting time" defaultValue={club.meeting_time?.slice(0, 5) ?? ""} error={clubForm.fieldErrors.meeting_time} />
-            </div>
             <Select
               name="president"
               label="President (club contact)"

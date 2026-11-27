@@ -8,8 +8,6 @@ export type BoardClub = {
   department_id: number;
   name: string;
   description: string;
-  meeting_day: string;
-  meeting_time: string | null;
   logo_url: string | null;
   banner_url: string | null;
   president: { id: number; name: string; email: string; phone: string } | null;
