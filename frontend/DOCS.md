@@ -6155,3 +6155,13 @@ interface SignupCodeFormProps {
 - The `Department` model and `/api/departments/` stay (the data shape and old rows depend on them).
 
 **Checked:** `core_data/test_campus_department.py` (fresh database, sign-up without a department, organization without one, members created anywhere), all 391 backend tests, the strict OpenAPI check, and in Chrome: sign-up reaches the code step, a super admin creates an organization, no console errors.
+
+## 32. 42 sign-in keeps the uploaded photo in the navbar (2026-11-27)
+
+**Bug.** After a 42 sign-in, the navbar avatar showed the 42 intra picture instead of a photo uploaded in the dashboard (or on `/profile`), and the initials when the 42 link was empty or failed to load. The email sign-in was right: it takes the picture from Django (`/api/me/` `avatar_url`). The 42 path never did: Auth.js fills `user.image` from the 42 profile (`image.link`) and the session cookie kept that.
+
+**Fix** (`src/auth.ts`). Django's `/auth/sync` already answers with the right `avatar_url` (an uploaded photo is kept over 42's, `accounts/avatar_views.py`), so the `signIn` callback now sets `user.image` from it (42's link only if Django has none), and the `jwt` callback writes `token.picture` from `user.image` explicitly for every sign-in. The dashboard was not affected: it reads `/api/me/` on each page.
+
+**Still true:** if a student is already signed in on the site when they change their photo in the dashboard, the navbar shows the new one at the next sign-in (the cookie only refreshes after a change made on the site itself, §26).
+
+**Checked:** `accounts.test_avatar_lifecycle` (42 sync keeps a custom avatar); in Chrome, a photo uploaded in the dashboard shows in the student navbar after an email sign-in. A real 42 sign-in needs the intra OAuth and is to be checked by hand: sign in with 42 after uploading a photo, the navbar shows the photo.
