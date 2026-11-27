@@ -1,25 +1,19 @@
-import Sidebar from "@/components/admin/Sidebar";
+import DashboardShell, { type ShellProfile } from "@/components/layout/DashboardShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import { backendFetch } from "@/lib/api";
 
-type DashboardIdentity = {
-  full_name: string;
-  email: string;
-  avatar_url: string | null;
-};
+export const metadata = { title: { default: "Club board", template: "%s · Campus Hub Dashboard" } };
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const profile = await backendFetch<DashboardIdentity>("/api/me/");
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [profile, club] = await Promise.all([
+    backendFetch<ShellProfile>("/api/me/"),
+    backendFetch<{ name: string }>("/api/board/club/"),
+  ]);
   return (
     <ToastProvider>
-      <div className="flex min-h-screen bg-slate-50">
-        <Sidebar profile={profile} />
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-      </div>
+      <DashboardShell area="admin" profile={profile} context={club.name}>
+        {children}
+      </DashboardShell>
     </ToastProvider>
   );
 }

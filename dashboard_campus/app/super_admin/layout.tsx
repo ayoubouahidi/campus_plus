@@ -1,25 +1,16 @@
-import SuperSidebar from "@/components/super-admin/SuperSidebar";
+import DashboardShell, { type ShellProfile } from "@/components/layout/DashboardShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import { backendFetch } from "@/lib/api";
 
-type DashboardIdentity = {
-  full_name: string;
-  email: string;
-  avatar_url: string | null;
-};
+export const metadata = { title: { default: "Super admin", template: "%s · Campus Hub Dashboard" } };
 
-export default async function SuperAdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const profile = await backendFetch<DashboardIdentity>("/api/me/");
+export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
+  const profile = await backendFetch<ShellProfile>("/api/me/");
   return (
     <ToastProvider>
-      <div className="flex min-h-screen bg-slate-50">
-        <SuperSidebar profile={profile} />
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-      </div>
+      <DashboardShell area="super_admin" profile={profile} context="1337 · all organizations">
+        {children}
+      </DashboardShell>
     </ToastProvider>
   );
 }

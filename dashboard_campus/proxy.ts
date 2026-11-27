@@ -1,4 +1,5 @@
-// On Next.js 16+ this file may need to be named proxy.ts, check the docs for your version.
+// Route guard (Next.js 16 renamed the `middleware` file convention to `proxy`).
+// Signed-out visitors go to /login; each area only opens for its role.
 import { auth } from "@/auth";
 
 export default auth((req) => {
@@ -14,12 +15,7 @@ export default auth((req) => {
   if (pathname.startsWith("/super_admin") && role !== "SUPERADMIN") {
     return Response.redirect(new URL("/login?error=AccessDenied", req.nextUrl));
   }
-
-  if (
-    pathname.startsWith("/admin") &&
-    role !== "BOARD_MEMBER" &&
-    role !== "SUPERADMIN"
-  ) {
+  if (pathname.startsWith("/admin") && role !== "BOARD_MEMBER") {
     return Response.redirect(new URL("/login?error=AccessDenied", req.nextUrl));
   }
 });

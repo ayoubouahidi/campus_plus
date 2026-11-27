@@ -1,51 +1,51 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
-type Theme = "light" | "dark";
+// Light/dark theme. The source of truth is the `dark` class on <html>, set
+// before the first paint by THEME_SCRIPT (in the root layout) so there is no
+// flash. React reads it through useSyncExternalStore: the server snapshot is
+// "light", the browser reads the real class right after hydration, so server
+// and client HTML never disagree (no hydration error).
 
-const ThemeContext = createContext<{
-  theme: Theme;
-  toggleTheme: () => void;
-}>({
-  theme: "light",
-  toggleTheme: () => undefined,
-});
+export type Theme = "light" | "dark";
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") {
-      return "light";
-    }
+export const THEME_STORAGE_KEY = "campushub-theme";
 
-    const storedTheme = window.localStorage.getItem("campuspulse-theme");
-    return storedTheme === "dark" ||
-      (storedTheme !== "light" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches)
-      ? "dark"
-      : "light";
-  });
+/** Runs in <head> before paint: saved choice, else the system preference. */
+export const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");var d=t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [theme]);
+const listeners = new Set<() => void>();
 
-  function toggleTheme() {
-    setTheme((currentTheme) => {
-      const nextTheme = currentTheme === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", nextTheme === "dark");
-      window.localStorage.setItem("campuspulse-theme", nextTheme);
-      return nextTheme;
-    });
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getSnapshot(): Theme {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function getServerSnapshot(): Theme {
+  return "light";
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Private mode or blocked storage: the theme still applies for this visit.
   }
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  listeners.forEach((listener) => listener());
 }
 
 export function useTheme() {
-  return useContext(ThemeContext);
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return {
+    theme,
+    toggleTheme: () => applyTheme(theme === "dark" ? "light" : "dark"),
+  };
 }

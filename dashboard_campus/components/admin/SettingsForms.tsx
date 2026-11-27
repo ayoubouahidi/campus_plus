@@ -2,184 +2,219 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { dashboardApi } from "@/lib/dashboard-api";
+import { dashboardApi, errorMessage, fieldErrorsOf, type FieldErrors } from "@/lib/dashboard-api";
+import type { BoardClub } from "@/lib/board";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { useToast } from "@/components/ui/Toast";
+import FormAlert from "@/components/shared/FormAlert";
 
 export type DashboardProfile = {
-  id: number;
   email: string;
   full_name: string;
-  avatar_url: string;
-  phone: string;
-  role: string;
-  campus: string;
+  avatar_url: string | null;
+  phone: string | null;
 };
 
-export type BoardClubSettings = {
-  id: number;
-  name: string;
-  description: string;
-  contact_email: string;
-  meeting_day: string;
-  meeting_time: string | null;
-  meeting_location: string;
-};
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PHONE_PATTERN = /^(?:\+212[67]\d{8}|0[67]\d{8})$/;
 
-export default function SettingsForms({
-  profile,
-  club,
-}: {
-  profile: DashboardProfile;
-  club: BoardClubSettings;
-}) {
-  const router = useRouter();
-  const [profileError, setProfileError] = useState("");
-  const [clubError, setClubError] = useState("");
-  const [avatarError, setAvatarError] = useState("");
+function useFormState() {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  return { busy, setBusy, error, setError, fieldErrors, setFieldErrors };
+}
 
-  async function saveProfile(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setProfileError("");
-    setBusy(true);
-    const form = new FormData(event.currentTarget);
-    const phone = String(form.get("phone") ?? "").trim().replace(/\s+/g, "");
-    if (phone && !/^(?:\+212[67]\d{8}|0[67]\d{8})$/.test(phone)) {
-      setProfileError("Enter a valid Moroccan mobile number.");
-      setBusy(false);
-      return;
-    }
-    try {
-      await dashboardApi("api/me/", {
-        method: "PATCH",
-        body: JSON.stringify({ phone }),
-      });
-      router.refresh();
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : "Unable to update your profile.");
-    } finally {
-      setBusy(false);
-    }
-  }
+export default function SettingsForms({ profile, club }: { profile: DashboardProfile; club: BoardClub }) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const photo = useFormState();
+  const phone = useFormState();
+  const clubForm = useFormState();
 
-  async function uploadAvatar(event: FormEvent<HTMLFormElement>) {
+  async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setAvatarError("");
     const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const file = form.get("file");
+    const file = new FormData(formElement).get("file");
+    photo.setError("");
     if (!(file instanceof File) || file.size === 0) {
-      setAvatarError("Select an image to upload.");
+      photo.setFieldErrors({ file: "Choose an image first." });
       return;
     }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setAvatarError("Choose a JPEG, PNG, or WebP image.");
+    if (!IMAGE_TYPES.includes(file.type)) {
+      photo.setFieldErrors({ file: "Choose a JPEG, PNG or WebP image." });
       return;
     }
     if (file.size >= 2 * 1024 * 1024) {
-      setAvatarError("The image must be smaller than 2 MB.");
+      photo.setFieldErrors({ file: "The image must be smaller than 2 MB." });
       return;
     }
-    setBusy(true);
+    photo.setFieldErrors({});
+    photo.setBusy(true);
     try {
-      await dashboardApi("api/me/avatar/", { method: "POST", body: form });
-      router.refresh();
+      const body = new FormData();
+      body.append("file", file);
+      await dashboardApi("api/me/avatar/", { method: "POST", body });
       formElement.reset();
+      showToast({ variant: "success", title: "Photo updated" });
+      router.refresh();
     } catch (error) {
-      setAvatarError(error instanceof Error ? error.message : "Unable to upload the image.");
+      const errors = fieldErrorsOf(error);
+      photo.setFieldErrors(errors);
+      if (!errors.file) photo.setError(errorMessage(error, "Unable to upload the photo."));
     } finally {
-      setBusy(false);
+      photo.setBusy(false);
+    }
+  }
+
+  async function savePhone(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = String(new FormData(event.currentTarget).get("phone") ?? "").replace(/\s+/g, "");
+    phone.setError("");
+    if (value && !PHONE_PATTERN.test(value)) {
+      phone.setFieldErrors({ phone: "Enter a Moroccan mobile number, e.g. 0612345678 or +212612345678." });
+      return;
+    }
+    phone.setFieldErrors({});
+    phone.setBusy(true);
+    try {
+      await dashboardApi("api/me/", { method: "PATCH", body: JSON.stringify({ phone: value }) });
+      showToast({ variant: "success", title: "Phone number saved" });
+      router.refresh();
+    } catch (error) {
+      const errors = fieldErrorsOf(error);
+      phone.setFieldErrors(errors);
+      if (!errors.phone) phone.setError(errorMessage(error, "Unable to save your phone number."));
+    } finally {
+      phone.setBusy(false);
     }
   }
 
   async function saveClub(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setClubError("");
-    setBusy(true);
     const form = new FormData(event.currentTarget);
+    const value = (name: string) => String(form.get(name) ?? "").trim();
+    clubForm.setError("");
+    const errors: FieldErrors = {};
+    if (!value("name")) errors.name = "The club needs a name.";
+    if (value("contact_email") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value("contact_email"))) {
+      errors.contact_email = "Enter a valid email address.";
+    }
+    clubForm.setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    clubForm.setBusy(true);
     try {
       await dashboardApi("api/board/club/", {
         method: "PATCH",
         body: JSON.stringify({
-          name: form.get("name"),
-          description: form.get("description"),
-          contact_email: form.get("contact_email"),
-          meeting_day: form.get("meeting_day"),
-          meeting_time: form.get("meeting_time") || null,
-          meeting_location: form.get("meeting_location"),
+          name: value("name"),
+          description: value("description"),
+          contact_email: value("contact_email"),
+          meeting_day: value("meeting_day"),
+          meeting_time: value("meeting_time") || null,
+          meeting_location: value("meeting_location"),
         }),
       });
+      showToast({ variant: "success", title: "Club page saved", description: "Students see the changes on Campus Hub." });
       router.refresh();
     } catch (error) {
-      setClubError(error instanceof Error ? error.message : "Unable to save club settings.");
+      const errors = fieldErrorsOf(error);
+      clubForm.setFieldErrors(errors);
+      if (!Object.keys(errors).length) clubForm.setError(errorMessage(error, "Unable to save the club."));
     } finally {
-      setBusy(false);
+      clubForm.setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-center gap-4">
-            <Avatar src={profile.avatar_url} name={profile.full_name} size="xl" />
-            <div>
-              <p className="font-semibold text-slate-900">{profile.full_name}</p>
-              <p className="text-sm text-slate-500">{profile.email}</p>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+      <Card className="xl:col-span-3">
+        <CardHeader>
+          <CardTitle>Club page</CardTitle>
+          <CardDescription>What students see on the club&rsquo;s page on Campus Hub.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={saveClub} noValidate className="space-y-4">
+            <FormAlert message={clubForm.error} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input name="name" label="Club name *" maxLength={255} defaultValue={club.name} error={clubForm.fieldErrors.name} />
+              <Input name="contact_email" type="email" label="Contact email" defaultValue={club.contact_email} error={clubForm.fieldErrors.contact_email} />
+              <Select
+                name="meeting_day"
+                label="Meeting day"
+                defaultValue={club.meeting_day ?? ""}
+                options={[
+                  { value: "", label: "No regular meeting" },
+                  ...(club.meeting_day && !DAYS.includes(club.meeting_day) ? [{ value: club.meeting_day, label: club.meeting_day }] : []),
+                  ...DAYS.map((day) => ({ value: day, label: day })),
+                ]}
+                error={clubForm.fieldErrors.meeting_day}
+              />
+              <Input name="meeting_time" type="time" label="Meeting time" defaultValue={club.meeting_time?.slice(0, 5) ?? ""} error={clubForm.fieldErrors.meeting_time} />
             </div>
-          </div>
-          <form onSubmit={uploadAvatar} className="flex flex-wrap items-end gap-3">
-            <label className="min-w-60 flex-1 space-y-1 text-sm font-medium text-slate-700">
-              Profile image (JPEG, PNG or WebP; under 2 MB)
-              <input name="file" type="file" accept="image/jpeg,image/png,image/webp" required className="block w-full text-sm" />
-            </label>
-            <Button type="submit" isLoading={busy}>Upload image</Button>
-          </form>
-          {avatarError && <p role="alert" className="text-sm text-rose-700">{avatarError}</p>}
-          <form onSubmit={saveProfile} className="space-y-4 border-t border-slate-100 pt-5">
-            <label className="block space-y-1 text-sm font-medium text-slate-700">
-              Phone
-              <input name="phone" type="tel" defaultValue={profile.phone} maxLength={30} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            {profileError && <p role="alert" className="text-sm text-rose-700">{profileError}</p>}
-            <Button type="submit" isLoading={busy}>Save profile</Button>
+            <Input name="meeting_location" label="Meeting place" maxLength={255} defaultValue={club.meeting_location} error={clubForm.fieldErrors.meeting_location} />
+            <Textarea name="description" label="About the club" rows={5} defaultValue={club.description} error={clubForm.fieldErrors.description} />
+            <Button type="submit" isLoading={clubForm.busy}>
+              Save club page
+            </Button>
           </form>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Club settings</CardTitle></CardHeader>
-        <CardContent>
-          <form onSubmit={saveClub} className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Club name
-              <input name="name" required maxLength={255} defaultValue={club.name} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Contact email
-              <input name="contact_email" type="email" defaultValue={club.contact_email} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Meeting day
-              <input name="meeting_day" maxLength={20} defaultValue={club.meeting_day} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Meeting time
-              <input name="meeting_time" type="time" defaultValue={club.meeting_time?.slice(0, 5) ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700 md:col-span-2">
-              Meeting location
-              <input name="meeting_location" maxLength={255} defaultValue={club.meeting_location} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700 md:col-span-2">
-              Description
-              <textarea name="description" rows={4} defaultValue={club.description} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-            {clubError && <p role="alert" className="text-sm text-rose-700 md:col-span-2">{clubError}</p>}
-            <div className="md:col-span-2"><Button type="submit" isLoading={busy}>Save club settings</Button></div>
+      <Card className="xl:col-span-2">
+        <CardHeader>
+          <CardTitle>Your profile</CardTitle>
+          <CardDescription>Shown in the dashboard and on Campus Hub.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center gap-4">
+            <Avatar src={profile.avatar_url} name={profile.full_name} size="xl" />
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-slate-900 dark:text-slate-100">{profile.full_name}</p>
+              <p className="truncate text-sm text-slate-500 dark:text-slate-400">{profile.email}</p>
+            </div>
+          </div>
+
+          <form onSubmit={uploadPhoto} noValidate className="space-y-3">
+            <FormAlert message={photo.error} />
+            <Input
+              name="file"
+              type="file"
+              accept={IMAGE_TYPES.join(",")}
+              label="Profile photo"
+              helperText={photo.fieldErrors.file ? undefined : "JPEG, PNG or WebP under 2 MB."}
+              error={photo.fieldErrors.file}
+              onChange={() => photo.fieldErrors.file && photo.setFieldErrors({})}
+              className="file:mr-3 file:rounded-md file:border-0 file:bg-violet-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-violet-700 dark:file:bg-violet-500/15 dark:file:text-violet-300"
+            />
+            <Button type="submit" variant="secondary" isLoading={photo.busy}>
+              Upload photo
+            </Button>
+          </form>
+
+          <form onSubmit={savePhone} noValidate className="space-y-3 border-t border-slate-200/80 pt-5 dark:border-slate-800">
+            <FormAlert message={phone.error} />
+            <Input
+              name="phone"
+              type="tel"
+              label="Phone"
+              autoComplete="tel"
+              placeholder="0612345678"
+              maxLength={30}
+              defaultValue={profile.phone ?? ""}
+              helperText={phone.fieldErrors.phone ? undefined : "Moroccan mobile number. Leave empty to remove it."}
+              error={phone.fieldErrors.phone}
+            />
+            <Button type="submit" variant="secondary" isLoading={phone.busy}>
+              Save phone
+            </Button>
           </form>
         </CardContent>
       </Card>

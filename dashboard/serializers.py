@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 
 from accounts.models import ClubBoardAssignment
-from core_data.models import Club, UserMember
+from core_data.models import Club
 from .models import Announcement, AuditLog, MembershipRequest
 
 User = get_user_model()
@@ -18,6 +18,7 @@ class BoardClubSettingsSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "department_id",
+            "slug",
             "name",
             "description",
             "contact_email",
@@ -25,6 +26,26 @@ class BoardClubSettingsSerializer(serializers.ModelSerializer):
             "meeting_time",
             "meeting_location",
         ]
+        read_only_fields = ["slug"]
+
+
+class BoardTeamMemberSerializer(serializers.ModelSerializer):
+    """A member of a club's board team (club membership exists only for board members)."""
+
+    name = serializers.SerializerMethodField()
+    joined_date = serializers.DateTimeField(source="date_joined", read_only=True)
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "name", "email", "role", "joined_date", "status"]
+        read_only_fields = fields
+
+    def get_name(self, obj) -> str:
+        return obj.get_full_name() or obj.username
+
+    def get_status(self, obj) -> str:
+        return "active" if obj.is_active else "inactive"
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -58,25 +79,6 @@ class MembershipRequestSerializer(serializers.ModelSerializer):
             "decided_by",
             "decided_at",
         ]
-
-
-class BoardMemberSerializer(serializers.ModelSerializer):
-    name = serializers.SerializerMethodField()
-    role = serializers.CharField(source="user.role", read_only=True)
-    joined_date = serializers.DateTimeField(source="user.date_joined", read_only=True)
-    status = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserMember
-        fields = ["id", "name", "role", "joined_date", "status"]
-
-    def get_name(self, obj) -> str:
-        if obj.user:
-            return obj.user.get_full_name() or obj.user.username
-        return obj.username
-
-    def get_status(self, obj) -> str:
-        return "active" if obj.user and obj.user.is_active else "inactive"
 
 
 class OrganizationAdminSerializer(serializers.ModelSerializer):

@@ -1,29 +1,23 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 
+// Backend routes the dashboard screens call (everything else gets a 404 here).
 const allowedRoutes = [
   /^api\/me\/?$/,
   /^api\/me\/avatar\/?$/,
+  /^api\/departments\/?$/,
   /^api\/board\/(club|stats|members)\/?$/,
   /^api\/board\/registrations\/weekly\/?$/,
-  /^api\/board\/requests\/?$/,
-  /^api\/board\/requests\/\d+\/(approve|reject)\/?$/,
-  /^api\/board\/announcements\/?$/,
-  /^api\/board\/announcements\/\d+\/?$/,
   /^api\/club-events\/?$/,
   /^api\/club-events\/\d+\/?$/,
   /^api\/superadmin\/organizations\/?$/,
   /^api\/superadmin\/organizations\/\d+\/?$/,
   /^api\/superadmin\/users\/?$/,
   /^api\/superadmin\/users\/\d+\/?$/,
-  /^api\/superadmin\/events\/?$/,
   /^api\/superadmin\/events\/weekly\/?$/,
-  /^api\/superadmin\/events\/\d+\/(approve|reject)\/?$/,
   /^api\/superadmin\/stats\/?$/,
   /^api\/superadmin\/roles\/distribution\/?$/,
   /^api\/superadmin\/audit-log\/?$/,
-  /^api\/superadmin\/settings\/?$/,
-  /^api\/superadmin\/settings\/\d+\/?$/,
 ];
 
 async function proxy(

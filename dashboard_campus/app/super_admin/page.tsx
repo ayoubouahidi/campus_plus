@@ -1,94 +1,101 @@
-import Topbar from "@/components/admin/Topbar";
-import StatCard from "@/components/admin/StatCard";
-import OrganizationsTable from "@/components/super-admin/OrganizationsTable";
-import RoleAssignments from "@/components/super-admin/RoleAssignments";
-import ActivityChart from "@/components/super-admin/ActivityChart";
-import RoleDistribution from "@/components/super-admin/RoleDistribution";
-import SystemHealth from "@/components/super-admin/SystemHealth";
-import AuditLog from "@/components/super-admin/AuditLog";
+import Link from "next/link";
 import { backendFetch } from "@/lib/api";
+import { formatAction, formatDateTime } from "@/lib/format";
+import { Badge } from "@/components/ui/Badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import PageBody from "@/components/layout/PageBody";
+import PageHeader from "@/components/layout/PageHeader";
+import StatCard from "@/components/shared/StatCard";
 
-export const instant = false;
+export const metadata = { title: "Overview" };
 
-type SuperStats = {
-  total_users: number;
-  total_clubs: number;
-  events_this_month: number;
-  pending_requests: number;
-};
-
-type Organization = {
-  id: number;
-  name: string;
-  department_name: string | null;
-  is_active: boolean;
-};
-
+type SuperStats = { total_users: number; total_clubs: number; events_this_month: number };
+type Organization = { id: number; name: string; department_name: string | null; is_active: boolean };
 type RoleRow = { role: string; count: number };
-type WeeklyEvent = { week_start: string; events: number };
-type AuditRow = {
-  id: number;
-  actor_username: string | null;
-  action: string;
-  target: string;
-  created_at: string;
-};
-type UserRow = {
-  id: number;
-  username: string;
-  role: string;
-  club_name: string | null;
-};
+type AuditRow = { id: number; actor_username: string | null; action: string; target: string; created_at: string };
+type Paginated<T> = { count: number; results: T[] };
+
+const linkClass =
+  "rounded text-sm font-semibold text-violet-600 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400";
 
 export default async function SuperAdminOverviewPage() {
-  const [statsData, organizationsResponse, roles, weeklyEvents, auditResponse, usersResponse] =
-    await Promise.all([
-      backendFetch<SuperStats>("/api/superadmin/stats/"),
-      backendFetch<{ results: Organization[] } | Organization[]>("/api/superadmin/organizations/"),
-      backendFetch<RoleRow[]>("/api/superadmin/roles/distribution/"),
-      backendFetch<WeeklyEvent[]>("/api/superadmin/events/weekly/"),
-      backendFetch<{ results: AuditRow[] } | AuditRow[]>("/api/superadmin/audit-log/?page=1&page_size=5"),
-      backendFetch<{ results: UserRow[] }>("/api/superadmin/users/?page=1&page_size=5"),
-    ]);
-  const organizations = Array.isArray(organizationsResponse)
-    ? organizationsResponse
-    : organizationsResponse.results;
-  const auditRows = Array.isArray(auditResponse) ? auditResponse : auditResponse.results;
+  const [stats, organizations, roles, audit] = await Promise.all([
+    backendFetch<SuperStats>("/api/superadmin/stats/"),
+    backendFetch<Paginated<Organization>>("/api/superadmin/organizations/?page_size=200"),
+    backendFetch<RoleRow[]>("/api/superadmin/roles/distribution/"),
+    backendFetch<Paginated<AuditRow>>("/api/superadmin/audit-log/?page_size=6"),
+  ]);
 
-  const platformStats = [
-    { label: "Total Users", value: statsData.total_users.toLocaleString(), note: "Registered users", tone: "good" as const },
-    { label: "Organizations", value: String(statsData.total_clubs), note: "Active and suspended clubs", tone: "neutral" as const },
-    { label: "Events This Month", value: String(statsData.events_this_month), note: "Current month", tone: "good" as const },
-    { label: "Pending Approvals", value: String(statsData.pending_requests), note: "Membership requests", tone: "warn" as const },
-  ];
+  const roleCount = (role: string) => roles.find((row) => row.role === role)?.count ?? 0;
+  const activeOrganizations = organizations.results.filter((organization) => organization.is_active).length;
 
   return (
-    <>
-      <Topbar
-        title="Platform Overview"
-        subtitle="1337 campus platform"
-      />
+    <PageBody>
+      <PageHeader title="Overview" description="Campus Hub at 1337: organizations, accounts and recent admin activity." />
 
-      <main className="space-y-6 p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {platformStats.map((s) => (
-            <StatCard key={s.label} {...s} />
-          ))}
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Users" value={stats.total_users.toLocaleString("en")} note={`${roleCount("STUDENT")} students`} />
+        <StatCard label="Organizations" value={String(stats.total_clubs)} note={`${activeOrganizations} active`} />
+        <StatCard label="Board members" value={String(roleCount("BOARD_MEMBER"))} note={`${roleCount("SUPERADMIN")} super admins`} />
+        <StatCard label="Events this month" value={String(stats.events_this_month)} note="Started since the 1st" />
+      </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="space-y-6 xl:col-span-2">
-            <OrganizationsTable organizations={organizations} />
-            <RoleAssignments users={usersResponse.results} />
-            <ActivityChart weeklyEvents={weeklyEvents} />
-          </div>
-          <div className="space-y-6">
-            <RoleDistribution roles={roles} />
-            <SystemHealth />
-            <AuditLog auditRows={auditRows} />
-          </div>
-        </div>
-      </main>
-    </>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        <Card className="xl:col-span-3">
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Organizations</CardTitle>
+            <Link href="/super_admin/organizations" className={linkClass}>
+              Manage
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {organizations.results.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                No organizations yet. <Link href="/super_admin/organizations" className={linkClass}>Create the first one</Link>.
+              </p>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {organizations.results.slice(0, 6).map((organization) => (
+                  <li key={organization.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{organization.name}</p>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{organization.department_name ?? "No department"}</p>
+                    </div>
+                    <Badge variant={organization.is_active ? "success" : "neutral"} hasDot>
+                      {organization.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-2">
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Recent activity</CardTitle>
+            <Link href="/super_admin/audit-logs" className={linkClass}>
+              View all
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {audit.results.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No admin activity yet.</p>
+            ) : (
+              <ul className="space-y-4">
+                {audit.results.map((row) => (
+                  <li key={row.id} className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{formatAction(row.action)}</p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                      {row.target || "—"} · {row.actor_username ?? "System"} · {formatDateTime(row.created_at)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </PageBody>
   );
 }

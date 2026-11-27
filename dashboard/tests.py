@@ -65,9 +65,10 @@ class BoardApiTests(TestCase):
         announcements = self.client.get("/api/board/announcements/")
 
         self.assertEqual(members.status_code, 200)
+        # Members are the club's board team, not student UserMember rows.
         self.assertEqual(
             [row["id"] for row in members.data],
-            [self.board_member.pk],
+            [self.board_user.pk],
         )
         self.assertEqual(requests.status_code, 200)
         self.assertEqual([row["id"] for row in requests.data], [self.request.pk])

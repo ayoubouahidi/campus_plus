@@ -1,11 +1,10 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 
-export const instant = false;
-
+// Entry point: each role goes to its own area.
 export default async function Home() {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session?.backendToken) redirect("/login");
   if (session.user.role === "SUPERADMIN") redirect("/super_admin");
   if (session.user.role === "BOARD_MEMBER") redirect("/admin");
   redirect("/login?error=AccessDenied");

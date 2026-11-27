@@ -14,14 +14,14 @@ from drf_spectacular.utils import extend_schema
 
 from accounts.models import ClubBoardAssignment
 from accounts.permissions import IsClubBoard, IsSuperAdmin, user_club_id
-from core_data.models import Club, ClubEvent, UserMember
+from core_data.models import Club, ClubEvent
 from .models import Announcement, AuditLog, MembershipRequest
 from .serializers import (
     AnnouncementSerializer,
     AuditLogSerializer,
     BoardClubSettingsSerializer,
     BoardStatsSerializer,
-    BoardMemberSerializer,
+    BoardTeamMemberSerializer,
     MembershipRequestSerializer,
     EventWeekSerializer,
     OrganizationAdminSerializer,
@@ -81,7 +81,7 @@ def board_stats(request):
     return Response(
         {
             "total_events": ClubEvent.objects.filter(club=club).count(),
-            "active_members": UserMember.objects.filter(club_id=club).count(),
+            "active_members": User.objects.filter(board_assignment__club=club).count(),
             "pending_requests": MembershipRequest.objects.filter(
                 club=club,
                 status=MembershipRequest.Status.PENDING,
@@ -174,16 +174,20 @@ def board_registrations_weekly(request):
     )
 
 
-@extend_schema(responses={200: BoardMemberSerializer(many=True)})
+@extend_schema(responses={200: BoardTeamMemberSerializer(many=True)})
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsClubBoard])
 def board_members(request):
+    # Club membership exists only for board members (students never join
+    # clubs), so a club's members are its board team.
     club = board_club(request)
     if club is None:
         return Response([])
-    members = UserMember.objects.filter(club_id=club).select_related("user")
-    return Response(BoardMemberSerializer(members, many=True).data)
+    team = User.objects.filter(board_assignment__club=club).order_by(
+        "first_name", "last_name", "username"
+    )
+    return Response(BoardTeamMemberSerializer(team, many=True).data)
 
 
 @extend_schema(responses={200: MembershipRequestSerializer(many=True)})

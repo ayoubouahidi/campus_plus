@@ -1,34 +1,12 @@
-import Topbar from "@/components/admin/Topbar";
-import SuperAdminResourceManager from "@/components/super-admin/SuperAdminResourceManager";
+import PageBody from "@/components/layout/PageBody";
+import OrganizationsManager from "@/components/super-admin/OrganizationsManager";
 
-export const instant = false;
+export const metadata = { title: "Organizations" };
 
 export default function OrganizationsPage() {
   return (
-    <>
-      <Topbar title="Organizations" subtitle="Manage campus organizations and their status" />
-      <SuperAdminResourceManager
-        endpoint="api/superadmin/organizations/"
-        title="Organizations"
-        description="Create, update, activate, suspend, or remove organizations."
-        fields={[
-          { name: "name", label: "Organization name", required: true },
-          {
-            name: "department",
-            label: "Department",
-            type: "select",
-            required: true,
-            optionsEndpoint: "api/departments/",
-            optionLabelKey: "name",
-          },
-          { name: "is_active", label: "Status", type: "checkbox", defaultChecked: true },
-        ]}
-        columns={[
-          { key: "name", label: "Organization" },
-          { key: "department_name", label: "Department" },
-          { key: "is_active", label: "Status", format: "status" },
-        ]}
-      />
-    </>
+    <PageBody>
+      <OrganizationsManager />
+    </PageBody>
   );
 }

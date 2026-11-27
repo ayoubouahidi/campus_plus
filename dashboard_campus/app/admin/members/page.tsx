@@ -1,72 +1,64 @@
-import Topbar from "@/components/admin/Topbar";
-import { Avatar } from "@/components/ui/Avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { backendFetch } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import PageBody from "@/components/layout/PageBody";
+import PageHeader from "@/components/layout/PageHeader";
+import { tableStyles as t } from "@/components/shared/table";
 
-export const instant = false;
+export const metadata = { title: "Board team" };
 
-type Member = {
+type TeamMember = {
   id: number;
   name: string;
-  role: string;
-  joined_date: string;
+  email: string;
+  joined_date: string | null;
   status: "active" | "inactive";
 };
 
-export default async function MembersPage() {
-  const [members, club] = await Promise.all([
-    backendFetch<Member[]>("/api/board/members/"),
-    backendFetch<{ name: string }>("/api/board/club/"),
-  ]);
-  const rows = members.map((member) => ({
-    name: member.name,
-    role: member.role,
-    joined: member.joined_date
-      ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(member.joined_date))
-      : "Unknown",
-    status: member.status === "active" ? "Active" : "Inactive",
-  }));
-
+export default async function BoardTeamPage() {
+  const team = await backendFetch<TeamMember[]>("/api/board/members/");
   return (
-    <>
-      <Topbar title="Members" subtitle={`Members of ${club.name}`} />
-
-      <main className="p-6">
-        {rows.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Club members</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="bg-slate-50 text-xs text-slate-500">
-                    <th className="rounded-l-lg px-3 py-2.5 font-medium">Member</th>
-                    <th className="px-3 py-2.5 font-medium">Role</th>
-                    <th className="px-3 py-2.5 font-medium">Joined</th>
-                    <th className="rounded-r-lg px-3 py-2.5 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((member) => (
-                    <tr key={member.name} className="border-b border-slate-100 last:border-0">
-                      <td className="flex items-center gap-3 px-3 py-3.5 font-semibold text-slate-900">
-                        <Avatar name={member.name} size="sm" />
-                        {member.name}
-                      </td>
-                      <td className="px-3 py-3.5 text-slate-600">{member.role}</td>
-                      <td className="px-3 py-3.5 text-slate-600">{member.joined}</td>
-                      <td className="px-3 py-3.5 text-slate-600">{member.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        ) : (
-          <p className="text-sm text-red-600">Member data is not available.</p>
-        )}
-      </main>
-    </>
+    <PageBody>
+      <PageHeader
+        title="Board team"
+        description="People who manage this club in the dashboard. A Campus Hub administrator adds or removes board members."
+      />
+      <Card className="overflow-hidden">
+        <div className={t.wrapper}>
+          <table className={t.table}>
+            <thead>
+              <tr className={t.headRow}>
+                <th scope="col" className={t.th}>Member</th>
+                <th scope="col" className={t.th}>Email</th>
+                <th scope="col" className={t.th}>On Campus Hub since</th>
+                <th scope="col" className={t.th}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {team.map((member) => (
+                <tr key={member.id} className={t.row}>
+                  <td className={t.td}>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={member.name} size="sm" />
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{member.name}</span>
+                    </div>
+                  </td>
+                  <td className={t.td}>{member.email || "—"}</td>
+                  <td className={`${t.td} whitespace-nowrap`}>{formatDateTime(member.joined_date)}</td>
+                  <td className={t.td}>
+                    <Badge variant={member.status === "active" ? "success" : "danger"} hasDot>
+                      {member.status === "active" ? "Active" : "Deactivated"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {team.length === 0 && <p className={t.empty}>No board members yet.</p>}
+        </div>
+      </Card>
+    </PageBody>
   );
 }
