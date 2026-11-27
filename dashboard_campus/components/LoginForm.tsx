@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
@@ -74,11 +75,8 @@ export default function LoginForm({ callbackUrl = "/" }: { callbackUrl?: string 
           setFortyTwoLoading(true);
           void signIn("42-school", { redirectTo: callbackUrl });
         }}
-        leftIcon={
-          <span aria-hidden="true" className="grid h-[22px] w-[22px] place-items-center rounded-md bg-slate-900 text-[10px] font-bold text-white dark:bg-white dark:text-slate-900">
-            42
-          </span>
-        }
+        // The official 42 logo, white in dark mode. Decorative: the text says "42".
+        leftIcon={<Image src="/42-logo.png" alt="" width={24} height={17} className="h-[17px] w-6 dark:invert" />}
       >
         {fortyTwoLoading ? "Redirecting to 42…" : "Continue with 42 Intra"}
       </Button>

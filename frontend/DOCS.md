@@ -6125,3 +6125,21 @@ interface SignupCodeFormProps {
 - The student site is unchanged: events still carry `category`, so the feed's category chips and search filters work as before.
 
 **Tests:** `dashboard/test_club_category.py` (5): event inherits the club category without sending one, a different one in the request is ignored, changing the club category updates its events, unknown categories are refused, the board can't change it. 381 backend tests OK.
+
+## 30. Login pages: the 1337 building as a vector illustration, and the real 42 logo (2026-11-27)
+
+**Component:** `src/components/auth/CampusIllustration.tsx` (copy in `dashboard_campus/components/CampusIllustration.tsx`), used by `LoginLayout` (student `/auth/login`, `/auth/register`) and the dashboard's `/login`.
+
+**Business purpose.** The left half of both login pages showed a campus photo. The 1337 building photo we have is only 800×504, so it looked blurry on large screens. A vector drawing of the same building (low wing with glass strip, white band and slot windows; tall block with the white claustra strip and the "1337" letters; palms and hedges) is sharp at any size and weighs ~26 KB of markup instead of an image download.
+
+**Engineering decisions.**
+- **Inline SVG, Server Component, no JS:** `aria-hidden` (decorative; the form column carries the meaning), `preserveAspectRatio="xMaxYMax slice"` so it fills the panel and always keeps the "1337" letters (right side) in view when the panel is narrower.
+- **Same palette as `CampusBackground`:** terracotta facade, sky gradient with a warm sun glow, violet circuit traces with the Benguerir coordinate tag, the faint 42° lattice. At night (dark mode) windows and the claustra glow warm, stars and a crescent moon appear.
+- **Colours are CSS variables** on `.ci-root`, switched in an inline `<style>`: `@media (prefers-color-scheme: dark)` on the student site (its `dark:` rule), `.dark .ci-root` on the dashboard (its class-based theme toggle). That is the only difference between the two copies.
+- **"Continue with 42 Intra"** shows the official 42 logo (`public/42-logo.png`, 96 px wide for retina, shown at 24×17) instead of the drawn "42" tile; `dark:invert` makes it white in dark mode.
+
+**Tradeoffs.** *Higher-resolution photo vs. illustration:* a photo needs a large file (~300 KB+ for retina) and still clashes with the site's drawn background; the illustration is crisp, themed and lighter. *Shared package vs. copy:* the two apps are separate Next.js projects with no shared package; one ~300-line decorative file copied is simpler than adding a workspace for it.
+
+**Contract.** `<CampusIllustration className?: string />` plus any `div` attributes (forwardRef to the root `div`). Give it a sized, positioned box: `<div className="relative hidden lg:block"><CampusIllustration className="absolute inset-0" /></div>`.
+
+**Checked:** both login pages in headless Chrome at 1440×900, light and dark: no console errors.

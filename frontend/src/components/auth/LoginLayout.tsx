@@ -1,15 +1,15 @@
 import React from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Logo } from '@/components/ui/Logo';
+import { CampusIllustration } from './CampusIllustration';
 
 export interface LoginLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode; // the form column, usually <LoginPanel>
 }
 
 // Full-screen split login layout, same design as the organizer dashboard's login (Ayoub,
-// dashboard_campus/app/login): campus photo on the left from lg (1024px), form column on the right.
+// dashboard_campus/app/login): the 1337 building (vector illustration) on the left from lg (1024px), form column on the right.
 // Below lg: form only. The app shell hides itself on these routes (isFullScreenRoute in lib/navigation.ts),
 // so the "← Campus Hub" link at the top is the way back to the site. Server Component.
 export const LoginLayout = React.forwardRef<HTMLDivElement, LoginLayoutProps>(
@@ -19,7 +19,7 @@ export const LoginLayout = React.forwardRef<HTMLDivElement, LoginLayoutProps>(
       <div ref={ref} className={`grid min-h-dvh grid-cols-1 lg:grid-cols-2 ${className}`} {...props}>
         {/* Decorative: the form column carries all the meaning, so alt="" keeps screen readers on the form */}
         <div className="relative hidden lg:block">
-          <Image src="/campus.webp" alt="" fill priority sizes="50vw" className="object-cover" />
+          <CampusIllustration className="absolute inset-0" />
         </div>
 
         <div className="flex flex-col bg-white px-6 py-6 dark:bg-slate-950">
