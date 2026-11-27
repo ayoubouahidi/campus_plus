@@ -8,6 +8,8 @@ import PageBody from "@/components/layout/PageBody";
 import PageHeader from "@/components/layout/PageHeader";
 import BarChart from "@/components/shared/BarChart";
 import { tableStyles as t } from "@/components/shared/table";
+import AttendeesButton from "@/components/admin/AttendeesButton";
+import AutoRefresh from "@/components/shared/AutoRefresh";
 
 export const metadata = { title: "Registrations" };
 
@@ -30,6 +32,7 @@ export default async function RegistrationsPage() {
 
   return (
     <PageBody>
+      <AutoRefresh />
       <PageHeader title="Registrations" description="Who is going to your club's events (RSVPs from Campus Hub)." />
 
       <Card>
@@ -49,7 +52,7 @@ export default async function RegistrationsPage() {
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Upcoming events</CardTitle>
-          <CardDescription>RSVPs against each event&rsquo;s capacity.</CardDescription>
+          <CardDescription>RSVPs against each event&rsquo;s capacity, and who&rsquo;s going. Updates every few seconds.</CardDescription>
         </CardHeader>
         <div className={t.wrapper}>
           <table className={t.table}>
@@ -59,6 +62,7 @@ export default async function RegistrationsPage() {
                 <th scope="col" className={t.th}>Starts</th>
                 <th scope="col" className={t.th}>Going</th>
                 <th scope="col" className={t.th}>Spots left</th>
+                <th scope="col" className={t.thRight}>Attendees</th>
               </tr>
             </thead>
             <tbody>
@@ -77,6 +81,9 @@ export default async function RegistrationsPage() {
                       ) : (
                         `${left} of ${event.capacity}`
                       )}
+                    </td>
+                    <td className={t.tdActions}>
+                      <AttendeesButton eventId={event.id} eventName={event.name} count={event.rsvps_count} />
                     </td>
                   </tr>
                 );

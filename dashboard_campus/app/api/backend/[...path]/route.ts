@@ -10,6 +10,7 @@ const allowedRoutes = [
   /^api\/board\/registrations\/weekly\/?$/,
   /^api\/club-events\/?$/,
   /^api\/club-events\/\d+\/?$/,
+  /^api\/club-events\/\d+\/attendees\/?$/,
   /^api\/superadmin\/organizations\/?$/,
   /^api\/superadmin\/organizations\/\d+\/?$/,
   /^api\/superadmin\/users\/?$/,

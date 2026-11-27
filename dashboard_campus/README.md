@@ -25,7 +25,7 @@ The management app of Campus Hub (1337), served at **https://dashboard.localhost
 | | Audit log | Every dashboard change, 25 per page | `/api/superadmin/audit-log/` |
 | Club board | Overview | Upcoming events, RSVPs this month, board team size, RSVPs per day | `/api/board/stats/`, `/api/club-events/?club=<slug>`, `/api/board/registrations/weekly/` |
 | | Events | Publish, edit (places, flyer, cancel; the category comes from the club), delete the club's events. Students see changes live. | `/api/club-events/` |
-| | Registrations | RSVPs per day and places left per upcoming event | same |
+| | Registrations | RSVPs per day, spots left per upcoming event, and **who's going** (dialog with names and photos, 100 at a time) | same + `/api/club-events/<id>/attendees/` |
 | | Board team | The club's board members | `/api/board/members/` |
 | | Club settings | The club's public page (name, description; no meeting day/time/place or contact email: students never saw them, and the president is the contact), its **president** (chosen from the board team; signed-in students see their name, email and phone), its **logo and banner** (upload, preview, replace, remove), your photo and phone | `/api/board/club/` (multipart for images), `/api/me/`, `/api/me/avatar/` |
 
@@ -34,6 +34,8 @@ The management app of Campus Hub (1337), served at **https://dashboard.localhost
 **Event times:** a new event, or an edit that moves the start, must start in the future (checked in the form with the browser's time zone, and again by Django in UTC: `starts_at` error). Renaming or cancelling a running event stays allowed.
 
 **President:** `president` (a user id, or empty to clear) on `PATCH /api/board/club/` and the super admin organization PATCH; it must be an active board member of that club. Moving, demoting or deleting the board member ends the presidency. Read back as `president: {id, name, email, phone}`.
+
+**Fresh numbers without reloading:** board Overview, Events, Registrations and the super admin Overview re-fetch their server data every 15 s while the tab is visible, and at once when you come back to the tab (`components/shared/AutoRefresh.tsx`, `router.refresh()`, keeps open dialogs and form input). Real WebSockets were not worth it here: RSVPs don't broadcast yet (Ahmed's open item) and `/ws/` isn't routed on the dashboard host.
 
 **Sign-in rate limit:** nginx allows 5 sign-ins per minute per address (`auth_callback_limit`); the 6th gets 429 and the form says to wait a minute.
 

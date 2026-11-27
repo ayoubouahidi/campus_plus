@@ -4,6 +4,7 @@ import { formatAction, formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import PageBody from "@/components/layout/PageBody";
+import AutoRefresh from "@/components/shared/AutoRefresh";
 import PageHeader from "@/components/layout/PageHeader";
 import StatCard from "@/components/shared/StatCard";
 
@@ -31,6 +32,7 @@ export default async function SuperAdminOverviewPage() {
 
   return (
     <PageBody>
+      <AutoRefresh />
       <PageHeader title="Overview" description="Campus Hub at 1337: organizations, accounts and recent admin activity." />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

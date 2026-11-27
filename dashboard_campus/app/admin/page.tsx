@@ -5,6 +5,7 @@ import { categoryLabel, eventPhase } from "@/lib/events";
 import { formatDateTime, formatShortDay } from "@/lib/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import PageBody from "@/components/layout/PageBody";
+import AutoRefresh from "@/components/shared/AutoRefresh";
 import PageHeader from "@/components/layout/PageHeader";
 import BarChart from "@/components/shared/BarChart";
 import StatCard from "@/components/shared/StatCard";
@@ -47,6 +48,7 @@ export default async function BoardOverviewPage() {
 
   return (
     <PageBody>
+      <AutoRefresh />
       <PageHeader
         title={club.name}
         description="Your club at a glance."
