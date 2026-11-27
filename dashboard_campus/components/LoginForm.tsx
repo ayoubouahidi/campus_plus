@@ -63,73 +63,76 @@ export default function LoginForm({ callbackUrl = "/" }: { callbackUrl?: string 
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4">
-      <Input
-        id="email"
-        name="email"
-        type="email"
-        label="Email"
-        autoComplete="email"
-        placeholder="you@example.com"
-        error={fieldErrors.email}
-        onChange={() => fieldErrors.email && setFieldErrors((current) => ({ ...current, email: undefined }))}
-      />
-
-      <Input
-        id="password"
-        name="password"
-        type={showPassword ? "text" : "password"}
-        label="Password"
-        autoComplete="current-password"
-        error={fieldErrors.password}
-        onChange={() => fieldErrors.password && setFieldErrors((current) => ({ ...current, password: undefined }))}
-        className="pr-16"
-        rightIcon={
-          <button
-            type="button"
-            onClick={() => setShowPassword((isVisible) => !isVisible)}
-            aria-pressed={showPassword}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            className="rounded text-xs font-semibold text-violet-600 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400"
-          >
-            {showPassword ? "Hide" : "Show"}
-          </button>
-        }
-      />
-
-      {error && (
-        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-          {error}
-        </p>
-      )}
-
-      <Button type="submit" isLoading={loading} className="w-full">
-        {loading ? "Signing in…" : "Sign in"}
-      </Button>
-
-      <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500" aria-hidden="true">
-        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-        or
-        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-      </div>
-
+    <>
+      {/* 42 first, like the student site: most board members and admins are 1337 students. */}
       <Button
         type="button"
         variant="secondary"
-        className="w-full"
+        className="mt-7 w-full"
         isLoading={fortyTwoLoading}
         onClick={() => {
           setFortyTwoLoading(true);
           void signIn("42-school", { redirectTo: callbackUrl });
         }}
         leftIcon={
-          <span aria-hidden="true" className="grid h-5 w-5 place-items-center rounded bg-slate-900 text-[10px] font-bold text-white dark:bg-white dark:text-slate-900">
+          <span aria-hidden="true" className="grid h-[22px] w-[22px] place-items-center rounded-md bg-slate-900 text-[10px] font-bold text-white dark:bg-white dark:text-slate-900">
             42
           </span>
         }
       >
-        Continue with 42
+        {fortyTwoLoading ? "Redirecting to 42…" : "Continue with 42 Intra"}
       </Button>
-    </form>
+
+      <div aria-hidden="true" className="my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+        or with your email
+        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+      </div>
+
+      <form onSubmit={handleSubmit} noValidate aria-label="Sign in with email" className="space-y-4">
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          error={fieldErrors.email}
+          onChange={() => fieldErrors.email && setFieldErrors((current) => ({ ...current, email: undefined }))}
+        />
+
+        <Input
+          id="password"
+          name="password"
+          type={showPassword ? "text" : "password"}
+          label="Password"
+          autoComplete="current-password"
+          error={fieldErrors.password}
+          onChange={() => fieldErrors.password && setFieldErrors((current) => ({ ...current, password: undefined }))}
+          className="pr-16"
+          rightIcon={
+            <button
+              type="button"
+              onClick={() => setShowPassword((isVisible) => !isVisible)}
+              aria-pressed={showPassword}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="rounded text-xs font-semibold text-violet-600 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:text-violet-400"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          }
+        />
+
+        {error && (
+          <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-300">
+            {error}
+          </p>
+        )}
+
+        <Button type="submit" isLoading={loading} className="w-full">
+          {loading ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
+    </>
   );
 }

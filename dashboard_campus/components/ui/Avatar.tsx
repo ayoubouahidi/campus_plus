@@ -57,12 +57,20 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
     },
     ref
   ) => {
-    const [hasError, setHasError] = useState(false);
+    // The src that failed to load (not a boolean): a new src gets its own try. Same fix as the
+    // student site's Avatar (DOCS §25): 42's image CDN often refuses our requests.
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
     // Derived states
     const initials = getInitials(name);
     const accessibleAlt = alt || name || 'Avatar';
-    const showImage = Boolean(src) && !hasError;
+    const showImage = Boolean(src) && failedSrc !== src;
+
+    // The <img> is in the server HTML, so it can fail before React hydrates; that early error event
+    // is lost and onError never runs, leaving a broken image. Check when React attaches the element.
+    const checkAlreadyFailed = (img: HTMLImageElement | null) => {
+      if (img && img.complete && img.naturalWidth === 0 && src) setFailedSrc(src);
+    };
 
     return (
       <div
@@ -79,10 +87,12 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
           }`}
         >
           {showImage ? (
+            // eslint-disable-next-line @next/next/no-img-element -- avatars come from any origin (42 CDN, our media); initials fallback below
             <img
+              ref={checkAlreadyFailed}
               src={src!}
               alt={accessibleAlt}
-              onError={() => setHasError(true)}
+              onError={() => setFailedSrc(src ?? null)}
               className="h-full w-full object-cover"
             />
           ) : initials ? (

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import LoginForm from "@/components/LoginForm";
@@ -11,6 +12,53 @@ function safeCallbackUrl(value: string | undefined) {
   return value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
 }
 
+type Notice = { tone: "warning" | "danger"; title: string; description: string };
+
+// Messages for ?error= (set by Auth.js, the 42 sign-in callback or the route guard).
+const NOTICES: Record<string, Notice> = {
+  StudentAccount: {
+    tone: "warning",
+    title: "This is a student account",
+    description: "The dashboard is for club boards and administrators. Students use the Campus Hub site to see events and RSVP.",
+  },
+  FortyTwoUnavailable: {
+    tone: "danger",
+    title: "42 sign-in didn’t complete",
+    description: "This 42 account isn’t allowed (1337 campuses only) or the server is busy. Try again, or sign in with your email.",
+  },
+  OAuthCallbackError: {
+    tone: "danger",
+    title: "42 sign-in failed",
+    description: "Try again, or sign in with your email.",
+  },
+  Configuration: {
+    tone: "danger",
+    title: "42 sign-in failed",
+    description: "Try again, or sign in with your email.",
+  },
+  AccessDenied: {
+    tone: "warning",
+    title: "You can’t open that page",
+    description: "Sign in with a club board or administrator account.",
+  },
+};
+
+const NOTICE_STYLES: Record<Notice["tone"], { box: string; title: string; text: string }> = {
+  warning: {
+    box: "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-950/40",
+    title: "text-amber-900 dark:text-amber-200",
+    text: "text-amber-800 dark:text-amber-300",
+  },
+  danger: {
+    box: "border-rose-200 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-950/40",
+    title: "text-rose-800 dark:text-rose-200",
+    text: "text-rose-700 dark:text-rose-300",
+  },
+};
+
+// Same split layout as the student site's login (frontend LoginLayout + LoginPanel): the campus
+// photo on the left from lg, a plain white / slate-950 column with the logo, the title, 42 first,
+// then email. The logo sits directly on the page background, the colors it's drawn for.
 export default async function LoginPage({
   searchParams,
 }: {
@@ -19,71 +67,43 @@ export default async function LoginPage({
   const { error, callbackUrl } = await searchParams;
   const session = await auth();
   if (session?.backendToken && !error) redirect("/");
+  const notice = error ? NOTICES[error] : undefined;
 
   return (
-    <main className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
-      {/* Brand panel (wide screens): what this app is and who it is for. */}
-      <section
-        aria-hidden="true"
-        className="relative hidden overflow-hidden bg-violet-700 lg:flex lg:flex-col lg:justify-between lg:p-12"
-      >
-        <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-violet-500/40 blur-3xl" />
-        <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-amber-400/20 blur-3xl" />
-        {/* The logo's colors follow the theme ("campus" turns white and the cap's cut line dark
-            in dark mode), so its backdrop must follow too: slate-50 / slate-950, the colors it's drawn for. */}
-        <span className="relative inline-flex w-fit rounded-2xl bg-slate-50 px-5 py-3 shadow-lg ring-1 ring-white/20 dark:bg-slate-950">
-          <Logo decorative className="h-10" />
-        </span>
-        <div className="relative max-w-md space-y-4 text-violet-50">
-          <p className="text-3xl font-bold leading-tight text-white">
-            Run your club&rsquo;s events at 1337.
-          </p>
-          <p className="text-base text-violet-100">
-            Publish events, follow registrations and keep your club&rsquo;s page up to date. Students see every change live on Campus Hub.
-          </p>
-        </div>
-        <p className="relative text-sm text-violet-200">Campus Hub · 1337 Coding School</p>
-      </section>
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
+      {/* Decorative: the form column carries all the meaning. */}
+      <div className="relative hidden lg:block">
+        <Image src="/campus.webp" alt="" fill priority sizes="50vw" className="object-cover" />
+      </div>
 
-      <section className="relative flex items-center justify-center px-6 py-12">
-        <div className="absolute right-6 top-6">
+      <div className="flex flex-col bg-white px-6 py-6 dark:bg-slate-950">
+        <div className="flex items-center justify-between">
+          <Logo className="h-8" />
           <ThemeToggle />
         </div>
-        <div className="w-full max-w-sm">
-          <Logo className="mb-8 h-10 lg:hidden" />
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Sign in to the dashboard</h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            For club boards and Campus Hub administrators.
-          </p>
 
-          {error === "StudentAccount" && (
-            <p role="alert" className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-              This 42 account is a student account. The dashboard is only for club boards and administrators; students use the Campus Hub site.
+        <main className="flex flex-1 items-center justify-center py-10">
+          <div className="w-full max-w-[22rem]">
+            <h1 className="text-[1.75rem] font-bold tracking-tight text-slate-900 dark:text-slate-100">Welcome back</h1>
+            <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+              Sign in to manage your club or Campus Hub.
             </p>
-          )}
-          {error === "FortyTwoUnavailable" && (
-            <p role="alert" className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-              42 sign-in didn&rsquo;t complete: this account isn&rsquo;t allowed (1337 campuses only) or the server is busy. Try again or use your email.
-            </p>
-          )}
-          {(error === "OAuthCallbackError" || error === "Configuration") && (
-            <p role="alert" className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-              42 sign-in failed. Try again, or sign in with your email.
-            </p>
-          )}
-          {error === "AccessDenied" && (
-            <p role="alert" className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-              Your account can&rsquo;t open that page. Sign in with a club board or administrator account.
-            </p>
-          )}
 
-          <LoginForm callbackUrl={safeCallbackUrl(callbackUrl)} />
+            {notice && (
+              <div role="alert" className={`mt-7 rounded-lg border p-3 text-sm ${NOTICE_STYLES[notice.tone].box}`}>
+                <p className={`font-semibold ${NOTICE_STYLES[notice.tone].title}`}>{notice.title}</p>
+                <p className={`mt-1 ${NOTICE_STYLES[notice.tone].text}`}>{notice.description}</p>
+              </div>
+            )}
 
-          <p className="mt-8 text-center text-xs text-slate-500 dark:text-slate-400">
-            Student? Use the Campus Hub site to see events and RSVP.
-          </p>
-        </div>
-      </section>
-    </main>
+            <LoginForm callbackUrl={safeCallbackUrl(callbackUrl)} />
+
+            <p className="mt-6 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              For club boards and Campus Hub administrators. Students use the Campus Hub site.
+            </p>
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
