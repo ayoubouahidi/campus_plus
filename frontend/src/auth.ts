@@ -29,7 +29,8 @@ type FortyTwoProfile = {
 };
 
 // Django sends a numeric id (accounts.UserSerializer); the session stores it as a string (Step 14.1).
-type BackendSyncResponse = { token: string; user: { id: number | string; role: UserRole } };
+// avatar_url is Django's picture: a photo uploaded on either site is kept over the 42 one (DOCS.md §32).
+type BackendSyncResponse = { token: string; user: { id: number | string; role: UserRole; avatar_url?: string | null } };
 
 const ROLES: readonly UserRole[] = ['STUDENT', 'BOARD_MEMBER', 'SUPERADMIN'];
 const isRole = (value: unknown): value is UserRole => ROLES.includes(value as UserRole);
@@ -306,6 +307,9 @@ export const { handlers, auth, signIn, signOut, unstable_update: updateSession }
       user.backendToken = data.token;
       user.backendUserId = String(data.user.id); // was copied as a number, which the session callback dropped
       user.role = data.user.role;
+      // Django's picture, not 42's: Auth.js fills user.image from the 42 profile, which would hide a photo
+      // uploaded in the dashboard or on /profile (and shows initials when the 42 link is empty).
+      user.image = data.user.avatar_url || fortyTwo.image?.link || null;
       user.login = fortyTwo.login;
       user.campus = fortyTwo.campus?.[0]?.name ?? null;
       return true;
@@ -325,6 +329,7 @@ export const { handlers, auth, signIn, signOut, unstable_update: updateSession }
         token.backendToken = user.backendToken;
         token.userId = user.backendUserId ?? user.id;
         token.role = user.role ?? 'STUDENT';
+        token.picture = user.image ?? null; // set by signIn (42) or authorize (email): always Django's avatar_url
         token.login = user.login ?? null;
         token.campus = user.campus ?? null;
       }
