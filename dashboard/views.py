@@ -7,14 +7,14 @@ from datetime import timedelta
 from rest_framework import status, viewsets
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
 from accounts.models import ClubBoardAssignment
 from accounts.permissions import IsClubBoard, IsSuperAdmin, user_club_id
-from core_data.models import Club, ClubEvent
+from core_data.models import Club, ClubEvent, UserMember
 from .models import Announcement, AuditLog, MembershipRequest
 from .serializers import (
     AnnouncementSerializer,
@@ -40,16 +40,72 @@ User = get_user_model()
 
 
 CLUB_IMAGE_FIELDS = ("logo", "banner")
+NOT_GIVEN = object()
 TRUE_VALUES = {"true", "1", "on", "yes"}
 
 
 def club_payload(request):
-    """Request data without the remove_logo/remove_banner flags (multipart or JSON)."""
-    return {
-        key: request.data.get(key)
-        for key in request.data
-        if key not in {f"remove_{field}" for field in CLUB_IMAGE_FIELDS}
-    }
+    """Fields for the club serializer: without remove_logo/remove_banner and president."""
+    handled_here = {f"remove_{field}" for field in CLUB_IMAGE_FIELDS} | {"president"}
+    return {key: request.data.get(key) for key in request.data if key not in handled_here}
+
+
+def resolve_president(club, request):
+    """
+    The user chosen as president, None to clear, or NOT_GIVEN. Raises a field error
+    unless the user is an active member of this club's board team.
+    """
+    if "president" not in request.data:
+        return NOT_GIVEN
+    value = request.data.get("president")
+    if value in (None, "", "null"):
+        return None
+    try:
+        user_id = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({"president": "Choose a member of this club's board team."})
+    user = User.objects.filter(
+        pk=user_id,
+        is_active=True,
+        role=User.Role.BOARD_MEMBER,
+        board_assignment__club=club,
+    ).first()
+    if user is None:
+        raise ValidationError({"president": "Choose a member of this club's board team."})
+    return user
+
+
+def apply_president(club, president):
+    """Make `president` (a board member of `club`) its head, or clear it with None."""
+    if president is NOT_GIVEN:
+        return
+    if president is None:
+        club.head = None
+    else:
+        member = UserMember.objects.filter(user=president).first()
+        if member is None:
+            username = president.username
+            if UserMember.objects.filter(username=username).exists():
+                username = f"{president.username}-{president.pk}"
+            member = UserMember.objects.create(user=president, username=username)
+        # The student site shows the head's name and phone: keep them in sync.
+        member.first_name = president.first_name or president.username
+        member.last_name = president.last_name
+        if not member.phone and president.phone:
+            member.phone = president.phone
+        if member.department_id_id is None:
+            member.department_id = club.department
+        member.save()
+        club.head = member
+    club.save(update_fields=["head"])
+
+
+def clear_presidencies(user, except_club=None):
+    """A user who leaves a club's board stops being its president."""
+    clubs = Club.objects.filter(head__user=user)
+    if except_club is not None:
+        clubs = clubs.exclude(pk=except_club.pk)
+    clubs.update(head=None)
 
 
 def club_image_removals(request):
@@ -85,6 +141,7 @@ ORGANIZATION_FIELDS = {
     "banner",
     "remove_logo",
     "remove_banner",
+    "president",
 }
 
 
@@ -173,6 +230,7 @@ def board_club_settings(request):
             "banner",
             "remove_logo",
             "remove_banner",
+            "president",
         }
         unknown_fields = set(request.data) - allowed_fields
         if unknown_fields:
@@ -188,8 +246,10 @@ def board_club_settings(request):
             context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
+        president = resolve_president(club, request)
         with transaction.atomic():
             club = save_club_images(serializer, previous_files, club_image_removals(request))
+            apply_president(club, president)
         AuditLog.objects.create(
             actor=request.user,
             action="club_settings_updated",
@@ -381,7 +441,7 @@ def superadmin_organizations(request):
             status=status.HTTP_201_CREATED,
         )
 
-    queryset = Club.objects.select_related("department").order_by("name")
+    queryset = Club.objects.select_related("department", "head__user").order_by("name")
     paginator = SuperadminPagination()
     page = paginator.paginate_queryset(queryset, request)
     return paginator.get_paginated_response(
@@ -442,12 +502,14 @@ def superadmin_organization_detail(request, organization_id):
         context={"request": request},
     )
     serializer.is_valid(raise_exception=True)
+    president = resolve_president(organization, request)
     with transaction.atomic():
         organization = save_club_images(
             serializer,
             previous_files,
             club_image_removals(request),
         )
+        apply_president(organization, president)
         if previous_status != organization.is_active:
             action = "club_reactivated" if organization.is_active else "club_suspended"
         else:
@@ -676,6 +738,7 @@ def superadmin_user_detail(request, user_id):
 
         if new_role != User.Role.BOARD_MEMBER and assignment is not None:
             old_club_name = assignment.club.name
+            clear_presidencies(target)
             assignment.delete()
             AuditLog.objects.create(
                 actor=request.user,
@@ -695,6 +758,7 @@ def superadmin_user_detail(request, user_id):
                     target=f"{target.username}: {new_club.name}",
                 )
             elif assignment.club_id != new_club.pk:
+                clear_presidencies(target, except_club=new_club)
                 old_club_name = assignment.club.name
                 assignment.club = new_club
                 assignment.save(update_fields=["club"])

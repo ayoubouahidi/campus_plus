@@ -344,6 +344,22 @@ class ClubEventSerializer(serializers.ModelSerializer):
                     'The end datetime must be later than the start datetime.'
                 )
 
+            # A new start must be in the future (UTC comparison, so the client's
+            # time zone doesn't matter). Editing an event without moving its
+            # start (rename, cancel an ongoing event) stays allowed. Compared to
+            # the minute: forms send minute precision.
+            new_start = attrs.get('starts_at')
+            start_moved = self.instance is None or (
+                new_start is not None
+                and (
+                    self.instance.starts_at is None
+                    or new_start.replace(second=0, microsecond=0)
+                    != self.instance.starts_at.replace(second=0, microsecond=0)
+                )
+            )
+            if new_start is not None and start_moved and new_start <= timezone.now():
+                event_errors['starts_at'] = 'The event must start in the future.'
+
         if event_errors:
             raise serializers.ValidationError(event_errors)
 

@@ -1,5 +1,5 @@
 import { backendFetch } from "@/lib/api";
-import { getBoardClub } from "@/lib/board";
+import { getBoardClub, type BoardTeamMember } from "@/lib/board";
 import PageBody from "@/components/layout/PageBody";
 import PageHeader from "@/components/layout/PageHeader";
 import SettingsForms, { type DashboardProfile } from "@/components/admin/SettingsForms";
@@ -7,11 +7,15 @@ import SettingsForms, { type DashboardProfile } from "@/components/admin/Setting
 export const metadata = { title: "Club settings" };
 
 export default async function ClubSettingsPage() {
-  const [profile, club] = await Promise.all([backendFetch<DashboardProfile>("/api/me/"), getBoardClub()]);
+  const [profile, club, team] = await Promise.all([
+    backendFetch<DashboardProfile>("/api/me/"),
+    getBoardClub(),
+    backendFetch<BoardTeamMember[]>("/api/board/members/"),
+  ]);
   return (
     <PageBody>
       <PageHeader title="Club settings" description="Your club's public page and your own profile." />
-      <SettingsForms profile={profile} club={club} />
+      <SettingsForms profile={profile} club={club} team={team} />
     </PageBody>
   );
 }

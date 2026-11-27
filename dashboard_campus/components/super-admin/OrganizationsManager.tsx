@@ -25,7 +25,9 @@ type Organization = {
   is_active: boolean;
   logo_url: string | null;
   banner_url: string | null;
+  president: { id: number; name: string; email: string } | null;
 };
+type BoardUser = { id: number; username: string; first_name: string; last_name: string; email: string; is_active: boolean; club_id: number | null };
 type Department = { id: number; name?: string; title?: string };
 
 const LIST_ENDPOINT = "api/superadmin/organizations/?page_size=200";
@@ -36,6 +38,7 @@ export default function OrganizationsManager() {
 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [boardUsers, setBoardUsers] = useState<BoardUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
@@ -52,12 +55,14 @@ export default function OrganizationsManager() {
 
   const load = useCallback(async () => {
     try {
-      const [orgResponse, departmentResponse] = await Promise.all([
+      const [orgResponse, departmentResponse, boardResponse] = await Promise.all([
         dashboardApi<Organization[] | { results: Organization[] }>(LIST_ENDPOINT),
         dashboardApi<Department[] | { results: Department[] }>("api/departments/"),
+        dashboardApi<BoardUser[] | { results: BoardUser[] }>("api/superadmin/users/?role=BOARD_MEMBER&page_size=200"),
       ]);
       setOrganizations(listRows(orgResponse));
       setDepartments(listRows(departmentResponse));
+      setBoardUsers(listRows(boardResponse));
       setLoadError("");
     } catch (error) {
       setLoadError(errorMessage(error, "Unable to load organizations."));
@@ -114,6 +119,7 @@ export default function OrganizationsManager() {
     body.append("name", name);
     body.append("department", department);
     body.append("is_active", form.has("is_active") ? "true" : "false");
+    if (editing) body.append("president", String(form.get("president") ?? ""));
     for (const field of ["logo", "banner"]) {
       const file = form.get(field);
       if (file instanceof File && file.size > 0) body.append(field, file);
@@ -188,6 +194,7 @@ export default function OrganizationsManager() {
               <tr className={t.headRow}>
                 <th scope="col" className={t.th}>Organization</th>
                 <th scope="col" className={t.th}>Department</th>
+                <th scope="col" className={t.th}>President</th>
                 <th scope="col" className={t.th}>Status</th>
                 <th scope="col" className={t.thRight}>Actions</th>
               </tr>
@@ -202,6 +209,7 @@ export default function OrganizationsManager() {
                     </div>
                   </td>
                   <td className={t.td}>{organization.department_name ?? "—"}</td>
+                  <td className={t.td}>{organization.president?.name ?? "—"}</td>
                   <td className={t.td}>
                     <Badge variant={organization.is_active ? "success" : "neutral"} hasDot>
                       {organization.is_active ? "Active" : "Inactive"}
@@ -260,6 +268,28 @@ export default function OrganizationsManager() {
               options={departmentOptions}
               error={fieldErrors.department}
             />
+            {editing && (
+              <Select
+                name="president"
+                label="President (club contact)"
+                defaultValue={editing.president ? String(editing.president.id) : ""}
+                options={[
+                  { value: "", label: "No president" },
+                  ...boardUsers
+                    .filter((user) => user.club_id === editing.id && user.is_active)
+                    .map((user) => ({
+                      value: String(user.id),
+                      label: `${`${user.first_name} ${user.last_name}`.trim() || user.username} · ${user.email}`,
+                    })),
+                ]}
+                helperText={
+                  fieldErrors.president
+                    ? undefined
+                    : "Chosen from this organization's board members (Users & roles). Signed-in students see their contact."
+                }
+                error={fieldErrors.president}
+              />
+            )}
             <ImagePicker
               name="logo"
               label="Logo"

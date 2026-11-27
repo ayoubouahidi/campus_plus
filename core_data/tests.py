@@ -66,8 +66,8 @@ class ClubEventPublicReadSerializerTests(SimpleTestCase):
             location='Agora Hall',
             category='Tech',
             capacity=150,
-            starts_at=datetime(2026, 11, 21, 9, tzinfo=timezone.utc),
-            ends_at=datetime(2026, 11, 23, 9, tzinfo=timezone.utc),
+            starts_at=datetime(2099, 11, 21, 9, tzinfo=timezone.utc),
+            ends_at=datetime(2099, 11, 23, 9, tzinfo=timezone.utc),
             status='planned',
         )
 
@@ -84,8 +84,8 @@ class ClubEventPublicReadSerializerTests(SimpleTestCase):
         self.assertEqual(data['flyer_url'], '')
         self.assertEqual(data['category'], 'Tech')
         self.assertEqual(data['capacity'], 150)
-        self.assertEqual(data['start_time'], '2026-11-21T09:00:00Z')
-        self.assertEqual(data['end_time'], '2026-11-23T09:00:00Z')
+        self.assertEqual(data['start_time'], '2099-11-21T09:00:00Z')
+        self.assertEqual(data['end_time'], '2099-11-23T09:00:00Z')
 
     def test_existing_event_fields_are_preserved(self):
         data = ClubEventSerializer(self.event).data
@@ -94,8 +94,8 @@ class ClubEventPublicReadSerializerTests(SimpleTestCase):
         self.assertEqual(data['parent_id'], 1)
         self.assertEqual(data['club'], 2)
         self.assertEqual(data['parent'], '1337 Coding School')
-        self.assertEqual(data['starts_at'], '2026-11-21T09:00:00Z')
-        self.assertEqual(data['ends_at'], '2026-11-23T09:00:00Z')
+        self.assertEqual(data['starts_at'], '2099-11-21T09:00:00Z')
+        self.assertEqual(data['ends_at'], '2099-11-23T09:00:00Z')
         self.assertEqual(data['status'], 'planned')
 
     @override_settings(PUBLIC_MEDIA_BASE_URL='')
@@ -215,8 +215,8 @@ class ClubEventOwnershipSecurityTests(SimpleTestCase):
         update_data = {
             'name': 'Updated Demo Day',
             'description': 'Updated description',
-            'starts_at': '2026-11-21T10:00:00Z',
-            'ends_at': '2026-11-21T12:00:00Z',
+            'starts_at': '2099-11-21T10:00:00Z',
+            'ends_at': '2099-11-21T12:00:00Z',
             'location': 'Main Hall',
             'status': 'ongoing',
         }
@@ -390,8 +390,8 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
             'category': 'Tech',
             'club': self.club,
             'parent_id': self.department,
-            'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
-            'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            'starts_at': datetime(2099, 11, 21, 10, tzinfo=timezone.utc),
+            'ends_at': datetime(2099, 11, 21, 12, tzinfo=timezone.utc),
         }
 
         self.assertTrue(CanCreateClubEvent().has_permission(
@@ -407,8 +407,8 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
                 'category': 'Tech',
                 'club': self.club,
                 'parent_id': self.other_department,
-                'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
-                'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+                'starts_at': datetime(2099, 11, 21, 10, tzinfo=timezone.utc),
+                'ends_at': datetime(2099, 11, 21, 12, tzinfo=timezone.utc),
             }, self.head_user)
 
         self.assertIn('parent_id', context.exception.detail)
@@ -432,8 +432,8 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
             'category': 'Tech',
             'club': self.club,
             'parent_id': self.department,
-            'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
-            'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            'starts_at': datetime(2099, 11, 21, 10, tzinfo=timezone.utc),
+            'ends_at': datetime(2099, 11, 21, 12, tzinfo=timezone.utc),
         }
 
         self.assertTrue(CanCreateClubEvent().has_permission(
@@ -449,8 +449,8 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
                 'category': 'Tech',
                 'club': self.club,
                 'parent_id': self.other_department,
-                'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
-                'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+                'starts_at': datetime(2099, 11, 21, 10, tzinfo=timezone.utc),
+                'ends_at': datetime(2099, 11, 21, 12, tzinfo=timezone.utc),
             })
 
         self.assertIn('parent_id', context.exception.detail)
@@ -481,8 +481,8 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
             'name': 'Department Event',
             'category': 'Tech',
             'parent_id': self.department,
-            'starts_at': datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
-            'ends_at': datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            'starts_at': datetime(2099, 11, 21, 10, tzinfo=timezone.utc),
+            'ends_at': datetime(2099, 11, 21, 12, tzinfo=timezone.utc),
         }
 
         self.assertTrue(CanCreateClubEvent().has_permission(
@@ -506,8 +506,8 @@ class ClubEventRelationshipIntegrityTests(SimpleTestCase):
                 'category': 'Tech',
                 'club': self.club.pk,
                 'parent_id': self.other_department.pk,
-                'starts_at': '2026-11-21T10:00:00Z',
-                'ends_at': '2026-11-21T12:00:00Z',
+                'starts_at': '2099-11-21T10:00:00Z',
+                'ends_at': '2099-11-21T12:00:00Z',
             },
             context={'request': self.request_for(self.staff)},
         )
@@ -559,8 +559,8 @@ class ClubEventManagementValidationTests(SimpleTestCase):
             category='Tech',
             parent_id=self.department,
             club=self.club,
-            starts_at=datetime(2026, 11, 21, 10, tzinfo=timezone.utc),
-            ends_at=datetime(2026, 11, 21, 12, tzinfo=timezone.utc),
+            starts_at=datetime(2099, 11, 21, 10, tzinfo=timezone.utc),
+            ends_at=datetime(2099, 11, 21, 12, tzinfo=timezone.utc),
             capacity=100,
         )
         self.valid_create_data = {
@@ -568,8 +568,8 @@ class ClubEventManagementValidationTests(SimpleTestCase):
             'category': 'Tech',
             'parent_id': self.department.pk,
             'club': self.club.pk,
-            'starts_at': '2026-11-22T10:00:00Z',
-            'ends_at': '2026-11-22T12:00:00Z',
+            'starts_at': '2099-11-22T10:00:00Z',
+            'ends_at': '2099-11-22T12:00:00Z',
         }
 
     def make_serializer(self, data, instance=None, user=None, partial=False):
@@ -635,8 +635,8 @@ class ClubEventManagementValidationTests(SimpleTestCase):
 
     def test_end_must_be_strictly_later_than_start(self):
         invalid_end_values = (
-            '2026-11-22T09:00:00Z',
-            '2026-11-22T10:00:00Z',
+            '2099-11-22T09:00:00Z',
+            '2099-11-22T10:00:00Z',
         )
         for end_value in invalid_end_values:
             with self.subTest(end=end_value):
@@ -676,7 +676,7 @@ class ClubEventManagementValidationTests(SimpleTestCase):
                 'description': 'Updated',
                 'category': 'Music',
                 'capacity': 0,
-                'ends_at': '2026-11-21T13:00:00Z',
+                'ends_at': '2099-11-21T13:00:00Z',
             },
             instance=self.event,
             user=self.head_user,
@@ -687,7 +687,7 @@ class ClubEventManagementValidationTests(SimpleTestCase):
         self.assertEqual(valid_serializer.validated_data['capacity'], 0)
 
         invalid_serializer = self.make_serializer(
-            {'starts_at': '2026-11-21T12:00:00Z'},
+            {'starts_at': '2099-11-21T12:00:00Z'},
             instance=self.event,
             user=self.head_user,
             partial=True,
@@ -717,7 +717,7 @@ class ClubEventManagementValidationTests(SimpleTestCase):
     def test_invalid_create_is_not_saved_or_broadcast(self):
         data = dict(
             self.valid_create_data,
-            ends_at='2026-11-22T10:00:00Z',
+            ends_at='2099-11-22T10:00:00Z',
         )
         serializer = self.make_serializer(data)
         view = ClubEventViewSet()
@@ -1547,8 +1547,8 @@ class DepartmentAndMemberApiTests(TestCase):
                 'description': 'Project demonstrations.',
                 'parent_id': self.department.pk,
                 'club': club.pk,
-                'starts_at': '2026-11-01T10:00:00Z',
-                'ends_at': '2026-11-01T12:00:00Z',
+                'starts_at': '2099-11-01T10:00:00Z',
+                'ends_at': '2099-11-01T12:00:00Z',
                 'location': 'Auditorium',
                 'status': 'planned',
             },
@@ -1583,8 +1583,8 @@ class DepartmentAndMemberApiTests(TestCase):
                 'category': 'Tech',
                 'parent_id': self.department.pk,
                 'club': club.pk,
-                'starts_at': '2026-11-01T10:00:00Z',
-                'ends_at': '2026-11-01T12:00:00Z',
+                'starts_at': '2099-11-01T10:00:00Z',
+                'ends_at': '2099-11-01T12:00:00Z',
             },
             format='json',
         )

@@ -25,13 +25,31 @@ class ClubImagesMixin(serializers.Serializer):
         return absolute_file_url(club.banner, self.context, None)
 
 
+class ClubPresidentMixin(serializers.Serializer):
+    """The club's president (contact shown to signed-in students): a member of its board team."""
+
+    president = serializers.SerializerMethodField()
+
+    def get_president(self, club) -> dict | None:
+        head = club.head
+        if head is None or head.user is None:
+            return None
+        user = head.user
+        return {
+            "id": user.pk,
+            "name": user.get_full_name() or user.username,
+            "email": user.email,
+            "phone": head.phone or user.phone,
+        }
+
+
 CLUB_IMAGE_KWARGS = {
     "logo": {"write_only": True, "required": False},
     "banner": {"write_only": True, "required": False},
 }
 
 
-class BoardClubSettingsSerializer(ClubImagesMixin, serializers.ModelSerializer):
+class BoardClubSettingsSerializer(ClubPresidentMixin, ClubImagesMixin, serializers.ModelSerializer):
     department_id = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -50,6 +68,7 @@ class BoardClubSettingsSerializer(ClubImagesMixin, serializers.ModelSerializer):
             "banner",
             "logo_url",
             "banner_url",
+            "president",
         ]
         read_only_fields = ["slug"]
         extra_kwargs = CLUB_IMAGE_KWARGS
@@ -107,7 +126,7 @@ class MembershipRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class OrganizationAdminSerializer(ClubImagesMixin, serializers.ModelSerializer):
+class OrganizationAdminSerializer(ClubPresidentMixin, ClubImagesMixin, serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.title", read_only=True)
 
     class Meta:
@@ -122,6 +141,7 @@ class OrganizationAdminSerializer(ClubImagesMixin, serializers.ModelSerializer):
             "banner",
             "logo_url",
             "banner_url",
+            "president",
         ]
         extra_kwargs = CLUB_IMAGE_KWARGS
 

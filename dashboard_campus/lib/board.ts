@@ -13,7 +13,10 @@ export type BoardClub = {
   meeting_location: string;
   logo_url: string | null;
   banner_url: string | null;
+  president: { id: number; name: string; email: string; phone: string } | null;
 };
+
+export type BoardTeamMember = { id: number; name: string; email: string; status: "active" | "inactive" };
 
 export function getBoardClub() {
   return backendFetch<BoardClub>("/api/board/club/");

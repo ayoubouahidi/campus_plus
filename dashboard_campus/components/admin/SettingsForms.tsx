@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { dashboardApi, errorMessage, fieldErrorsOf, type FieldErrors } from "@/lib/dashboard-api";
-import type { BoardClub } from "@/lib/board";
+import type { BoardClub, BoardTeamMember } from "@/lib/board";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -32,7 +32,15 @@ function useFormState() {
   return { busy, setBusy, error, setError, fieldErrors, setFieldErrors };
 }
 
-export default function SettingsForms({ profile, club }: { profile: DashboardProfile; club: BoardClub }) {
+export default function SettingsForms({
+  profile,
+  club,
+  team,
+}: {
+  profile: DashboardProfile;
+  club: BoardClub;
+  team: BoardTeamMember[];
+}) {
   const router = useRouter();
   const { showToast } = useToast();
   const photo = useFormState();
@@ -160,6 +168,7 @@ export default function SettingsForms({ profile, club }: { profile: DashboardPro
           meeting_day: value("meeting_day"),
           meeting_time: value("meeting_time") || null,
           meeting_location: value("meeting_location"),
+          president: value("president") ? Number(value("president")) : null,
         }),
       });
       showToast({ variant: "success", title: "Club page saved", description: "Students see the changes on Campus Hub." });
@@ -199,6 +208,23 @@ export default function SettingsForms({ profile, club }: { profile: DashboardPro
               />
               <Input name="meeting_time" type="time" label="Meeting time" defaultValue={club.meeting_time?.slice(0, 5) ?? ""} error={clubForm.fieldErrors.meeting_time} />
             </div>
+            <Select
+              name="president"
+              label="President (club contact)"
+              defaultValue={club.president ? String(club.president.id) : ""}
+              options={[
+                { value: "", label: "No president" },
+                ...team
+                  .filter((member) => member.status === "active")
+                  .map((member) => ({ value: String(member.id), label: `${member.name} · ${member.email}` })),
+              ]}
+              helperText={
+                clubForm.fieldErrors.president
+                  ? undefined
+                  : "Signed-in students see the president's name, email and phone on the club page. Chosen from the board team."
+              }
+              error={clubForm.fieldErrors.president}
+            />
             <Input name="meeting_location" label="Meeting place" maxLength={255} defaultValue={club.meeting_location} error={clubForm.fieldErrors.meeting_location} />
             <Textarea name="description" label="About the club" rows={5} defaultValue={club.description} error={clubForm.fieldErrors.description} />
             <Button type="submit" isLoading={clubForm.busy}>

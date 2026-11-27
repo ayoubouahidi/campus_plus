@@ -64,6 +64,7 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
 
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [formOpen, setFormOpen] = useState(false);
+  const [minStart, setMinStart] = useState("");
   const [editing, setEditing] = useState<DashboardEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -83,6 +84,8 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
   }, [events, filter, now]);
 
   function openForm(event: DashboardEvent | null) {
+    // Earliest selectable start: now, in the browser's time zone (taken on click, not during render).
+    setMinStart(toLocalInput(new Date().toISOString()));
     setEditing(event);
     setFormError("");
     setFieldErrors({});
@@ -106,6 +109,14 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
     if (!value("name")) errors.name = "Give the event a name.";
     if (!value("category")) errors.category = "Choose a category.";
     if (!startsAt) errors.starts_at = "Choose when the event starts.";
+    else {
+      // New events, and edits that move the start, must start in the future (the
+      // browser's local time; the server checks again in UTC).
+      const startMoved = !editing || startsAt !== toLocalInput(editing.starts_at);
+      if (startMoved && new Date(startsAt).getTime() <= Date.now()) {
+        errors.starts_at = "The event must start in the future.";
+      }
+    }
     if (!endsAt) errors.ends_at = "Choose when the event ends.";
     else if (startsAt && new Date(endsAt) <= new Date(startsAt)) errors.ends_at = "The end must be after the start.";
     if (!value("location")) errors.location = "Say where the event takes place.";
@@ -298,8 +309,8 @@ export default function EventsManager({ events, clubId, departmentId, clubName, 
                 onChange={() => clearFieldError("category")}
               />
               <Input name="location" label="Location *" maxLength={255} placeholder="e.g. 1337 Benguerir, Cluster 2" defaultValue={editing?.location ?? ""} error={fieldErrors.location} onChange={() => clearFieldError("location")} />
-              <Input name="starts_at" type="datetime-local" label="Starts *" defaultValue={toLocalInput(editing?.starts_at ?? null)} error={fieldErrors.starts_at} onChange={() => clearFieldError("starts_at")} />
-              <Input name="ends_at" type="datetime-local" label="Ends *" defaultValue={toLocalInput(editing?.ends_at ?? null)} error={fieldErrors.ends_at} onChange={() => clearFieldError("ends_at")} />
+              <Input name="starts_at" type="datetime-local" label="Starts *" min={minStart} defaultValue={toLocalInput(editing?.starts_at ?? null)} error={fieldErrors.starts_at} onChange={() => clearFieldError("starts_at")} />
+              <Input name="ends_at" type="datetime-local" label="Ends *" min={minStart} defaultValue={toLocalInput(editing?.ends_at ?? null)} error={fieldErrors.ends_at} onChange={() => clearFieldError("ends_at")} />
               <Input
                 name="capacity"
                 type="number"
