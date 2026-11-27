@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from accounts.models import EmailVerification
-from core_data.models import Department
+from core_data.models import Department, campus_department
 from core_data.views import (
     SIGNUP_CODE_LIFETIME,
     VALIDATION_ERROR_RESPONSE,
@@ -31,7 +31,10 @@ class SecureSignupSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=150)
     email = serializers.EmailField()
     year_of_study = serializers.IntegerField(min_value=1, max_value=7)
-    department_id = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all())
+    # 1337 only: the form no longer asks; an old client sending the id still works.
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(), default=campus_department
+    )
 
     def validate_password(self, value):
         validate_password(value)

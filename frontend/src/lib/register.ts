@@ -10,7 +10,7 @@ export interface RegisterValues {
   password: string;
   password_confirm: string; // ours only: never sent to Django
   year_of_study: string; // a <select> value; sent as a number
-  department_id: string;
+  // No school field: 1337 only (2026-11-27), Django sets the 1337 department itself.
   // No club field (Mouad's decision, 2026-11-23, DOCS.md §23): Django would make the student a member with no
   // board approval. Clubs are joined through the board, never at sign-up.
 }
@@ -40,7 +40,6 @@ export const EMPTY_REGISTER_VALUES: RegisterPublicValues = {
   last_name: '',
   email: '',
   year_of_study: '',
-  department_id: '',
 };
 
 export const REGISTER_INITIAL_STATE: RegisterState = { error: null, fieldErrors: {}, values: EMPTY_REGISTER_VALUES };
@@ -64,7 +63,6 @@ export const readRegisterForm = (formData: FormData): RegisterValues => {
     password: text('password'), // not trimmed: spaces can be part of a password
     password_confirm: text('password_confirm'),
     year_of_study: text('year_of_study'),
-    department_id: text('department_id'),
   };
 };
 
@@ -74,7 +72,6 @@ export const toPublicValues = (values: RegisterValues): RegisterPublicValues => 
   last_name: values.last_name,
   email: values.email,
   year_of_study: values.year_of_study,
-  department_id: values.department_id,
 });
 
 // The two password rules of Django's own validators that are cheap to mirror (Step 23.1, DOCS.md §23): not
@@ -111,7 +108,6 @@ export const validateRegistration = (values: RegisterValues): RegisterFieldError
   else if (values.password && values.password_confirm !== values.password) errors.password_confirm = { key: 'passwordMismatch' };
 
   if (!YEARS.some((year) => String(year) === values.year_of_study)) errors.year_of_study = { key: 'yearRequired' };
-  if (!values.department_id) errors.department_id = { key: 'schoolRequired' };
   return errors;
 };
 
@@ -123,7 +119,6 @@ export const REGISTER_FIELD_ORDER: readonly RegisterField[] = [
   'password',
   'password_confirm',
   'year_of_study',
-  'department_id',
 ];
 
 export const firstErrorField = (errors: RegisterFieldErrors): RegisterField | undefined =>
@@ -132,7 +127,7 @@ export const firstErrorField = (errors: RegisterFieldErrors): RegisterField | un
 // Django REST Framework 400 body → our field errors. DRF sends { field: ["message", …] } and
 // { non_field_errors: [...] }. Django's messages are shown as Django wrote them ({ text }), except an email
 // "already exists" message, which becomes the email-taken state with our translated wording.
-const DJANGO_FIELDS: readonly RegisterField[] = ['first_name', 'last_name', 'email', 'password', 'year_of_study', 'department_id'];
+const DJANGO_FIELDS: readonly RegisterField[] = ['first_name', 'last_name', 'email', 'password', 'year_of_study'];
 
 export const fromDjangoErrors = (body: unknown): { error: RegisterError; fieldErrors: RegisterFieldErrors } => {
   const fieldErrors: RegisterFieldErrors = {};

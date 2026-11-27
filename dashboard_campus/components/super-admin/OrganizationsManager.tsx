@@ -30,7 +30,6 @@ type Organization = {
   president: { id: number; name: string; email: string } | null;
 };
 type BoardUser = { id: number; username: string; first_name: string; last_name: string; email: string; is_active: boolean; club_id: number | null };
-type Department = { id: number; name?: string; title?: string };
 
 const LIST_ENDPOINT = "api/superadmin/organizations/?page_size=200";
 
@@ -39,7 +38,6 @@ export default function OrganizationsManager() {
   const formTitleId = useId();
 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [boardUsers, setBoardUsers] = useState<BoardUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -57,13 +55,11 @@ export default function OrganizationsManager() {
 
   const load = useCallback(async () => {
     try {
-      const [orgResponse, departmentResponse, boardResponse] = await Promise.all([
+      const [orgResponse, boardResponse] = await Promise.all([
         dashboardApi<Organization[] | { results: Organization[] }>(LIST_ENDPOINT),
-        dashboardApi<Department[] | { results: Department[] }>("api/departments/"),
         dashboardApi<BoardUser[] | { results: BoardUser[] }>("api/superadmin/users/?role=BOARD_MEMBER&page_size=200"),
       ]);
       setOrganizations(listRows(orgResponse));
-      setDepartments(listRows(departmentResponse));
       setBoardUsers(listRows(boardResponse));
       setLoadError("");
     } catch (error) {
@@ -83,14 +79,9 @@ export default function OrganizationsManager() {
     const query = search.trim().toLocaleLowerCase();
     if (!query) return organizations;
     return organizations.filter((organization) =>
-      `${organization.name} ${organization.department_name ?? ""}`.toLocaleLowerCase().includes(query)
+      organization.name.toLocaleLowerCase().includes(query)
     );
   }, [organizations, search]);
-
-  const departmentOptions = departments.map((department) => ({
-    value: String(department.id),
-    label: department.name ?? department.title ?? `Department ${department.id}`,
-  }));
 
   function openForm(organization: Organization | null) {
     setEditing(organization);
@@ -103,11 +94,9 @@ export default function OrganizationsManager() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
-    const department = String(form.get("department") ?? "");
 
     const errors: FieldErrors = {};
     if (!name) errors.name = "Enter the organization's name.";
-    if (!department) errors.department = "Choose a department.";
     const category = String(form.get("category") ?? "");
     if (!category) errors.category = "Choose the organization's category.";
     for (const field of ["logo", "banner"]) {
@@ -121,7 +110,7 @@ export default function OrganizationsManager() {
     // Multipart, so the logo and banner files travel with the other fields.
     const body = new FormData();
     body.append("name", name);
-    body.append("department", department);
+    // No department field: 1337 only, Django gives every organization the 1337 department.
     body.append("category", category);
     body.append("is_active", form.has("is_active") ? "true" : "false");
     if (editing) body.append("president", String(form.get("president") ?? ""));
@@ -188,7 +177,7 @@ export default function OrganizationsManager() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name or department"
+            placeholder="Search by name"
             aria-label="Search organizations"
             className={searchInputClass}
           />
@@ -199,7 +188,6 @@ export default function OrganizationsManager() {
               <tr className={t.headRow}>
                 <th scope="col" className={t.th}>Organization</th>
                 <th scope="col" className={t.th}>Category</th>
-                <th scope="col" className={t.th}>Department</th>
                 <th scope="col" className={t.th}>President</th>
                 <th scope="col" className={t.th}>Status</th>
                 <th scope="col" className={t.thRight}>Actions</th>
@@ -215,7 +203,6 @@ export default function OrganizationsManager() {
                     </div>
                   </td>
                   <td className={t.td}>{organization.category ? categoryLabel(organization.category) : <span className="text-amber-600 dark:text-amber-400">Not set</span>}</td>
-                  <td className={t.td}>{organization.department_name ?? "—"}</td>
                   <td className={t.td}>{organization.president?.name ?? "—"}</td>
                   <td className={t.td}>
                     <Badge variant={organization.is_active ? "success" : "neutral"} hasDot>
@@ -276,14 +263,6 @@ export default function OrganizationsManager() {
               helperText={fieldErrors.category ? undefined : "Every event of this organization gets this category (students filter events by it)."}
               error={fieldErrors.category}
               onChange={() => fieldErrors.category && setFieldErrors((current) => ({ ...current, category: "" }))}
-            />
-            <Select
-              name="department"
-              label="Department *"
-              defaultValue={editing ? String(editing.department) : ""}
-              placeholder={departmentOptions.length ? "Choose a department" : "No departments available"}
-              options={departmentOptions}
-              error={fieldErrors.department}
             />
             {editing && (
               <Select

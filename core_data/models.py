@@ -77,6 +77,22 @@ def validate_image_content(value):
         )
 
 
+CAMPUS_DEPARTMENT_SLUG = '1337'
+CAMPUS_DEPARTMENT_TITLE = '1337 Coding School'
+
+
+def campus_department():
+    """Campus Hub serves 1337 only: the one department every club, event and member belongs to.
+
+    Created on first use, so a fresh database works without seeding anything.
+    """
+    department, _ = Department.objects.get_or_create(
+        slug=CAMPUS_DEPARTMENT_SLUG,
+        defaults={'title': CAMPUS_DEPARTMENT_TITLE},
+    )
+    return department
+
+
 class Department(models.Model):
     title = models.CharField(max_length=255)
     # [ahmed] Unique URL-friendly department identifier.
@@ -172,6 +188,8 @@ class Club(models.Model):
                 candidate = f'{base_slug[:100 - len(suffix_text)]}{suffix_text}'
                 suffix += 1
             self.slug = candidate
+        if self.department_id is None:
+            self.department = campus_department()
         super().save(*args, **kwargs)
 
 
@@ -298,6 +316,12 @@ class UserMember(models.Model):
 
     def __str__(self):
         return self.username
+
+    def save(self, *args, **kwargs):
+        # Every member is at 1337 (42 login, email sign-up, a new president): no department to choose.
+        if self.department_id_id is None and kwargs.get('update_fields') is None:
+            self.department_id = campus_department()
+        super().save(*args, **kwargs)
 
 # [ahmed] Records which authenticated users registered for which events.
 class Rsvp(models.Model):

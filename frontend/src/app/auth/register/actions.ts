@@ -54,7 +54,6 @@ async function createAccount(values: RegisterValues): Promise<SignupResult> {
       email: values.email,
       password: values.password,
       year_of_study: Number(values.year_of_study),
-      department_id: values.department_id,
     });
   } catch {
     return UNAVAILABLE; // network error, timeout, Django down

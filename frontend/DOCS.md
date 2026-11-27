@@ -6143,3 +6143,15 @@ interface SignupCodeFormProps {
 **Contract.** `<CampusIllustration className?: string />` plus any `div` attributes (forwardRef to the root `div`). Give it a sized, positioned box: `<div className="relative hidden lg:block"><CampusIllustration className="absolute inset-0" /></div>`.
 
 **Checked:** both login pages in headless Chrome at 1440×900, light and dark: no console errors.
+
+## 31. No department choice anywhere: everything is 1337 (2026-11-27)
+
+**Why.** The sign-up "School" select read its options from `GET /api/departments/`, and nothing ever created a department. On a fresh database (every teammate's machine) the list was empty, so the required field could not be filled and email sign-up was blocked. The dashboard's "New organization" form had the same required select. Campus Hub serves 1337 only (§13), so the choice is removed instead of seeded.
+
+**What changed.**
+- Django: `core_data.models.campus_department()` returns the "1337 Coding School" department (slug `1337`), creating it on first use. `Club.save()` and `UserMember.save()` use it when no department is set, which covers 42 login, email sign-up, avatar upload and a new president. The sign-up serializers and the organization serializer default `department_id` / `department` to it; a client that still sends an id keeps working.
+- Student site: the School select, `department_id` in `lib/register.ts`, the `schoolRequired` and `school` strings (en/fr/ar) are gone; the register page no longer fetches departments. Year of study is now a full-width field.
+- Dashboard: the organization form has no Department select and the table no Department column; the super admin overview lists organizations by name only.
+- The `Department` model and `/api/departments/` stay (the data shape and old rows depend on them).
+
+**Checked:** `core_data/test_campus_department.py` (fresh database, sign-up without a department, organization without one, members created anywhere), all 391 backend tests, the strict OpenAPI check, and in Chrome: sign-up reaches the code step, a super admin creates an organization, no console errors.

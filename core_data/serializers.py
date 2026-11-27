@@ -7,7 +7,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import Club, ClubEvent, Department, UserMember
+from .models import Club, ClubEvent, Department, UserMember, campus_department
 
 
 User = get_user_model()
@@ -464,6 +464,7 @@ class SignupSerializer(serializers.Serializer):
     year_of_study = serializers.IntegerField(min_value=1, max_value=7)
     department_id = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.all(),
+        default=campus_department,
     )
     club_id = serializers.PrimaryKeyRelatedField(
         queryset=Club.objects.all(),

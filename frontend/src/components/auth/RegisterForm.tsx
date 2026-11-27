@@ -34,8 +34,6 @@ export interface RegisterFormProps extends Omit<React.FormHTMLAttributes<HTMLFor
   verifyAction: (previous: SignupCodeState, formData: FormData) => Promise<SignupCodeState>;
   resendAction: (email: string) => Promise<ResendResult>;
   next: string; // already cleaned with safeNextPath()
-  // From the server (GET /api/departments/). Plain data, so this stays serializable.
-  departments: { id: string; name: string }[];
 }
 
 const linkStyles =
@@ -49,14 +47,12 @@ const linkStyles =
 // Step 28: when Django has emailed a code (state.verifyEmail), the code step replaces the fields; "Use another
 // email" brings the fields back with their values.
 export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>(
-  ({ action, verifyAction, resendAction, next, departments, className = '', onSubmit, ...props }, ref) => {
+  ({ action, verifyAction, resendAction, next, className = '', onSubmit, ...props }, ref) => {
     const [state, formAction, isPending] = useActionState(action, REGISTER_INITIAL_STATE);
     // The answer the student stepped back from with "Use another email". A new submit gives a new state object,
     // so the code step comes back by itself for the next answer (no effect needed).
     const [leftState, setLeftState] = useState<RegisterState | null>(null);
     const [clientErrors, setClientErrors] = useState<RegisterFieldErrors>({});
-    // One school today (1337 only, DOCS.md §13): it is chosen for the student.
-    const onlyDepartment = departments.length === 1 ? departments[0].id : '';
     const formRef = useRef<HTMLFormElement | null>(null);
 
     const fieldErrors = Object.keys(clientErrors).length > 0 ? clientErrors : state.fieldErrors;
@@ -182,28 +178,17 @@ export const RegisterForm = React.forwardRef<HTMLFormElement, RegisterFormProps>
           required
         />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            name="year_of_study"
-            label={t('year')}
-            placeholder={t('choose')}
-            options={YEARS.map((year) => ({ value: String(year), label: t('yearOption', { year }) }))}
-            defaultValue={values.year_of_study}
-            error={errorText(fieldErrors.year_of_study)}
-            onChange={clearError('year_of_study')}
-            required
-          />
-          <Select
-            name="department_id"
-            label={t('school')}
-            placeholder={t('choose')}
-            options={departments.map((department) => ({ value: department.id, label: department.name }))}
-            defaultValue={values.department_id || onlyDepartment}
-            error={errorText(fieldErrors.department_id)}
-            onChange={clearError('department_id')}
-            required
-          />
-        </div>
+        {/* No school field: Campus Hub is 1337 only, Django puts every student in the 1337 department. */}
+        <Select
+          name="year_of_study"
+          label={t('year')}
+          placeholder={t('choose')}
+          options={YEARS.map((year) => ({ value: String(year), label: t('yearOption', { year }) }))}
+          defaultValue={values.year_of_study}
+          error={errorText(fieldErrors.year_of_study)}
+          onChange={clearError('year_of_study')}
+          required
+        />
 
         <Button type="submit" isLoading={isPending} className="w-full">
           {t(isPending ? 'creating' : 'create')}
