@@ -4,7 +4,7 @@ The management app of Campus Hub (1337), served at **https://dashboard.localhost
 
 ## Who signs in, and how
 
-- **Email + password only.** 42 login was removed from the dashboard on 2026-11-27 (it belongs to the student site).
+- **Email + password, or "Continue with 42".** 42 accounts are synced to Django through `/auth/sync` (same as the student site); only SUPERADMIN and BOARD_MEMBER get in, a 42 student account gets "This 42 account is a student account". The 42 app must list `https://dashboard.localhost/api/auth/callback/42-school` as a redirect URI (it does since 2026-11-27).
 - **SUPERADMIN** → `/super_admin`. **BOARD_MEMBER** → `/admin` (their own club only). A **STUDENT** gets "This account is a student account" (Auth.js error code `student_account`); a wrong password gets "Incorrect email or password".
 - The route guard is `proxy.ts` (Next.js 16 renamed `middleware.ts` to `proxy.ts`).
 - **First super admin on a fresh stack:** `createsuperuser` gives `role=STUDENT`, so set the role too:

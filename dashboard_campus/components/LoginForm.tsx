@@ -18,6 +18,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function LoginForm({ callbackUrl = "/" }: { callbackUrl?: string }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fortyTwoLoading, setFortyTwoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
@@ -104,6 +105,30 @@ export default function LoginForm({ callbackUrl = "/" }: { callbackUrl?: string 
 
       <Button type="submit" isLoading={loading} className="w-full">
         {loading ? "Signing in…" : "Sign in"}
+      </Button>
+
+      <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500" aria-hidden="true">
+        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+        or
+        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+      </div>
+
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        isLoading={fortyTwoLoading}
+        onClick={() => {
+          setFortyTwoLoading(true);
+          void signIn("42-school", { redirectTo: callbackUrl });
+        }}
+        leftIcon={
+          <span aria-hidden="true" className="grid h-5 w-5 place-items-center rounded bg-slate-900 text-[10px] font-bold text-white dark:bg-white dark:text-slate-900">
+            42
+          </span>
+        }
+      >
+        Continue with 42
       </Button>
     </form>
   );
